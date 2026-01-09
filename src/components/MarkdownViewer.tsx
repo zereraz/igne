@@ -11,9 +11,6 @@ interface MarkdownViewerProps {
 export function MarkdownViewer({ content, fileName }: MarkdownViewerProps) {
   return (
     <div style={{ maxWidth: '48rem', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '1.5rem', paddingBottom: '1.5rem' }}>
-      <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.5rem', color: 'white', borderBottom: '1px solid #3f3f46', paddingBottom: '1rem' }}>
-        {fileName.replace('.md', '')}
-      </h1>
       <div className="prose">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}

@@ -4,3 +4,10 @@ export interface FileEntry {
   is_dir: boolean;
   children?: FileEntry[];
 }
+
+export interface OpenFile {
+  path: string;
+  name: string;
+  content: string;
+  isDirty: boolean;
+}

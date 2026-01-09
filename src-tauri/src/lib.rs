@@ -1,6 +1,6 @@
+use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
-use serde::Serialize;
 
 #[derive(Serialize, Clone)]
 pub struct FileEntry {
@@ -16,7 +16,11 @@ fn read_directory(path: String) -> Result<Vec<FileEntry>, String> {
     read_dir_recursive(&path, 0, 3)
 }
 
-fn read_dir_recursive(path: &PathBuf, depth: u32, max_depth: u32) -> Result<Vec<FileEntry>, String> {
+fn read_dir_recursive(
+    path: &PathBuf,
+    depth: u32,
+    max_depth: u32,
+) -> Result<Vec<FileEntry>, String> {
     if depth > max_depth {
         return Ok(vec![]);
     }
@@ -57,12 +61,10 @@ fn read_dir_recursive(path: &PathBuf, depth: u32, max_depth: u32) -> Result<Vec<
     }
 
     // Sort: folders first, then alphabetically
-    entries.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
+    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
 
     Ok(entries)
@@ -73,11 +75,27 @@ fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn write_file(path: String, content: String) -> Result<(), String> {
+    fs::write(&path, content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn file_exists(path: String) -> bool {
+    std::path::Path::new(&path).exists()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![read_directory, read_file])
+        .invoke_handler(tauri::generate_handler![
+            read_directory,
+            read_file,
+            write_file,
+            file_exists
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
