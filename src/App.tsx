@@ -5,11 +5,10 @@ import {
   FolderOpen,
   FileText,
   FilePlus,
-  Dot,
-  X,
 } from 'lucide-react';
 import { FileTree } from './components/FileTree';
 import { Editor } from './components/Editor';
+import { TitleBar } from './components/TitleBar';
 import { QuickSwitcher } from './components/QuickSwitcher';
 import { BacklinksPanel } from './components/BacklinksPanel';
 import { ContextMenu } from './components/ContextMenu';
@@ -630,6 +629,15 @@ function App() {
 
   return (
     <div style={styles.app}>
+      {/* Custom Title Bar with Tabs */}
+      <TitleBar
+        openTabs={openTabs}
+        activeTabPath={activeTabPath}
+        onTabClick={setActiveTabPath}
+        onTabClose={closeTab}
+        onFileNameChange={handleFileNameChange}
+      />
+
       {/* Main Content */}
       <div style={styles.mainContent}>
         {/* Sidebar */}
@@ -779,112 +787,6 @@ function App() {
 
         {/* Content Area */}
         <main style={styles.contentArea}>
-          {/* Tabs bar */}
-          {openTabs.length > 0 && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              backgroundColor: '#27272a',
-              borderBottom: '1px solid #3f3f46',
-              height: '36px',
-              flexShrink: 0,
-            }}>
-              <div style={{
-                display: 'flex',
-                flex: 1,
-                overflowX: 'auto',
-                gap: '2px',
-                padding: '0 8px',
-              }}>
-                {openTabs.map((tab) => (
-                  <div
-                    key={tab.path}
-                    onClick={() => setActiveTabPath(tab.path)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '6px 12px',
-                      backgroundColor: tab.path === activeTabPath ? '#18181b' : 'transparent',
-                      border: tab.path === activeTabPath ? '1px solid #3f3f46' : '1px solid transparent',
-                      borderBottom: tab.path === activeTabPath ? '1px solid #18181b' : '1px solid transparent',
-                      borderTopLeftRadius: '4px',
-                      borderTopRightRadius: '4px',
-                      cursor: 'pointer',
-                      minWidth: 'fit-content',
-                      maxWidth: '200px',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (tab.path !== activeTabPath) {
-                        e.currentTarget.style.backgroundColor = '#3f3f46';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (tab.path !== activeTabPath) {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }
-                    }}
-                  >
-                    {tab.isDirty && (
-                      <Dot style={{ color: '#f59e0b', flexShrink: 0 }} size={12} />
-                    )}
-                    <input
-                      type="text"
-                      value={tab.name}
-                      onChange={(e) => {
-                        if (tab.path === activeTabPath) {
-                          handleFileNameChange(e.target.value);
-                        }
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        border: 'none',
-                        background: 'transparent',
-                        padding: '0',
-                        margin: '0',
-                        fontSize: '12px',
-                        color: '#a1a1aa',
-                        fontFamily: '"IBM Plex Mono", "SF Mono", "Courier New", monospace',
-                        outline: 'none',
-                        minWidth: '40px',
-                        maxWidth: '150px',
-                      }}
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeTab(tab.path);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '18px',
-                        height: '18px',
-                        border: 'none',
-                        background: 'transparent',
-                        color: '#71717a',
-                        cursor: 'pointer',
-                        borderRadius: '3px',
-                        padding: '0',
-                        flexShrink: 0,
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#3f3f46';
-                        e.currentTarget.style.color = '#a1a1aa';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.color = '#71717a';
-                      }}
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
           {(() => {
             const activeTab = getActiveTab();
             return activeTab ? (

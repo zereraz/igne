@@ -44,28 +44,48 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick 
     const view = viewRef.current;
     if (!view || !wikilinkSearch) return;
 
-    const { query } = wikilinkSearch;
-    const insertText = `[[${name}]]`;
+    const insertText = name;
 
-    // Find and replace the incomplete [[query]]
+    // Find the [[]] pattern and replace the inner ]]
     const docText = view.state.doc.toString();
-    const searchPattern = `[[${query}`;
-    const startIndex = docText.lastIndexOf(searchPattern);
+    const cursorPos = view.state.selection.main.head;
 
-    if (startIndex !== -1) {
-      const from = startIndex;
-      const to = from + searchPattern.length;
+    // Look backward from cursor for [[ followed by ]]
+    // The cursor is between the ] characters, so we need to find [[ before and ]] after
+    const beforeCursor = docText.slice(0, cursorPos);
+    const afterCursor = docText.slice(cursorPos);
+
+    // Match [[ at the end of beforeCursor
+    const openMatch = beforeCursor.match(/\[\[$/);
+    // Match ]] at the start of afterCursor
+    const closeMatch = afterCursor.match(/^\]\]/);
+
+    if (openMatch && closeMatch) {
+      // Found [[]] with cursor in the middle
+      const from = cursorPos - 2; // Position of first [
+      const to = cursorPos + 2; // Position after second ]
       view.dispatch({
-        changes: { from, to, insert: insertText },
-        selection: { anchor: from + insertText.length },
+        changes: { from, to, insert: `[[${insertText}]]` },
+        selection: { anchor: from + insertText.length + 4 }, // After the closing ]]
       });
-    } else {
-      // Fallback: just append
-      const pos = view.state.selection.main.head;
-      view.dispatch({
-        changes: { from: pos, insert: insertText },
-        selection: { anchor: pos + insertText.length },
-      });
+      setWikilinkSearch(null);
+      return;
+    }
+
+    // Fallback: search for [[]] pattern in the document
+    const pattern = /\[\[\]\]/g;
+    let match;
+    while ((match = pattern.exec(docText)) !== null) {
+      const matchPos = match.index;
+      // Check if this [[]] is near the cursor
+      if (matchPos <= cursorPos && matchPos + 4 >= cursorPos) {
+        view.dispatch({
+          changes: { from: matchPos, to: matchPos + 4, insert: `[[${insertText}]]` },
+          selection: { anchor: matchPos + insertText.length + 4 },
+        });
+        setWikilinkSearch(null);
+        return;
+      }
     }
 
     setWikilinkSearch(null);
@@ -99,52 +119,51 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick 
         codeLanguages: languages,
         extensions: [Strikethrough, Highlight, Wikilink, Embed, BlockID, Tag, TaskMarker],
       }),
-      // Keymap to trigger wikilink search when [[ is typed
+      // Keymap to auto-close [ and trigger wikilink search for [[
       keymap.of([
         {
           key: '[',
           run: (view) => {
             const pos = view.state.selection.main.head;
             const line = view.state.doc.lineAt(pos);
-            const lineBefore = line.text.slice(0, pos - line.from - 1);
 
-            console.log('[Editor] [ key pressed, lineBefore:', lineBefore);
-
-            // Check if previous character is [
-            if (lineBefore.endsWith('[')) {
-              console.log('[Editor] [[ detected, opening search popup');
-
-              // Remove the second [ that was just inserted
-              const beforeBracketPos = pos - 1;
+            // Check if we just typed [ after another [
+            const textBefore = line.text.slice(0, pos - line.from);
+            if (textBefore.endsWith('[')) {
+              // We typed [[ - insert [ and closing brackets, show popup
               view.dispatch({
-                changes: { from: beforeBracketPos, to: pos, insert: '' },
+                changes: { from: pos, to: pos, insert: '[]]' },
+                selection: { anchor: pos + 2 }, // Cursor between the inner brackets
               });
 
-              // Get cursor coordinates
-              const coords = view.coordsAtPos(beforeBracketPos);
+              // Get cursor coordinates for popup
+              const coords = view.coordsAtPos(pos + 2);
               if (coords) {
-                // Extract the query (text after [[)
-                const fullLineBefore = line.text.slice(0, beforeBracketPos - line.from);
-                const queryMatch = fullLineBefore.match(/\[\[([^\]]*)$/);
-                const query = queryMatch ? queryMatch[1] : '';
-
-                console.log('[Editor] Initial query:', query);
-
                 setWikilinkSearch({
                   position: { top: coords.bottom + 4, left: coords.left },
-                  query,
+                  query: '',
                 });
-                performSearch(query);
+                performSearch('');
               }
               return true;
             }
-            return false;
+
+            // Just [, auto-close it
+            view.dispatch({
+              changes: { from: pos, to: pos, insert: '[]' },
+              selection: { anchor: pos + 1 }, // Cursor between brackets
+            });
+            return true;
           },
         },
       ]),
       createLivePreview({
         onWikilinkClick: onWikilinkClick || (() => {}),
         onWikilinkCmdClick: onWikilinkCmdClick || (() => {}),
+        resolveWikilink: (target: string) => {
+          const exists = searchStore.noteExists(target);
+          return exists ? { exists: true } : { exists: false };
+        },
       }),
       placeholder('Start writing...'),
       EditorView.updateListener.of((update) => {
