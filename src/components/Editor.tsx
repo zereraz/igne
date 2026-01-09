@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { EditorState, Compartment } from '@codemirror/state';
+import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, placeholder } from '@codemirror/view';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
@@ -21,9 +21,6 @@ export function Editor({ content, onChange }: EditorProps) {
 
   useEffect(() => {
     if (!containerRef.current) return;
-
-    // Create extensions compartments for dynamic updates
-    const languageCompartment = new Compartment();
 
     const extensions = [
       oneDark,

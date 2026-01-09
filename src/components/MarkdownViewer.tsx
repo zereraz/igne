@@ -8,7 +8,7 @@ interface MarkdownViewerProps {
   fileName: string;
 }
 
-export function MarkdownViewer({ content, fileName }: MarkdownViewerProps) {
+export function MarkdownViewer({ content }: MarkdownViewerProps) {
   return (
     <div style={{ maxWidth: '48rem', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '1.5rem', paddingBottom: '1.5rem' }}>
       <div className="prose">
