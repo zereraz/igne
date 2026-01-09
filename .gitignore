@@ -1,0 +1,6 @@
+# Igné Ralph Loop
+
+/work/outputs/
+/logs/
+.env
+*.log
