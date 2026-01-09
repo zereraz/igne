@@ -5,6 +5,7 @@ import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { wikilinkAutocompletion } from '../utils/wikilinkCompletion';
 
 interface EditorProps {
   content: string;
@@ -27,6 +28,7 @@ export function Editor({ content, onChange }: EditorProps) {
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
       markdown({ codeLanguages: languages }),
+      wikilinkAutocompletion(),
       placeholder('Start writing...'),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -51,6 +53,25 @@ export function Editor({ content, onChange }: EditorProps) {
         },
         '.cm-placeholder': {
           color: '#52525b',
+        },
+        '.cm-tooltip': {
+          backgroundColor: '#27272a',
+          border: '1px solid #3f3f46',
+          borderRadius: '0.25rem',
+        },
+        '.cm-tooltip-autocomplete': {
+          maxWidth: '300px',
+        },
+        '.cm-tooltip-autocomplete ul': {
+          maxHeight: '200px',
+        },
+        '.cm-tooltip-autocomplete ul li': {
+          color: '#a1a1aa',
+          padding: '0.25rem 0.5rem',
+        },
+        '.cm-tooltip-autocomplete ul li[aria-selected]': {
+          backgroundColor: '#3f3f46',
+          color: 'white',
         },
       }),
     ];

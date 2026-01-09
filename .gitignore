@@ -4,3 +4,27 @@
 /logs/
 .env
 *.log
+
+# Node
+node_modules/
+dist/
+build/
+
+# Rust / Tauri
+src-tauri/target/
+*.rlib
+*.rmeta
+*.a
+*.dylib
+*.so
+*.dll
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

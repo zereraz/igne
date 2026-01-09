@@ -6,9 +6,11 @@ interface FileTreeProps {
   entries: FileEntry[];
   selectedPath: string | null;
   onSelect: (path: string) => void;
+  onContextMenu?: (path: string, isFolder: boolean, x: number, y: number) => void;
+  onDrop?: (sourcePath: string, targetPath: string) => void;
 }
 
-const getRowStyle = (depth: number, isSelected: boolean) => ({
+const getRowStyle = (depth: number, isSelected: boolean, isDragOver: boolean) => ({
   display: 'flex',
   alignItems: 'center',
   gap: '0.25rem',
@@ -18,15 +20,16 @@ const getRowStyle = (depth: number, isSelected: boolean) => ({
   paddingBottom: '0.25rem',
   cursor: 'pointer',
   borderRadius: '0.25rem',
-  backgroundColor: isSelected ? '#3f3f46' : 'transparent',
+  backgroundColor: isDragOver ? '#3f3f46' : (isSelected ? '#3f3f46' : 'transparent'),
   color: isSelected ? '#a78bfa' : 'inherit',
+  border: isDragOver ? '1px dashed #7c3aed' : 'none',
 });
 
-const getRowHoverStyle = (isHovered: boolean, isSelected: boolean) => ({
-  backgroundColor: isSelected ? '#3f3f46' : (isHovered ? '#27272a' : 'transparent'),
+const getRowHoverStyle = (isHovered: boolean, isSelected: boolean, isDragOver: boolean) => ({
+  backgroundColor: isDragOver ? '#3f3f46' : (isSelected ? '#3f3f46' : (isHovered ? '#27272a' : 'transparent')),
 });
 
-export function FileTree({ entries, selectedPath, onSelect }: FileTreeProps) {
+export function FileTree({ entries, selectedPath, onSelect, onContextMenu, onDrop }: FileTreeProps) {
   return (
     <div style={{ fontSize: '0.875rem' }}>
       {entries.map((entry) => (
@@ -36,6 +39,8 @@ export function FileTree({ entries, selectedPath, onSelect }: FileTreeProps) {
           depth={0}
           selectedPath={selectedPath}
           onSelect={onSelect}
+          onContextMenu={onContextMenu}
+          onDrop={onDrop}
         />
       ))}
     </div>
@@ -47,11 +52,15 @@ interface FileTreeItemProps {
   depth: number;
   selectedPath: string | null;
   onSelect: (path: string) => void;
+  onContextMenu?: (path: string, isFolder: boolean, x: number, y: number) => void;
+  onDrop?: (sourcePath: string, targetPath: string) => void;
 }
 
-function FileTreeItem({ entry, depth, selectedPath, onSelect }: FileTreeItemProps) {
+function FileTreeItem({ entry, depth, selectedPath, onSelect, onContextMenu, onDrop }: FileTreeItemProps) {
   const [expanded, setExpanded] = useState(depth < 1);
   const [isHovered, setIsHovered] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
 
   const isSelected = selectedPath === entry.path;
 
@@ -63,13 +72,60 @@ function FileTreeItem({ entry, depth, selectedPath, onSelect }: FileTreeItemProp
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onContextMenu?.(entry.path, entry.is_dir, e.clientX, e.clientY);
+  };
+
+  const handleDragStart = (e: React.DragEvent) => {
+    setDraggedItem(entry.path);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', entry.path);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setIsDragOver(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (entry.is_dir && draggedItem && draggedItem !== entry.path) {
+      e.dataTransfer.dropEffect = 'move';
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    const sourcePath = e.dataTransfer.getData('text/plain');
+    if (sourcePath && sourcePath !== entry.path && entry.is_dir) {
+      onDrop?.(sourcePath, entry.path);
+    }
+    setDraggedItem(null);
+  };
+
   return (
     <div>
       <div
-        style={{ ...getRowStyle(depth, isSelected), ...getRowHoverStyle(isHovered, isSelected) }}
+        style={{ ...getRowStyle(depth, isSelected, isDragOver), ...getRowHoverStyle(isHovered, isSelected, isDragOver) }}
         onClick={handleClick}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        onContextMenu={handleContextMenu}
+        draggable={true}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {entry.is_dir ? (
           <>
@@ -100,6 +156,8 @@ function FileTreeItem({ entry, depth, selectedPath, onSelect }: FileTreeItemProp
               depth={depth + 1}
               selectedPath={selectedPath}
               onSelect={onSelect}
+              onContextMenu={onContextMenu}
+              onDrop={onDrop}
             />
           ))}
         </div>

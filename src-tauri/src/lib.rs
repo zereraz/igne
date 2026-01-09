@@ -85,6 +85,30 @@ fn file_exists(path: String) -> bool {
     std::path::Path::new(&path).exists()
 }
 
+#[tauri::command]
+fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
+    fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_file(path: String) -> Result<(), String> {
+    if PathBuf::from(&path).is_dir() {
+        fs::remove_dir_all(&path).map_err(|e| e.to_string())
+    } else {
+        fs::remove_file(&path).map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+fn create_directory(path: String) -> Result<(), String> {
+    fs::create_dir_all(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn move_file(source: String, destination: String) -> Result<(), String> {
+    fs::rename(&source, &destination).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -93,7 +117,11 @@ pub fn run() {
             read_directory,
             read_file,
             write_file,
-            file_exists
+            file_exists,
+            rename_file,
+            delete_file,
+            create_directory,
+            move_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
