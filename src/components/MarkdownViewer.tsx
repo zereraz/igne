@@ -5,7 +5,6 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface MarkdownViewerProps {
   content: string;
-  fileName: string;
 }
 
 export function MarkdownViewer({ content }: MarkdownViewerProps) {

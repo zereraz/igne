@@ -502,7 +502,7 @@ function App() {
               </div>
             ) : (
               <div style={styles.viewerContainer}>
-                <MarkdownViewer content={openFile.content} fileName={openFile.name} />
+                <MarkdownViewer content={openFile.content} />
               </div>
             )
           ) : (
