@@ -5,7 +5,7 @@ import { FileEntry } from '../types';
 interface FileTreeProps {
   entries: FileEntry[];
   selectedPath: string | null;
-  onSelect: (path: string) => void;
+  onSelect: (path: string, newTab?: boolean) => void;
   onContextMenu?: (path: string, isFolder: boolean, x: number, y: number) => void;
   onDrop?: (sourcePath: string, targetPath: string) => void;
 }
@@ -51,7 +51,7 @@ interface FileTreeItemProps {
   entry: FileEntry;
   depth: number;
   selectedPath: string | null;
-  onSelect: (path: string) => void;
+  onSelect: (path: string, newTab?: boolean) => void;
   onContextMenu?: (path: string, isFolder: boolean, x: number, y: number) => void;
   onDrop?: (sourcePath: string, targetPath: string) => void;
 }
@@ -64,11 +64,12 @@ function FileTreeItem({ entry, depth, selectedPath, onSelect, onContextMenu, onD
 
   const isSelected = selectedPath === entry.path;
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
     if (entry.is_dir) {
       setExpanded(!expanded);
     } else {
-      onSelect(entry.path);
+      const isNewTab = (e.metaKey || e.ctrlKey);
+      onSelect(entry.path, isNewTab);
     }
   };
 
@@ -116,7 +117,7 @@ function FileTreeItem({ entry, depth, selectedPath, onSelect, onContextMenu, onD
     <div>
       <div
         style={{ ...getRowStyle(depth, isSelected, isDragOver), ...getRowHoverStyle(isHovered, isSelected, isDragOver) }}
-        onClick={handleClick}
+        onClick={(e) => handleClick(e)}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         onContextMenu={handleContextMenu}

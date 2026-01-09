@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -5,7 +6,6 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { searchStore } from '../stores/searchStore';
 import { Callout } from './Callout';
 import { NoteEmbed } from './NoteEmbed';
-import { invoke } from '@tauri-apps/api/core';
 
 interface MarkdownViewerProps {
   content: string;
@@ -13,17 +13,50 @@ interface MarkdownViewerProps {
   getEmbedContent?: (noteName: string) => Promise<string | null>;
 }
 
+// Helper component to load embed content asynchronously
+function EmbedLoader({ noteName, getEmbedContent, onOpen }: { noteName: string; getEmbedContent: (noteName: string) => Promise<string | null>; onOpen: () => void }) {
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getEmbedContent(noteName)
+      .then(setContent)
+      .finally(() => setLoading(false));
+  }, [noteName, getEmbedContent]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '1rem', backgroundColor: '#27272a', borderRadius: '0.375rem' }}>
+        <span style={{ color: '#71717a' }}>Loading...</span>
+      </div>
+    );
+  }
+
+  return <NoteEmbed noteName={noteName} content={content} onOpen={onOpen} />;
+}
+
 export function MarkdownViewer({ content, onLinkClick, getEmbedContent }: MarkdownViewerProps) {
-  // Custom renderer for text to handle wikilinks
+  // Custom renderer for text to handle wikilinks and embeds
   const transformWikilinks = (text: string): string => {
-    // Pattern to match [[note]] or [[note|display]]
-    return text.replace(
+    // First handle embeds: ![[note]] or ![[note|display]]
+    let transformed = text.replace(
+      /!\[\[([^\]|]+)(\|([^\]]+))?\]\]/g,
+      (_match, target, _pipe, display) => {
+        const linkText = display || target;
+        return `[${linkText}](embed:${target})`;
+      }
+    );
+
+    // Then handle regular wikilinks: [[note]] or [[note|display]]
+    transformed = transformed.replace(
       /\[\[([^\]|]+)(\|([^\]]+))?\]\]/g,
-      (match, target, _, display) => {
+      (_match, target, _pipe, display) => {
         const linkText = display || target;
         return `[${linkText}](wikilink:${target})`;
       }
     );
+
+    return transformed;
   };
 
   // Parse callout syntax from blockquote
@@ -121,27 +154,15 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent }: Markdo
                 </code>
               );
             },
-            a: async ({ href, children }) => {
+            a: ({ href, children }) => {
               // Check for embed syntax: ![[note]]
               if (href?.startsWith('embed:')) {
                 const noteName = href.replace('embed:', '');
                 const notePath = searchStore.getFilePathByName(noteName);
 
                 if (notePath && getEmbedContent) {
-                  try {
-                    const content = await getEmbedContent(noteName);
-                    if (content) {
-                      return (
-                        <NoteEmbed
-                          noteName={noteName}
-                          content={content}
-                          onOpen={() => onLinkClick?.(noteName)}
-                        />
-                      );
-                    }
-                  } catch (error) {
-                    console.error('Failed to load embed:', error);
-                  }
+                  // Return a component that will handle async loading
+                  return <EmbedLoader noteName={noteName} getEmbedContent={getEmbedContent} onOpen={() => onLinkClick?.(noteName)} />;
                 }
                 return (
                   <div style={{ padding: '1rem', backgroundColor: '#27272a', borderRadius: '0.375rem' }}>

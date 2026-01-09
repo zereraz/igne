@@ -1,13 +1,11 @@
 import {
   Info,
   AlertTriangle,
-  AlertCircle,
   CheckCircle,
   Lightbulb,
   FileQuestion,
   Quote,
   FileText,
-  Flame,
   Bug,
   Bookmark,
   X,

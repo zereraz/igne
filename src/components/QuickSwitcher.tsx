@@ -1,21 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, FileText } from 'lucide-react';
 import { searchStore } from '../stores/searchStore';
+import type { SearchResult, ModalProps } from '../types';
 
-interface QuickSwitcherProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface QuickSwitcherProps extends Omit<ModalProps, 'title' | 'style' | 'className'> {
   onSelectFile: (path: string) => void;
-}
-
-interface FileResult {
-  path: string;
-  name: string;
 }
 
 export function QuickSwitcher({ isOpen, onClose, onSelectFile }: QuickSwitcherProps) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<FileResult[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 

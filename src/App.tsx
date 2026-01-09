@@ -1,18 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { open, save } from '@tauri-apps/plugin-dialog';
+import { open } from '@tauri-apps/plugin-dialog';
 import {
   FolderOpen,
   FileText,
   FilePlus,
-  Eye,
-  Edit3,
-  Save,
   Dot,
-  FolderPlus,
+  X,
 } from 'lucide-react';
 import { FileTree } from './components/FileTree';
-import { MarkdownViewer } from './components/MarkdownViewer';
 import { Editor } from './components/Editor';
 import { QuickSwitcher } from './components/QuickSwitcher';
 import { BacklinksPanel } from './components/BacklinksPanel';
@@ -28,41 +24,6 @@ const styles = {
     flexDirection: 'column' as const,
     backgroundColor: '#18181b',
     fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: '16px',
-    paddingRight: '16px',
-    paddingTop: '8px',
-    paddingBottom: '8px',
-    backgroundColor: '#27272a',
-    borderBottom: '1px solid #3f3f46',
-    flexShrink: 0,
-  },
-  headerLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  headerRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  title: {
-    fontWeight: 600,
-    color: 'white',
-    fontSize: '14px',
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
-  },
-  fileNameDisplay: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    color: '#a1a1aa',
-    fontSize: '12px',
   },
   dirtyIndicator: {
     color: '#f59e0b',
@@ -86,44 +47,6 @@ const styles = {
     transition: 'background-color 100ms ease',
     color: 'white',
   },
-  // Primary button: solid accent
-  buttonPrimary: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    paddingLeft: '12px',
-    paddingRight: '12px',
-    paddingTop: '8px',
-    paddingBottom: '8px',
-    fontSize: '12px',
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
-    fontWeight: 500,
-    backgroundColor: '#a78bfa',
-    border: 'none',
-    borderRadius: '2px',
-    cursor: 'pointer',
-    transition: 'background-color 100ms ease',
-    color: 'white',
-  },
-  // Ghost button: muted accent on hover
-  toggleButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    paddingLeft: '10px',
-    paddingRight: '10px',
-    paddingTop: '6px',
-    paddingBottom: '6px',
-    fontSize: '12px',
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
-    fontWeight: 500,
-    backgroundColor: 'transparent',
-    border: '1px solid #3f3f46',
-    borderRadius: '2px',
-    cursor: 'pointer',
-    transition: 'border-color 100ms ease, color 100ms ease',
-    color: '#a1a1aa',
-  },
   mainContent: {
     display: 'flex',
     flex: 1,
@@ -137,8 +60,10 @@ const styles = {
     flexShrink: 0,
   },
   sidebarContent: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    height: '100%',
     paddingTop: '8px',
-    paddingBottom: '8px',
   },
   sidebarHeader: {
     display: 'flex',
@@ -194,7 +119,7 @@ const styles = {
   },
   contentArea: {
     flex: 1,
-    overflowY: 'auto' as const,
+    overflow: 'hidden',
     backgroundColor: '#18181b',
     display: 'flex',
     flexDirection: 'column' as const,
@@ -212,13 +137,9 @@ const styles = {
     flex: 1,
     overflow: 'hidden',
   },
-  viewerContainer: {
-    flex: 1,
-    overflowY: 'auto' as const,
-  },
 };
 
-const UNTITLED_NAME = 'Untitled.md';
+const UNTITLED_BASE = 'Untitled';
 const POLL_INTERVAL = 2000;
 
 interface ContextMenuState {
@@ -231,21 +152,78 @@ interface ContextMenuState {
 function App() {
   const [vaultPath, setVaultPath] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
-  const [openFile, setOpenFile] = useState<OpenFile | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
+  const [openTabs, setOpenTabs] = useState<OpenFile[]>([]);
+  const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isQuickSwitcherOpen, setIsQuickSwitcherOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ path: string; isFolder: boolean } | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
+  const autoSaveTimerRef = useRef<number | null>(null);
 
-  // Start/stop file watching
+  // Helper to get the active tab
+  const getActiveTab = useCallback(() => {
+    return openTabs.find(tab => tab.path === activeTabPath) || null;
+  }, [openTabs, activeTabPath]);
+
+  // Open a file in a tab (or switch to it if already open)
+  const openTab = useCallback((path: string, name: string, content: string, isDirty = false) => {
+    setOpenTabs(prev => {
+      const existing = prev.find(tab => tab.path === path);
+      if (existing) {
+        // File already open, just switch to it and update content if changed
+        setActiveTabPath(path);
+        return prev.map(tab =>
+          tab.path === path ? { ...tab, content, isDirty: tab.isDirty || isDirty } : tab
+        );
+      }
+      // Open new tab
+      const newTab: OpenFile = { path, name, content, isDirty };
+      return [...prev, newTab];
+    });
+    setActiveTabPath(path);
+  }, []);
+
+  // Close a tab
+  const closeTab = useCallback((path: string) => {
+    setOpenTabs(prev => {
+      const index = prev.findIndex(tab => tab.path === path);
+      if (index === -1) return prev;
+
+      const newTabs = prev.filter(tab => tab.path !== path);
+
+      // If closing the active tab, switch to another
+      if (path === activeTabPath) {
+        if (newTabs.length > 0) {
+          // Try to select the tab to the right, or the one to the left
+          const newIndex = Math.min(index, newTabs.length - 1);
+          setActiveTabPath(newTabs[newIndex].path);
+        } else {
+          setActiveTabPath(null);
+        }
+      }
+
+      return newTabs;
+    });
+  }, [activeTabPath]);
+
+  // Start/stop file watching - only re-index if file count changes
   useEffect(() => {
     if (vaultPath) {
-      pollIntervalRef.current = window.setInterval(() => {
-        invoke<FileEntry[]>('read_directory', { path: vaultPath })
-          .then(setFiles)
-          .catch(console.error);
+      let lastFileCount = 0;
+
+      pollIntervalRef.current = window.setInterval(async () => {
+        const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+        const currentFileCount = entries.length;
+
+        // Only re-index if the number of files changed (external add/delete)
+        if (currentFileCount !== lastFileCount) {
+          setFiles(entries);
+          await searchStore.indexFiles(vaultPath, entries);
+          lastFileCount = currentFileCount;
+        } else {
+          setFiles(entries); // Still update the file tree
+        }
       }, POLL_INTERVAL);
 
       return () => {
@@ -281,122 +259,197 @@ function App() {
 
       if (selected && typeof selected === 'string') {
         setVaultPath(selected);
-        setOpenFile(null);
-        setIsEditMode(false);
+        setOpenTabs([]);
+        setActiveTabPath(null);
       }
     } catch (e) {
       console.error('Failed to open folder:', e);
     }
   };
 
-  const handleNewFile = useCallback(() => {
+  const handleNewFile = useCallback(async () => {
     if (!vaultPath) return;
 
-    const untitledPath = `${vaultPath}/${UNTITLED_NAME}`;
-    invoke<boolean>('file_exists', { path: untitledPath }).then((exists) => {
-      if (!exists) {
-        setOpenFile({
-          path: untitledPath,
-          name: UNTITLED_NAME,
-          content: '',
-          isDirty: true,
-        });
-        setIsEditMode(true);
-      } else {
-        invoke<string>('read_file', { path: untitledPath })
-          .then((content) => {
-            setOpenFile({
-              path: untitledPath,
-              name: UNTITLED_NAME,
-              content,
-              isDirty: false,
-            });
-            setIsEditMode(false);
-          })
-          .catch(console.error);
-      }
-    });
-  }, [vaultPath]);
+    // Find the next available untitled filename
+    const existingFiles = files.map(f => f.name);
+    let counter = 0;
+    let fileName: string;
+    do {
+      fileName = counter === 0 ? `${UNTITLED_BASE}.md` : `${UNTITLED_BASE} ${counter}.md`;
+      counter++;
+    } while (existingFiles.includes(fileName));
+
+    const untitledPath = `${vaultPath}/${fileName}`;
+
+    // Create the file immediately with empty content
+    try {
+      await invoke('write_file', { path: untitledPath, content: '' });
+      openTab(untitledPath, fileName, '', false);
+      // Refresh file list and re-index
+      const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+      setFiles(entries);
+      await searchStore.indexFiles(vaultPath, entries);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [vaultPath, files, openTab]);
 
   const handleFileSelect = useCallback(
-    (path: string) => {
+    (path: string, newTab = false) => {
       invoke<string>('read_file', { path })
         .then((content) => {
           const parts = path.split(/[/\\]/);
           const name = parts[parts.length - 1] || '';
-          setOpenFile({
-            path,
-            name,
-            content,
-            isDirty: false,
+
+          setOpenTabs(prev => {
+            const existing = prev.find(tab => tab.path === path);
+
+            if (existing) {
+              // File already open - just switch to it and update content
+              setActiveTabPath(path);
+              return prev.map(tab =>
+                tab.path === path ? { ...tab, content } : tab
+              );
+            }
+
+            if (newTab) {
+              // Open in new tab
+              const newTabItem: OpenFile = { path, name, content, isDirty: false };
+              return [...prev, newTabItem];
+            }
+
+            // Replace active tab content
+            if (prev.length === 0) {
+              // No tabs yet, create first one
+              const newTabItem: OpenFile = { path, name, content, isDirty: false };
+              return [newTabItem];
+            }
+
+            // Replace the active tab's content
+            return prev.map(tab =>
+              tab.path === activeTabPath ? { path, name, content, isDirty: false } : tab
+            );
           });
-          setIsEditMode(false);
+
+          // If we created a new tab, activate it
+          if (newTab || openTabs.length === 0 || !openTabs.find(t => t.path === path)) {
+            setActiveTabPath(path);
+          }
         })
         .catch(console.error);
     },
-    []
+    [activeTabPath, openTabs]
   );
 
   const handleSave = useCallback(async () => {
-    if (!openFile) return;
+    const activeTab = getActiveTab();
+    if (!activeTab) return;
 
-    if (openFile.name === UNTITLED_NAME) {
-      try {
-        const newPath = await save({
-          defaultPath: openFile.path,
-          filters: [{ name: 'Markdown', extensions: ['md'] }],
-        });
+    try {
+      await invoke('write_file', {
+        path: activeTab.path,
+        content: activeTab.content,
+      });
 
-        if (newPath) {
-          await invoke('write_file', {
-            path: newPath,
-            content: openFile.content,
-          });
+      setOpenTabs(prev => prev.map(tab =>
+        tab.path === activeTab.path ? { ...tab, isDirty: false } : tab
+      ));
 
-          const parts = newPath.split(/[/\\]/);
-          const name = parts[parts.length - 1] || '';
-
-          setOpenFile({
-            path: newPath,
-            name,
-            content: openFile.content,
-            isDirty: false,
-          });
-
-          if (vaultPath) {
-            invoke<FileEntry[]>('read_directory', { path: vaultPath })
-              .then(setFiles)
-              .catch(console.error);
-          }
-        }
-      } catch (e) {
-        console.error('Failed to save file:', e);
+      if (vaultPath) {
+        invoke<FileEntry[]>('read_directory', { path: vaultPath })
+          .then(setFiles)
+          .catch(console.error);
       }
-    } else {
-      try {
-        await invoke('write_file', {
-          path: openFile.path,
-          content: openFile.content,
-        });
-
-        setOpenFile((prev) => (prev ? { ...prev, isDirty: false } : null));
-
-        if (vaultPath) {
-          invoke<FileEntry[]>('read_directory', { path: vaultPath })
-            .then(setFiles)
-            .catch(console.error);
-        }
-      } catch (e) {
-        console.error('Failed to save file:', e);
-      }
+    } catch (e) {
+      console.error('Failed to save file:', e);
     }
-  }, [openFile, vaultPath]);
+  }, [getActiveTab, vaultPath]);
+
+  // Auto-save: saves to file after 1 second of inactivity
+  const autoSave = useCallback(async () => {
+    const activeTab = getActiveTab();
+    if (!activeTab) return;
+
+    try {
+      await invoke('write_file', {
+        path: activeTab.path,
+        content: activeTab.content,
+      });
+      setOpenTabs(prev => prev.map(tab =>
+        tab.path === activeTab.path ? { ...tab, isDirty: false } : tab
+      ));
+      // Update search index with new content
+      await searchStore.updateFile(activeTab.path, activeTab.content);
+    } catch (e) {
+      console.error('Auto-save failed:', e);
+    }
+  }, [getActiveTab]);
 
   const handleContentChange = useCallback((content: string) => {
-    setOpenFile((prev) =>
-      prev ? { ...prev, content, isDirty: true } : null
-    );
-  }, []);
+    setOpenTabs(prev => prev.map(tab =>
+      tab.path === activeTabPath ? { ...tab, content, isDirty: true } : tab
+    ));
+  }, [activeTabPath]);
+
+  const handleFileNameChange = useCallback(async (newName: string) => {
+    const activeTab = getActiveTab();
+    if (!activeTab || !activeTab.path) return;
+
+    // Add .md extension if not present
+    if (!newName.endsWith('.md')) {
+      newName += '.md';
+    }
+
+    // Don't do anything if name hasn't changed
+    if (newName === activeTab.name) return;
+
+    const parts = activeTab.path.split(/[/\\]/);
+    parts.pop();
+    const newPath = [...parts, newName].join('/');
+
+    try {
+      await invoke('rename_file', {
+        oldPath: activeTab.path,
+        newPath: newPath,
+      });
+
+      setOpenTabs(prev => prev.map(tab =>
+        tab.path === activeTab.path ? { ...tab, path: newPath, name: newName } : tab
+      ));
+
+      // Refresh file list
+      if (vaultPath) {
+        invoke<FileEntry[]>('read_directory', { path: vaultPath })
+          .then(setFiles)
+          .catch(console.error);
+      }
+    } catch (error) {
+      console.error('Failed to rename:', error);
+    }
+  }, [getActiveTab, vaultPath]);
+
+  // Trigger auto-save when content changes (debounced by 1 second)
+  useEffect(() => {
+    const activeTab = getActiveTab();
+    if (!activeTab) return;
+
+    // Clear any pending auto-save
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    // Schedule auto-save after 1 second
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSave();
+      autoSaveTimerRef.current = null;
+    }, 1000);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [getActiveTab()?.content, autoSave, getActiveTab]);
 
   // Keyboard shortcut for save and quick switcher
   useEffect(() => {
@@ -406,7 +459,7 @@ function App() {
         handleSave();
       } else if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
         e.preventDefault();
-        setIsQuickSwitcherOpen(true);
+        setIsQuickSwitcherOpen(prev => !prev);
       }
     };
 
@@ -415,39 +468,6 @@ function App() {
   }, [handleSave]);
 
   const vaultName = vaultPath ? vaultPath.split(/[/\\]/).pop() : null;
-
-  const handleWikilinkClick = useCallback(
-    (targetName: string) => {
-      const targetPath = searchStore.getFilePathByName(targetName);
-
-      if (targetPath) {
-        handleFileSelect(targetPath);
-      } else {
-        if (!vaultPath) return;
-        const newPath = `${vaultPath}/${targetName}.md`;
-        setOpenFile({
-          path: newPath,
-          name: `${targetName}.md`,
-          content: '',
-          isDirty: true,
-        });
-        setIsEditMode(true);
-      }
-    },
-    [vaultPath, handleFileSelect]
-  );
-
-  const handleGetEmbedContent = useCallback(async (noteName: string): Promise<string | null> => {
-    const notePath = searchStore.getFilePathByName(noteName);
-    if (!notePath) return null;
-
-    try {
-      return await invoke<string>('read_file', { path: notePath });
-    } catch (error) {
-      console.error('Failed to read embed content:', error);
-      return null;
-    }
-  }, []);
 
   const handleContextMenu = useCallback((path: string, isFolder: boolean, x: number, y: number) => {
     setContextMenu({ path, isFolder, x, y });
@@ -473,27 +493,31 @@ function App() {
         newPath: newPath,
       });
 
-      // Refresh file list
+      // Remove old path from search index and re-index
+      await searchStore.removeFile(renameTarget.path);
+
+      // Refresh file list and re-index
       if (vaultPath) {
-        invoke<FileEntry[]>('read_directory', { path: vaultPath })
-          .then(setFiles)
-          .catch(console.error);
+        const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+        setFiles(entries);
+        await searchStore.indexFiles(vaultPath, entries);
       }
 
-      // Update open file if it was renamed
-      if (openFile && openFile.path === renameTarget.path) {
-        const newParts = newPath.split(/[/\\]/);
-        const name = newParts[newParts.length - 1] || '';
-        setOpenFile((prev) =>
-          prev ? { ...prev, path: newPath, name } : null
-        );
-      }
+      // Update open tabs if file was renamed
+      setOpenTabs(prev => prev.map(tab => {
+        if (tab.path === renameTarget.path) {
+          const newParts = newPath.split(/[/\\]/);
+          const name = newParts[newParts.length - 1] || '';
+          return { ...tab, path: newPath, name };
+        }
+        return tab;
+      }));
     } catch (error) {
       console.error('Failed to rename:', error);
     }
 
     setRenameTarget(null);
-  }, [renameTarget, vaultPath, openFile]);
+  }, [renameTarget, vaultPath]);
 
   const handleDelete = useCallback(async () => {
     if (!contextMenu) return;
@@ -501,37 +525,54 @@ function App() {
     try {
       await invoke('delete_file', { path: contextMenu.path });
 
-      // Refresh file list
+      // Remove from search index
+      await searchStore.removeFile(contextMenu.path);
+
+      // Refresh file list and re-index
       if (vaultPath) {
-        invoke<FileEntry[]>('read_directory', { path: vaultPath })
-          .then(setFiles)
-          .catch(console.error);
+        const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+        setFiles(entries);
+        await searchStore.indexFiles(vaultPath, entries);
       }
 
-      // Close open file if it was deleted
-      if (openFile && openFile.path === contextMenu.path) {
-        setOpenFile(null);
-      }
+      // Close tab if file was deleted
+      closeTab(contextMenu.path);
     } catch (error) {
       console.error('Failed to delete:', error);
     }
 
     setContextMenu(null);
-  }, [contextMenu, vaultPath, openFile]);
+  }, [contextMenu, vaultPath, closeTab]);
 
   const handleNewFileInFolder = useCallback(async () => {
     if (!contextMenu || !vaultPath) return;
 
-    const untitledPath = `${contextMenu.path}/${UNTITLED_NAME}`;
-    setOpenFile({
-      path: untitledPath,
-      name: UNTITLED_NAME,
-      content: '',
-      isDirty: true,
-    });
-    setIsEditMode(true);
+    // Find the next available untitled filename
+    const folderFiles = files.filter(f => f.path.startsWith(contextMenu.path));
+    const existingFiles = folderFiles.map(f => f.name);
+    let counter = 0;
+    let fileName: string;
+    do {
+      fileName = counter === 0 ? `${UNTITLED_BASE}.md` : `${UNTITLED_BASE} ${counter}.md`;
+      counter++;
+    } while (existingFiles.includes(fileName));
+
+    const newFilePath = `${contextMenu.path}/${fileName}`;
+
+    // Create the file immediately with empty content
+    try {
+      await invoke('write_file', { path: newFilePath, content: '' });
+      openTab(newFilePath, fileName, '', false);
+      // Refresh file list and re-index
+      const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+      setFiles(entries);
+      await searchStore.indexFiles(vaultPath, entries);
+    } catch (e) {
+      console.error(e);
+    }
+
     setContextMenu(null);
-  }, [contextMenu, vaultPath]);
+  }, [contextMenu, vaultPath, files]);
 
   const handleNewFolder = useCallback(async () => {
     if (!contextMenu) return;
@@ -575,87 +616,20 @@ function App() {
           .catch(console.error);
       }
 
-      // Update open file path if it was moved
-      if (openFile && openFile.path === sourcePath) {
-        setOpenFile((prev) =>
-          prev ? { ...prev, path: destination } : null
-        );
-      }
+      // Update open tabs if file was moved
+      setOpenTabs(prev => prev.map(tab => {
+        if (tab.path === sourcePath) {
+          return { ...tab, path: destination };
+        }
+        return tab;
+      }));
     } catch (error) {
       console.error('Failed to move file:', error);
     }
-  }, [vaultPath, openFile]);
+  }, [vaultPath]);
 
   return (
     <div style={styles.app}>
-      {/* Header */}
-      <header style={styles.header}>
-        <div style={styles.headerLeft}>
-          <FileText style={{ width: '20px', height: '20px', color: '#a78bfa' }} />
-          <span style={styles.title}>Igne</span>
-          {openFile && (
-            <span style={styles.fileNameDisplay}>
-              {openFile.isDirty && (
-                <Dot style={styles.dirtyIndicator} size={16} />
-              )}
-              {openFile.name}
-            </span>
-          )}
-        </div>
-        <div style={styles.headerRight}>
-          {openFile && (
-            <>
-              <button
-                onClick={() => setIsEditMode(!isEditMode)}
-                style={styles.toggleButton}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#a78bfa';
-                  e.currentTarget.style.color = '#e4e4e7';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#3f3f46';
-                  e.currentTarget.style.color = '#a1a1aa';
-                }}
-                title={isEditMode ? 'Preview' : 'Edit'}
-              >
-                {isEditMode ? (
-                  <>
-                    <Eye size={14} />
-                    Preview
-                  </>
-                ) : (
-                  <>
-                    <Edit3 size={14} />
-                    Edit
-                  </>
-                )}
-              </button>
-              {openFile.isDirty && (
-                <button
-                  onClick={handleSave}
-                  style={styles.buttonPrimary}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#8b5cf6'}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#a78bfa'}
-                  title="Save (Cmd+S / Ctrl+S)"
-                >
-                  <Save size={14} />
-                  Save
-                </button>
-              )}
-            </>
-          )}
-          <button
-            onClick={handleOpenVault}
-            style={styles.button}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#52525b'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#3f3f46'}
-          >
-            <FolderOpen size={14} />
-            Open Vault
-          </button>
-        </div>
-      </header>
-
       {/* Main Content */}
       <div style={styles.mainContent}>
         {/* Sidebar */}
@@ -666,7 +640,12 @@ function App() {
                 <div style={styles.vaultName}>{vaultName}</div>
                 <button
                   onClick={handleNewFile}
-                  style={styles.newFileButton}
+                  style={{
+                    ...styles.newFileButton,
+                    padding: '4px',
+                    width: '24px',
+                    height: '24px',
+                  }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.borderColor = '#a78bfa';
                     e.currentTarget.style.color = '#e4e4e7';
@@ -678,7 +657,6 @@ function App() {
                   title="New File"
                 >
                   <FilePlus size={12} />
-                  New
                 </button>
               </div>
               {loading ? (
@@ -686,54 +664,262 @@ function App() {
               ) : (
                 <FileTree
                   entries={files}
-                  selectedPath={openFile?.path ?? null}
+                  selectedPath={activeTabPath ?? null}
                   onSelect={handleFileSelect}
                   onContextMenu={handleContextMenu}
                   onDrop={handleDrop}
                 />
               )}
+              {/* Open Vault button at bottom */}
+              <div
+                style={{
+                  marginTop: 'auto',
+                  padding: '6px 8px',
+                  borderTop: '1px solid #3f3f46',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                }}
+                onDoubleClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Clear any existing selection
+                  const selection = window.getSelection();
+                  if (selection) {
+                    selection.removeAllRanges();
+                  }
+                }}
+                onMouseDown={(e) => {
+                  // Prevent selection on mousedown too
+                  if (e.detail > 1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
+                }}
+              >
+                <FolderOpen size={12} style={{ color: '#71717a', flexShrink: 0, pointerEvents: 'none' }} />
+                {vaultName && (
+                  <span
+                    style={{
+                      color: '#71717a',
+                      fontSize: '10px',
+                      fontFamily: "'IBM Plex Mono', monospace",
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      flex: 1,
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    {vaultName}
+                  </span>
+                )}
+                <button
+                  onClick={handleOpenVault}
+                  style={{
+                    ...styles.newFileButton,
+                    padding: '4px',
+                    width: '20px',
+                    height: '20px',
+                    flexShrink: 0,
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = '#a78bfa';
+                    e.currentTarget.style.color = '#e4e4e7';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = '#3f3f46';
+                    e.currentTarget.style.color = '#a1a1aa';
+                  }}
+                  title="Change Vault"
+                  onMouseDown={(e) => {
+                    if (e.detail > 1) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }
+                  }}
+                >
+                  <FolderOpen size={10} style={{ pointerEvents: 'none' }} />
+                </button>
+              </div>
             </div>
           ) : (
             <div style={styles.emptyState}>
               <FolderOpen size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
               <p>No vault open</p>
-              <p style={{ fontSize: '11px', marginTop: '4px', color: '#52525b' }}>
-                Click &quot;Open Vault&quot; to get started
-              </p>
+              <button
+                onClick={handleOpenVault}
+                style={{
+                  marginTop: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  fontSize: '12px',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  backgroundColor: '#a78bfa',
+                  border: 'none',
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  color: 'white',
+                }}
+              >
+                <FolderOpen size={14} />
+                Open Vault
+              </button>
             </div>
           )}
         </aside>
 
         {/* Content Area */}
         <main style={styles.contentArea}>
-          {openFile ? (
-            <>
-              {isEditMode ? (
-                <div style={styles.editorContainer}>
-                  <Editor content={openFile.content} onChange={handleContentChange} />
-                </div>
-              ) : (
-                <>
-                  <div style={styles.viewerContainer}>
-                    <MarkdownViewer
-                      content={openFile.content}
-                      onLinkClick={handleWikilinkClick}
-                      getEmbedContent={handleGetEmbedContent}
+          {/* Tabs bar */}
+          {openTabs.length > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              backgroundColor: '#27272a',
+              borderBottom: '1px solid #3f3f46',
+              height: '36px',
+              flexShrink: 0,
+            }}>
+              <div style={{
+                display: 'flex',
+                flex: 1,
+                overflowX: 'auto',
+                gap: '2px',
+                padding: '0 8px',
+              }}>
+                {openTabs.map((tab) => (
+                  <div
+                    key={tab.path}
+                    onClick={() => setActiveTabPath(tab.path)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '6px 12px',
+                      backgroundColor: tab.path === activeTabPath ? '#18181b' : 'transparent',
+                      border: tab.path === activeTabPath ? '1px solid #3f3f46' : '1px solid transparent',
+                      borderBottom: tab.path === activeTabPath ? '1px solid #18181b' : '1px solid transparent',
+                      borderTopLeftRadius: '4px',
+                      borderTopRightRadius: '4px',
+                      cursor: 'pointer',
+                      minWidth: 'fit-content',
+                      maxWidth: '200px',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (tab.path !== activeTabPath) {
+                        e.currentTarget.style.backgroundColor = '#3f3f46';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (tab.path !== activeTabPath) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
+                    {tab.isDirty && (
+                      <Dot style={{ color: '#f59e0b', flexShrink: 0 }} size={12} />
+                    )}
+                    <input
+                      type="text"
+                      value={tab.name}
+                      onChange={(e) => {
+                        if (tab.path === activeTabPath) {
+                          handleFileNameChange(e.target.value);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        padding: '0',
+                        margin: '0',
+                        fontSize: '12px',
+                        color: '#a1a1aa',
+                        fontFamily: '"IBM Plex Mono", "SF Mono", "Courier New", monospace',
+                        outline: 'none',
+                        minWidth: '40px',
+                        maxWidth: '150px',
+                      }}
                     />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTab(tab.path);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '18px',
+                        height: '18px',
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#71717a',
+                        cursor: 'pointer',
+                        borderRadius: '3px',
+                        padding: '0',
+                        flexShrink: 0,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#3f3f46';
+                        e.currentTarget.style.color = '#a1a1aa';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.color = '#71717a';
+                      }}
+                    >
+                      <X size={12} />
+                    </button>
                   </div>
-                  <BacklinksPanel
-                    currentFilePath={openFile.path}
-                    onBacklinkClick={handleFileSelect}
-                  />
-                </>
-              )}
-            </>
-          ) : (
-            <div style={styles.emptyContent}>
-              <FileText size={48} style={{ marginBottom: '12px', opacity: 0.5 }} />
-              <p>Select a file or create a new one</p>
+                ))}
+              </div>
             </div>
           )}
+          {(() => {
+            const activeTab = getActiveTab();
+            return activeTab ? (
+              <>
+                <div style={styles.editorContainer}>
+                  <Editor
+                    content={activeTab.content}
+                    onChange={handleContentChange}
+                    onWikilinkClick={(target) => {
+                      const path = searchStore.getFilePathByName(target);
+                      if (path) {
+                        handleFileSelect(path); // Regular click: switch to existing tab or open in current tab
+                      }
+                    }}
+                    onWikilinkCmdClick={(target) => {
+                      const path = searchStore.getFilePathByName(target);
+                      if (path) {
+                        handleFileSelect(path, true); // Cmd+Click: open in new tab
+                      }
+                    }}
+                  />
+                </div>
+                <BacklinksPanel
+                  key={activeTab.path}
+                  currentFilePath={activeTab.path}
+                  onBacklinkClick={handleFileSelect}
+                />
+              </>
+            ) : (
+              <div style={styles.emptyContent}>
+                <FileText size={48} style={{ marginBottom: '12px', opacity: 0.5 }} />
+                <p>Select a file or create a new one</p>
+              </div>
+            );
+          })()}
         </main>
       </div>
 

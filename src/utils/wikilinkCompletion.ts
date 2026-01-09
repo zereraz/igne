@@ -1,70 +1,37 @@
-import { autocompletion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import { searchStore } from '../stores/searchStore';
+import type { WikilinkSearchResult } from '../types';
 
-export function wikilinkAutocompletion() {
-  return autocompletion({
-    override: [wikilinkCompletionSource],
-  });
-}
+export function searchWikilinks(query: string): WikilinkSearchResult[] {
+  console.log('[searchWikilinks] Searching for:', query);
 
-function wikilinkCompletionSource(
-  context: CompletionContext
-): CompletionResult | null {
-  const match = context.matchBefore(/\[\[[^\]]*/);
-
-  // Only trigger if we're inside [[ and haven't closed it yet
-  if (!match || (match.from === match.to && !context.explicit)) {
-    return null;
+  if (!query.trim()) {
+    const all = searchStore.getAllNoteNames();
+    console.log('[searchWikilinks] All note names:', all);
+    return all.map((name) => ({
+      name,
+      path: searchStore.getFilePathByName(name) || '',
+    }));
   }
 
-  // Don't trigger if we've already closed the wikilink
-  const textAfterCursor = context.state.doc
-    .toString()
-    .slice(context.pos, context.pos + 2);
-  if (textAfterCursor.startsWith(']]')) {
-    return null;
+  const results = searchStore.searchFiles(query);
+  const allNames = searchStore.getAllNoteNames();
+
+  console.log('[searchWikilinks] Fuzzy results:', results.map(r => r.name));
+  console.log('[searchWikilinks] All names:', allNames);
+
+  // Combine fuzzy results with partial matches
+  const names = new Set(results.map((r) => r.name));
+  for (const name of allNames) {
+    if (!names.has(name) && name.toLowerCase().includes(query.toLowerCase())) {
+      names.add(name);
+    }
   }
 
-  // Get all note names as completion options
-  const noteNames = searchStore.getAllNoteNames();
-
-  const options = noteNames.map((name) => ({
-    label: name,
-    type: 'text',
-    info: `Link to ${name}`,
-    apply: (view: any) => {
-      // Get the text before the cursor inside the [[ ]]
-      const currentText = match ? match.text.slice(2) : ''; // Remove [[ prefix
-
-      // Find the common prefix to replace
-      let commonPrefix = '';
-      for (let i = 0; i < currentText.length && i < name.length; i++) {
-        if (currentText[i].toLowerCase() === name[i].toLowerCase()) {
-          commonPrefix += currentText[i];
-        } else {
-          break;
-        }
-      }
-
-      // Replace from the start of the common prefix (after [[)
-      const from = match.from + 2; // After [[
-      const to = context.pos;
-
-      view.dispatch({
-        changes: {
-          from,
-          to,
-          insert: name + ']]',
-        },
-        selection: {
-          anchor: from + name.length + 2,
-        },
-      });
-    },
+  const finalResults = Array.from(names).map((name) => ({
+    name,
+    path: searchStore.getFilePathByName(name) || '',
   }));
 
-  return {
-    from: match.from,
-    options,
-  };
+  console.log('[searchWikilinks] Final results:', finalResults);
+  return finalResults;
 }

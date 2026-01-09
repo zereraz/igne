@@ -1,43 +1,20 @@
 import MiniSearch from 'minisearch';
 import Fuse from 'fuse.js';
 import { invoke } from '@tauri-apps/api/core';
-import { FileEntry } from '../types';
-
-interface Document {
-  id: string;
-  path: string;
-  name: string;
-  content: string;
-}
-
-interface SearchResult {
-  id: string;
-  path: string;
-  name: string;
-  score: number;
-  match?: {
-    key: string;
-    indices: number[][];
-    value: string;
-  };
-}
+import type { FileEntry, SearchDocument } from '../types';
 
 class SearchStore {
   private miniSearch: MiniSearch;
-  private files: Map<string, Document>;
-  private fuse: Fuse<Document>;
-  private vaultPath: string | null = null;
+  private files: Map<string, SearchDocument>;
+  private fuse: Fuse<SearchDocument>;
 
   constructor() {
+    this.files = new Map();
     this.miniSearch = new MiniSearch({
+      idField: 'id',
       fields: ['name', 'content'],
       storeFields: ['id', 'path', 'name'],
-      searchOptions: {
-        fuzzy: 0.2,
-        prefix: true,
-      },
     });
-    this.files = new Map();
     this.fuse = new Fuse([], {
       keys: ['name'],
       includeScore: true,
@@ -45,16 +22,15 @@ class SearchStore {
     });
   }
 
-  async indexFiles(vaultPath: string, entries: FileEntry[]) {
-    this.vaultPath = vaultPath;
-    const documents: Document[] = [];
+  async indexFiles(_vaultPath: string, entries: FileEntry[]) {
+    const documents: SearchDocument[] = [];
 
     for (const entry of this.flattenFileTree(entries)) {
       if (!entry.is_dir && entry.name.endsWith('.md')) {
         try {
           const content = await invoke<string>('read_file', { path: entry.path });
-          const doc: Document = {
-            id: entry.path,
+          const doc: SearchDocument = {
+            id: entry.path, // Use file path as unique ID
             path: entry.path,
             name: entry.name.replace('.md', ''),
             content,
@@ -67,8 +43,44 @@ class SearchStore {
       }
     }
 
+    console.log(`[searchStore] Indexed ${documents.length} files`);
+
+    // Clear and rebuild MiniSearch index
     this.miniSearch.removeAll();
-    this.miniSearch.add(documents);
+    this.miniSearch.addAll(documents);
+
+    // Update Fuse for name-only search
+    this.fuse = new Fuse(documents, {
+      keys: ['name'],
+      includeScore: true,
+      threshold: 0.3,
+    });
+  }
+
+  // Update a single file's content in the index (called when file is saved)
+  async updateFile(path: string, content: string) {
+    const existing = this.files.get(path);
+    const name = path.split(/[/\\]/).pop()?.replace('.md', '') || '';
+
+    const doc: SearchDocument = {
+      id: path, // Use file path as unique ID
+      path,
+      name,
+      content,
+    };
+
+    this.files.set(path, doc);
+
+    if (existing) {
+      // Discard old version and add new
+      this.miniSearch.discard(path);
+      this.miniSearch.add(doc);
+    } else {
+      // Add new document
+      this.miniSearch.add(doc);
+    }
+
+    // Update Fuse instance
     this.fuse = new Fuse(Array.from(this.files.values()), {
       keys: ['name'],
       includeScore: true,
@@ -76,28 +88,45 @@ class SearchStore {
     });
   }
 
-  search(query: string): SearchResult[] {
-    if (!query.trim()) return [];
+  // Remove a file from the index (called when file is deleted)
+  async removeFile(path: string) {
+    this.files.delete(path);
+    this.miniSearch.discard(path);
 
-    const results = this.miniSearch.search(query);
-    return results.map((result: any) => ({
-      id: result.id,
-      path: result.path,
-      name: result.name,
-      score: result.score,
-    }));
+    this.fuse = new Fuse(Array.from(this.files.values()), {
+      keys: ['name'],
+      includeScore: true,
+      threshold: 0.3,
+    });
   }
 
-  searchFiles(query: string): Document[] {
+  // Search by content (MiniSearch) - for full-text search
+  search(query: string) {
     if (!query.trim()) return [];
 
+    return this.miniSearch.search(query, {
+      fuzzy: 0.2,
+      prefix: true,
+    });
+  }
+
+  // Search by file name (Fuse) - for QuickSwitcher
+  searchFiles(query: string): SearchDocument[] {
+    // Returns SearchDocument for compatibility, can be mapped to SearchResult
+    if (!query.trim()) {
+      const allFiles = Array.from(this.files.values());
+      console.log(`[searchStore] searchFiles('') returning ${allFiles.length} files`);
+      return allFiles;
+    }
+
     const results = this.fuse.search(query);
+    console.log(`[searchStore] searchFiles('${query}') found ${results.length} results`);
     return results.map((result) => result.item);
   }
 
-  findBacklinks(filePath: string): Document[] {
+  findBacklinks(filePath: string): SearchDocument[] {
     const fileName = filePath.split(/[/\\]/).pop()?.replace('.md', '') || '';
-    const backlinks: Document[] = [];
+    const backlinks: SearchDocument[] = [];
 
     for (const doc of this.files.values()) {
       const wikilinkPattern = new RegExp(
@@ -113,7 +142,7 @@ class SearchStore {
     return backlinks;
   }
 
-  resolveWikilink(wikilink: string): Document | null {
+  resolveWikilink(wikilink: string): SearchDocument | null {
     const match = wikilink.match(/\[\[([^\]|]+)(\|([^\]]+))?\]\]/);
     if (!match) return null;
 
