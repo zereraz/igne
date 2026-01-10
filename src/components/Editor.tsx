@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, placeholder } from '@codemirror/view';
-import { markdown } from '@codemirror/lang-markdown';
-import { languages } from '@codemirror/language-data';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { searchWikilinks } from '../utils/wikilinkCompletion';
 import { createLivePreview } from '../extensions/livePreview';
-import { Strikethrough, Highlight, Wikilink, Embed, BlockID, Tag, TaskMarker } from '../extensions/markdownExtensions';
+import { createMarkdownLanguage } from '../extensions/markdownLanguage';
+import { searchStore } from '../stores/searchStore';
 import type { WikilinkSearchResult, EditorChangeHandler, WikilinkClickHandler } from '../types';
 
 interface WikilinkSearchState {
@@ -115,10 +114,7 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick 
       oneDark,
       history(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
-      markdown({
-        codeLanguages: languages,
-        extensions: [Strikethrough, Highlight, Wikilink, Embed, BlockID, Tag, TaskMarker],
-      }),
+      createMarkdownLanguage(),
       // Keymap to auto-close [ and trigger wikilink search for [[
       keymap.of([
         {

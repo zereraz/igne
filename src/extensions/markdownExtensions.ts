@@ -11,6 +11,7 @@ export const Strikethrough: MarkdownConfig = {
   ],
   parseInline: [{
     name: 'Strikethrough',
+    before: 'Emphasis',  // Run before standard emphasis parser
     parse(cx: any, next: number, pos: number) {
       if (next !== 126 /* ~ */ || cx.char(pos + 1) !== 126) return -1;
       const start = pos;
@@ -40,6 +41,7 @@ export const Highlight: MarkdownConfig = {
   ],
   parseInline: [{
     name: 'Highlight',
+    before: 'Emphasis',  // Run before standard emphasis parser
     parse(cx: any, next: number, pos: number) {
       if (next !== 61 /* = */ || cx.char(pos + 1) !== 61) return -1;
       const start = pos;
@@ -72,6 +74,7 @@ export const Wikilink: MarkdownConfig = {
   ],
   parseInline: [{
     name: 'Wikilink',
+    before: 'Link',  // Run before the standard Link parser
     parse(cx: any, next: number, pos: number) {
       if (next !== 91 /* [ */ || cx.char(pos + 1) !== 91) return -1;
       const start = pos;
@@ -126,6 +129,7 @@ export const Embed: MarkdownConfig = {
   ],
   parseInline: [{
     name: 'Embed',
+    before: 'Image',  // Run before the standard Image parser
     parse(cx: any, next: number, pos: number) {
       if (next !== 33 /*! */ || cx.char(pos + 1) !== 91 /* [ */ || cx.char(pos + 2) !== 91) return -1;
       const start = pos;

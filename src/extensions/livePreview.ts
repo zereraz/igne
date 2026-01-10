@@ -235,9 +235,15 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
 
   // === SYNTAX TREE ITERATION ===
   let wikilinkCount = 0;
+  const seenNodes = new Set<string>();
 
   syntaxTree(view.state).iterate({
     enter(node) {
+      // Track all node names for debugging
+      if (seenNodes.size < 30) {
+        seenNodes.add(node.name);
+      }
+
       // Debug: log all wikilink nodes found
       if (node.name === 'Wikilink') {
         wikilinkCount++;
@@ -318,10 +324,28 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         return;
       }
 
+      // Fallback: detect strikethrough in Emphasis nodes
+      if (node.name === 'Emphasis') {
+        const text = doc.sliceString(node.from, node.to);
+        if (text.startsWith('~~') && text.endsWith('~~')) {
+          decorations.push(Decoration.mark({ class: 'cm-strikethrough' }).range(node.from, node.to));
+          return;
+        }
+      }
+
       // Highlight
       if (node.name === 'Highlight') {
         decorations.push(Decoration.mark({ class: 'cm-highlight' }).range(node.from, node.to));
         return;
+      }
+
+      // Fallback: detect highlight in Emphasis nodes
+      if (node.name === 'Emphasis' || node.name === 'StrongEmphasis') {
+        const text = doc.sliceString(node.from, node.to);
+        if (text.startsWith('==') && text.endsWith('==')) {
+          decorations.push(Decoration.mark({ class: 'cm-highlight' }).range(node.from, node.to));
+          return;
+        }
       }
 
       // === WIDGETS ===
@@ -351,6 +375,31 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         return;
       }
 
+      // Handle Link nodes that are actually wikilinks (parsed as links by standard parser)
+      if (node.name === 'Link' || node.name === 'URL') {
+        const text = doc.sliceString(node.from, node.to);
+        // Check if this looks like a wikilink [[...]]
+        const wikilinkMatch = text.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
+        if (wikilinkMatch) {
+          const target = wikilinkMatch[1];
+          const display = wikilinkMatch[2] || target;
+          const resolved = fullConfig.resolveWikilink(target);
+
+          decorations.push(
+            Decoration.replace({
+              widget: new WikilinkWidget(
+                target,
+                display,
+                resolved?.exists ?? false,
+                fullConfig.onWikilinkClick,
+                fullConfig.onWikilinkCmdClick
+              ),
+            }).range(node.from, node.to)
+          );
+          return;
+        }
+      }
+
       // Embeds - render content inline when cursor outside
       if (node.name === 'Embed' && !cursorInParent) {
         const text = doc.sliceString(node.from, node.to);
@@ -367,6 +416,24 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
           );
         }
         return;
+      }
+
+      // Handle Image nodes that are actually embeds (parsed as images by standard parser)
+      if (node.name === 'Image' && !cursorInParent) {
+        const text = doc.sliceString(node.from, node.to);
+        const embedMatch = text.match(/^!\[\[([^\]]+)\]\]$/);
+        if (embedMatch) {
+          const target = embedMatch[1];
+          const resolved = fullConfig.resolveWikilink(target);
+
+          decorations.push(
+            Decoration.replace({
+              widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
+              block: true,
+            }).range(node.from, node.to)
+          );
+          return;
+        }
       }
 
       // Tags - render as pills when cursor outside
@@ -486,6 +553,13 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       }).range(callout.from, callout.to)
     );
   }
+
+  console.log('[livePreview] Built decorations:', {
+    totalDecorations: decorations.length,
+    wikilinkCount,
+    cursorLine,
+    seenNodes: Array.from(seenNodes),
+  });
 
   return Decoration.set(decorations, true);
 }

@@ -50,15 +50,16 @@ export class WikilinkWidget extends WidgetType {
     return span;
   }
 
-  eq(other: WikilinkWidget) {
-    return this.target === other.target &&
-           this.display === other.display &&
-           this.exists === other.exists;
+  eq(other: WidgetType) {
+    if (!(other instanceof WikilinkWidget)) return false;
+    return this.target === (other as WikilinkWidget).target &&
+           this.display === (other as WikilinkWidget).display &&
+           this.exists === (other as WikilinkWidget).exists;
   }
 
-  ignoreEvent(event: string) {
+  ignoreEvent(event: Event): boolean {
     // Handle click events ourselves, let CodeMirror handle everything else
-    return event === 'mousedown' || event === 'mouseup' || event === 'click';
+    return event.type === 'mousedown' || event.type === 'mouseup' || event.type === 'click';
   }
 }
 
