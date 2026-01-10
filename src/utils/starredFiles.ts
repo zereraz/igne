@@ -4,7 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import * as path from 'path';
+import { join } from '@tauri-apps/api/path';
 
 interface StarredFilesData {
   stars: StarredFile[];
@@ -22,7 +22,7 @@ const STARRED_FILE = '.obsidian/starred.json';
  */
 export async function loadStarredFiles(vaultPath: string): Promise<Set<string>> {
   try {
-    const starredPath = path.join(vaultPath, STARRED_FILE);
+    const starredPath = await join(vaultPath, STARRED_FILE);
     const content = await invoke<string>('read_file', { path: starredPath });
     const data: StarredFilesData = JSON.parse(content);
 
@@ -37,7 +37,7 @@ export async function loadStarredFiles(vaultPath: string): Promise<Set<string>> 
  * Save starred files to vault
  */
 async function saveStarredFiles(vaultPath: string, starredPaths: Set<string>): Promise<void> {
-  const starredPath = path.join(vaultPath, STARRED_FILE);
+  const starredPath = await join(vaultPath, STARRED_FILE);
 
   const data: StarredFilesData = {
     stars: Array.from(starredPaths).map(filePath => ({
@@ -47,7 +47,7 @@ async function saveStarredFiles(vaultPath: string, starredPaths: Set<string>): P
   };
 
   // Ensure .obsidian directory exists
-  const obsidianDir = path.join(vaultPath, '.obsidian');
+  const obsidianDir = await join(vaultPath, '.obsidian');
   try {
     await invoke('create_directory', { path: obsidianDir });
   } catch {

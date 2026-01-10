@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Dot, X } from 'lucide-react';
+import { Dot, X, Sun, Moon, Settings } from 'lucide-react';
 import { OpenFile } from '../types';
 
 interface TitleBarProps {
@@ -9,9 +9,21 @@ interface TitleBarProps {
   onTabClick: (path: string) => void;
   onTabClose: (path: string) => void;
   onFileNameChange: (name: string) => void;
+  onToggleTheme?: () => void;
+  onOpenSettings?: () => void;
+  isDarkMode?: boolean;
 }
 
-export function TitleBar({ openTabs, activeTabPath, onTabClick, onTabClose, onFileNameChange }: TitleBarProps) {
+export function TitleBar({
+  openTabs,
+  activeTabPath,
+  onTabClick,
+  onTabClose,
+  onFileNameChange,
+  onToggleTheme,
+  onOpenSettings,
+  isDarkMode = true
+}: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
 
@@ -153,6 +165,77 @@ export function TitleBar({ openTabs, activeTabPath, onTabClick, onTabClose, onFi
             </button>
           </div>
         ))}
+      </div>
+
+      {/* Right side controls */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        height: '100%',
+        paddingRight: '8px',
+      }}>
+        {/* Theme Toggle Button */}
+        {onToggleTheme && (
+          <button
+            onClick={onToggleTheme}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '28px',
+              border: 'none',
+              background: 'transparent',
+              color: '#71717a',
+              cursor: 'pointer',
+              borderRadius: '2px',
+              padding: '0',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#3f3f46';
+              e.currentTarget.style.color = '#e4e4e7';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#71717a';
+            }}
+            title="Toggle theme"
+          >
+            {isDarkMode ? <Moon size={14} /> : <Sun size={14} />}
+          </button>
+        )}
+
+        {/* Settings Button */}
+        {onOpenSettings && (
+          <button
+            onClick={onOpenSettings}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '28px',
+              border: 'none',
+              background: 'transparent',
+              color: '#71717a',
+              cursor: 'pointer',
+              borderRadius: '2px',
+              padding: '0',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#3f3f46';
+              e.currentTarget.style.color = '#e4e4e7';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#71717a';
+            }}
+            title="Settings (Cmd+Ctrl+,)"
+          >
+            <Settings size={14} />
+          </button>
+        )}
       </div>
     </div>
   );

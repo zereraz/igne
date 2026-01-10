@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { exists } from '@tauri-apps/plugin-fs';
 import {
   FolderOpen,
   FileText,
@@ -19,8 +20,16 @@ import { RenameDialog } from './components/RenameDialog';
 import { TemplateInsertModal } from './components/TemplateInsertModal';
 import { DailyNotesNav } from './components/DailyNotesNav';
 import { StarredFilesPanel } from './components/StarredFilesPanel';
+import { VaultPicker } from './components/VaultPicker';
+import { SettingsModal } from './components/SettingsModal';
 import { FileEntry, OpenFile } from './types';
 import { searchStore } from './stores/searchStore';
+import { vaultsStore } from './stores/VaultsStore';
+import { windowStateStore } from './stores/WindowStateStore';
+import { globalSettingsStore } from './stores/GlobalSettingsStore';
+import { vaultConfigStore } from './stores/VaultConfigStore';
+import { workspaceStateManager } from './stores/WorkspaceStateManager';
+import { ThemeManager } from './obsidian/ThemeManager';
 import {
   openDailyNote,
   loadDailyNotesConfig,
@@ -161,6 +170,13 @@ interface ContextMenuState {
 }
 
 function App() {
+  // Persistence state
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [showVaultPicker, setShowVaultPicker] = useState(false);
+  const [vaultSettings, setVaultSettings] = useState<any>(null);
+  const [appearanceSettings, setAppearanceSettings] = useState<any>(null);
+
+  // App state
   const [vaultPath, setVaultPath] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [openTabs, setOpenTabs] = useState<OpenFile[]>([]);
@@ -176,8 +192,200 @@ function App() {
   const [scrollToPosition, setScrollToPosition] = useState<number | undefined>(undefined);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [templates, setTemplates] = useState<Array<{ name: string; path: string }>>([]);
+  const [showSettings, setShowSettings] = useState(false);
   const pollIntervalRef = useRef<number | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
+  const lastOpenFilesRef = useRef<string[]>([]);
+
+  // Theme Manager
+  const themeManagerRef = useRef<ThemeManager | null>(null);
+
+  // Create a minimal mock App interface for ThemeManager
+  const mockApp = useRef<{
+    vault: {
+      configDir: string;
+      adapter: {
+        read: (path: string) => Promise<string>;
+      };
+    };
+  } | null>(null);
+
+  // Initialize stores and auto-open vault on app mount
+  useEffect(() => {
+    async function initializeApp() {
+      try {
+        console.log('[App] Initializing stores...');
+        // Initialize all stores in parallel
+        await Promise.all([
+          vaultsStore.init(),
+          windowStateStore.init(),
+          globalSettingsStore.init(),
+        ]);
+
+        console.log('[App] Stores initialized');
+
+        // Check if we should auto-open last vault
+        const settings = globalSettingsStore.getSettings();
+        const lastVault = vaultsStore.getLastOpenedVault();
+
+        console.log('[App] Global settings:', { openLastVault: settings.openLastVault, lastVault });
+
+        if (settings.openLastVault && lastVault) {
+          // Verify vault still exists
+          if (await exists(lastVault)) {
+            console.log('[App] Auto-opening last vault:', lastVault);
+            await handleOpenVaultPath(lastVault);
+          } else {
+            console.log('[App] Last vault no longer exists, removing from registry');
+            await vaultsStore.removeVault(lastVault);
+            setShowVaultPicker(true);
+          }
+        } else {
+          console.log('[App] Showing vault picker');
+          setShowVaultPicker(true);
+        }
+
+        setIsInitialized(true);
+      } catch (e) {
+        console.error('[App] Failed to initialize:', e);
+        // Still show app even if initialization fails
+        setShowVaultPicker(true);
+        setIsInitialized(true);
+      }
+    }
+
+    initializeApp();
+  }, []);
+
+  // Helper to open a vault by path (used during init and vault switching)
+  const handleOpenVaultPath = useCallback(async (path: string) => {
+    try {
+      console.log('[App] Opening vault:', path);
+
+      // Save current workspace if we have one
+      if (vaultPath && openTabs.length > 0) {
+        const lastOpenFiles = openTabs.map(t => t.path);
+        await workspaceStateManager.saveNow(lastOpenFiles);
+        console.log('[App] Saved previous workspace');
+      }
+
+      // Add to vaults registry and set as last opened
+      await vaultsStore.addVault(path);
+
+      // Load vault config
+      await vaultConfigStore.init(path);
+      const vaultSettings = vaultConfigStore.getSettings();
+      const appearance = vaultConfigStore.getAppearance();
+
+      console.log('[App] Loaded vault config:', { vaultSettings, appearance });
+
+      // Initialize ThemeManager with mock app
+      const configDir = `${path}/.obsidian`;
+      mockApp.current = {
+        vault: {
+          configDir,
+          adapter: {
+            read: async (filePath: string) => {
+              const fullPath = filePath.startsWith('/') ? filePath : `${path}/${filePath}`;
+              return await invoke<string>('read_file', { path: fullPath });
+            },
+          },
+        },
+      };
+
+      if (!themeManagerRef.current) {
+        themeManagerRef.current = new ThemeManager(mockApp.current as any);
+        console.log('[App] ThemeManager initialized');
+      } else {
+        // Update the mock app reference
+        (themeManagerRef.current as any).app = mockApp.current;
+      }
+
+      // Load theme and snippets from appearance settings
+      if (appearance.cssTheme) {
+        try {
+          await themeManagerRef.current.loadTheme(appearance.cssTheme);
+          console.log('[App] Loaded theme:', appearance.cssTheme);
+        } catch (e) {
+          console.warn('[App] Failed to load theme:', appearance.cssTheme, e);
+        }
+      }
+
+      if (appearance.enabledCssSnippets && appearance.enabledCssSnippets.length > 0) {
+        for (const snippet of appearance.enabledCssSnippets) {
+          try {
+            await themeManagerRef.current.loadSnippet(snippet);
+            console.log('[App] Loaded snippet:', snippet);
+          } catch (e) {
+            console.warn('[App] Failed to load snippet:', snippet, e);
+          }
+        }
+      }
+
+      // Restore workspace from saved state
+      const { openFiles, activeTab, lastOpenFiles } = await workspaceStateManager.restore();
+      console.log('[App] Restored workspace:', { fileCount: openFiles.length, activeTab });
+
+      // Load file contents for restored workspace
+      const openTabsWithContent = await Promise.all(
+        openFiles.map(async (file) => {
+          try {
+            const content = await invoke<string>('read_file', { path: file.path });
+            return { ...file, content };
+          } catch (e) {
+            console.error('[App] Failed to load file:', file.path, e);
+            return { ...file, content: '' };
+          }
+        })
+      );
+
+      // Update state
+      setVaultPath(path);
+      setOpenTabs(openTabsWithContent);
+      setActiveTabPath(activeTab);
+      setVaultSettings(vaultSettings);
+      setAppearanceSettings(appearance);
+      lastOpenFilesRef.current = lastOpenFiles;
+      setShowVaultPicker(false);
+    } catch (e) {
+      console.error('[App] Failed to open vault:', e);
+      alert('Failed to open vault: ' + (e as Error).message);
+    }
+  }, [vaultPath, openTabs]);
+
+  // Apply appearance settings when they change
+  useEffect(() => {
+    if (!appearanceSettings) return;
+
+    console.log('[App] Applying appearance settings:', appearanceSettings);
+
+    const root = document.documentElement;
+
+    // Apply theme mode
+    document.body.classList.remove('theme-dark', 'theme-light');
+    document.body.classList.add(`theme-${appearanceSettings.baseTheme}`);
+
+    // Apply accent color
+    if (appearanceSettings.accentColor) {
+      root.style.setProperty('--color-accent', appearanceSettings.accentColor);
+    }
+
+    // Apply font size
+    if (appearanceSettings.baseFontSize) {
+      root.style.setProperty('--font-text-size', `${appearanceSettings.baseFontSize}px`);
+    }
+
+    // Apply custom fonts
+    if (appearanceSettings.textFontFamily) {
+      root.style.setProperty('--font-text-theme', appearanceSettings.textFontFamily);
+    }
+    if (appearanceSettings.monospaceFontFamily) {
+      root.style.setProperty('--font-monospace-theme', appearanceSettings.monospaceFontFamily);
+    }
+    if (appearanceSettings.interfaceFontFamily) {
+      root.style.setProperty('--font-interface-theme', appearanceSettings.interfaceFontFamily);
+    }
+  }, [appearanceSettings]);
 
   // Helper to get the active tab
   const getActiveTab = useCallback(() => {
@@ -300,9 +508,7 @@ function App() {
       });
 
       if (selected && typeof selected === 'string') {
-        setVaultPath(selected);
-        setOpenTabs([]);
-        setActiveTabPath(null);
+        await handleOpenVaultPath(selected);
       }
     } catch (e) {
       console.error('Failed to open folder:', e);
@@ -781,7 +987,97 @@ function App() {
     setIsTemplateModalOpen(true);
   }, [vaultPath]);
 
-  // Keyboard shortcut for save and quick switcher
+  // Handle appearance settings updates
+  const handleUpdateAppearance = useCallback(async (updates: any) => {
+    const updated = { ...appearanceSettings, ...updates };
+    setAppearanceSettings(updated);
+
+    // Persist to disk
+    await vaultConfigStore.updateAppearance(updates);
+
+    // Handle theme changes
+    if ('cssTheme' in updates && themeManagerRef.current) {
+      const newTheme = updates.cssTheme;
+      const currentTheme = themeManagerRef.current.getCurrentTheme();
+
+      // Unload current theme if there is one
+      if (currentTheme && currentTheme !== newTheme) {
+        themeManagerRef.current.unloadTheme();
+      }
+
+      // Load new theme if specified
+      if (newTheme && newTheme !== currentTheme) {
+        try {
+          await themeManagerRef.current.loadTheme(newTheme);
+          console.log('[App] Loaded theme:', newTheme);
+        } catch (e) {
+          console.error('[App] Failed to load theme:', newTheme, e);
+        }
+      }
+    }
+
+    // Handle snippet changes
+    if ('enabledCssSnippets' in updates && themeManagerRef.current) {
+      const currentSnippets = themeManagerRef.current.getLoadedSnippets();
+      const newSnippets = updates.enabledCssSnippets || [];
+
+      // Unload snippets that were removed
+      for (const snippet of currentSnippets) {
+        if (!newSnippets.includes(snippet)) {
+          themeManagerRef.current.unloadSnippet(snippet);
+          console.log('[App] Unloaded snippet:', snippet);
+        }
+      }
+
+      // Load newly enabled snippets
+      for (const snippet of newSnippets) {
+        if (!currentSnippets.includes(snippet)) {
+          try {
+            await themeManagerRef.current.loadSnippet(snippet);
+            console.log('[App] Loaded snippet:', snippet);
+          } catch (e) {
+            console.error('[App] Failed to load snippet:', snippet, e);
+          }
+        }
+      }
+    }
+  }, [appearanceSettings]);
+
+  // Auto-save workspace when tabs change (debounced)
+  useEffect(() => {
+    if (!vaultPath || openTabs.length === 0) return;
+
+    // Debounce workspace save
+    const timer = window.setTimeout(async () => {
+      const lastOpenFiles = openTabs.map(t => t.path);
+      workspaceStateManager.queueSave(openTabs, activeTabPath, lastOpenFiles);
+      lastOpenFilesRef.current = lastOpenFiles;
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [openTabs, activeTabPath, vaultPath]);
+
+  // Save workspace state before window close
+  useEffect(() => {
+    const handleBeforeUnload = async () => {
+      console.log('[App] Saving state before close...');
+
+      // Save window state
+      await windowStateStore.saveNow();
+
+      // Save workspace state if vault open
+      if (vaultPath && openTabs.length > 0) {
+        const lastOpenFiles = openTabs.map(t => t.path);
+        await workspaceStateManager.saveNow(lastOpenFiles);
+        console.log('[App] Saved workspace state');
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [vaultPath, openTabs, activeTabPath]);
+
+  // Keyboard shortcut for save, quick switcher, and settings
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
@@ -796,12 +1092,53 @@ function App() {
       } else if ((e.metaKey || e.ctrlKey) && e.key === 't') {
         e.preventDefault();
         handleOpenTemplateModal();
+      } else if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        setShowSettings(true);
+      } else if (e.key === 'Escape' && showSettings) {
+        setShowSettings(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSave, handleOpenDailyNote, handleOpenTemplateModal]);
+  }, [handleSave, handleOpenDailyNote, handleOpenTemplateModal, showSettings]);
+
+  // Show loading screen while initializing
+  if (!isInitialized) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#18181b',
+        flexDirection: 'column',
+        gap: '16px',
+      }}>
+        <div style={{
+          color: '#a78bfa',
+          fontSize: '24px',
+          fontWeight: 600,
+          fontFamily: "'IBM Plex Mono', monospace",
+        }}>
+          Igne
+        </div>
+        <div style={{
+          color: '#71717a',
+          fontSize: '12px',
+          fontFamily: "'IBM Plex Mono', monospace",
+        }}>
+          Loading...
+        </div>
+      </div>
+    );
+  }
+
+  // Show vault picker if requested
+  if (showVaultPicker) {
+    return <VaultPicker onOpen={handleOpenVaultPath} />;
+  }
 
   const handleDrop = useCallback(async (sourcePath: string, targetPath: string) => {
     const parts = sourcePath.split(/[/\\]/);
@@ -833,6 +1170,21 @@ function App() {
     }
   }, [vaultPath]);
 
+  // Theme toggle handler
+  const handleToggleTheme = useCallback(async () => {
+    if (!appearanceSettings) return;
+
+    const newMode = appearanceSettings.baseTheme === 'dark' ? 'light' : 'dark';
+    const updated = { ...appearanceSettings, baseTheme: newMode };
+
+    // Apply theme mode immediately
+    document.body.classList.remove('theme-dark', 'theme-light');
+    document.body.classList.add(`theme-${newMode}`);
+
+    setAppearanceSettings(updated);
+    await vaultConfigStore.updateAppearance({ baseTheme: newMode });
+  }, [appearanceSettings]);
+
   return (
     <div style={styles.app}>
       {/* Custom Title Bar with Tabs */}
@@ -842,6 +1194,9 @@ function App() {
         onTabClick={setActiveTabPath}
         onTabClose={closeTab}
         onFileNameChange={handleFileNameChange}
+        onToggleTheme={handleToggleTheme}
+        onOpenSettings={() => setShowSettings(true)}
+        isDarkMode={appearanceSettings?.baseTheme === 'dark'}
       />
 
       {/* Main Content */}
@@ -1007,9 +1362,9 @@ function App() {
                     const name = parts[parts.length - 1] || '';
 
                     // Refresh file list and re-index
-                    const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+                    const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath! });
                     setFiles(entries);
-                    await searchStore.indexFiles(vaultPath, entries);
+                    await searchStore.indexFiles(vaultPath!, entries);
 
                     openTab(path, name, content, false);
                   }}
@@ -1244,6 +1599,18 @@ function App() {
           templates={templates}
           onInsertTemplate={handleInsertTemplate}
           onClose={() => setIsTemplateModalOpen(false)}
+        />
+      )}
+
+      {/* Settings Modal */}
+      {appearanceSettings && (
+        <SettingsModal
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+          vaultSettings={vaultSettings || {}}
+          appearanceSettings={appearanceSettings}
+          onUpdateAppearance={handleUpdateAppearance}
+          vaultPath={vaultPath}
         />
       )}
     </div>
