@@ -1,228 +1,168 @@
-# Obsidian Plugin Compatibility Matrix
+# Obsidian API Compatibility Status
 
-This document tracks the compatibility status of popular Obsidian plugins with Igne.
+This document tracks the implementation status of the Obsidian API in Igne.
 
-## Legend
+## Implementation Status
 
-- ✅ **Full Support** - Plugin works perfectly
-- ⚠️ **Partial Support** - Plugin works with some limitations
-- ❌ **Not Supported** - Plugin doesn't work
-- 🔄 **Testing Needed** - Compatibility unknown, needs testing
+| API Component | Status | Notes |
+|---------------|--------|-------|
+| Events System | ✅ Implemented | Full event bus with on/off/trigger |
+| Metadata Cache | ✅ Implemented | Markdown parsing, headings, links, tags |
+| Vault API | ✅ Implemented | File CRUD, enumeration |
+| Workspace API | ✅ Partial | Basic layout, needs full split pane |
+| Plugin API | ✅ Partial | Base class exists, loader incomplete |
+| Settings API | ✅ Implemented | Setting components, tabs |
+| Commands API | ✅ Implemented | Add/remove/execute commands |
+| Editor API | ✅ Implemented | CodeMirror wrapper |
+| Menu API | ✅ Implemented | Context menus |
+| Notice API | ✅ Implemented | Toast notifications |
+| Modal API | ✅ Implemented | Modal system |
+| Theme System | 🚧 In Progress | CSS variables defined, loader incomplete |
 
-## Core Plugins
+## API Method Compatibility
 
-### 1. Dataview ⚠️
+### MetadataCache
 
-**Status**: Partial Support
+| Method | Status | Notes |
+|--------|--------|-------|
+| `getCache(path)` | ✅ | Full support |
+| `getFileCache(file)` | ✅ | Full support |
+| `on('changed')` | ✅ | Event support |
+| `getLinks()` | ✅ | Extracted from cache |
+| `getTags()` | ✅ | Extracted from cache |
+| `getFrontmatter()` | ✅ | YAML parsing |
+| `getHeadings()` | ✅ | Heading extraction |
 
-**Features Supported**:
-- ✅ Frontmatter parsing
-- ✅ Metadata queries
-- ✅ Tag indexing
-- ✅ Inline fields
-- ❌ Complex query language (WHERE, GROUP BY)
-- ❌ Live queries in preview mode
-- ❌ DataviewJS
+### Vault
 
-**Known Issues**:
-- Complex dataview queries not yet implemented
-- No reactive updates for metadata changes
-
-**Testing Status**: Unit tests passing, needs E2E testing
-
----
-
-### 2. Calendar ⚠️
-
-**Status**: Partial Support
-
-**Features Supported**:
-- ✅ Daily note creation
-- ✅ Date-based filename parsing
-- ✅ Frontmatter metadata
-- ❌ Calendar UI integration
-- ❌ Week/Day navigation
-
-**Known Issues**:
-- Calendar UI plugin not implemented
-- No integrated calendar view
-
-**Testing Status**: Basic metadata parsing tested
-
----
-
-### 3. Templater ⚠️
-
-**Status**: Partial Support
-
-**Features Supported**:
-- ✅ Template syntax parsing
-- ✅ Frontmatter variables
-- ✅ Template file metadata
-- ❌ Template execution engine
-- ❌ Dynamic template functions
-- ❌ User functions
-
-**Known Issues**:
-- No template execution engine
-- Template variables not replaced dynamically
-
-**Testing Status**: Metadata parsing tested, execution not tested
-
----
-
-### 4. Obsidian Git ✅
-
-**Status**: Full Support
-
-**Features Supported**:
-- ✅ File change tracking
-- ✅ Git-related frontmatter
-- ✅ Metadata caching
-- ✅ File watching for changes
-
-**Known Issues**:
-- None known (basic git workflow works)
-
-**Testing Status**: Fully tested
-
----
-
-### 5. Advanced Tables ✅
-
-**Status**: Full Support
-
-**Features Supported**:
-- ✅ Markdown table parsing
-- ✅ Table metadata extraction
-- ✅ Table syntax in editor
-- ✅ Table formatting
-
-**Known Issues**:
-- No table-specific editor extensions (yet)
-
-**Testing Status**: Parsing and syntax tested
-
----
-
-### 6. Kanban ⚠️
-
-**Status**: Partial Support
-
-**Features Supported**:
-- ✅ Kanban frontmatter metadata
-- ✅ Task list parsing
-- ✅ Checkbox items
-- ❌ Kanban board UI
-- ❌ Drag-and-drop cards
-- ❌ Board state management
-
-**Known Issues**:
-- No dedicated kanban board view
-- No interactive board features
-
-**Testing Status**: Metadata tested, UI not implemented
-
----
-
-### 7. Tasks ⚠️
-
-**Status**: Partial Support
-
-**Features Supported**:
-- ✅ Task metadata parsing
-- ✅ Task tag extraction
-- ✅ Checkbox status
-- ❌ Task filtering
-- ❌ Task querying
-- ❌ Task priority system
-
-**Known Issues**:
-- No dedicated task management UI
-- No advanced task filtering
-
-**Testing Status**: Basic task parsing tested
-
----
-
-## API Compatibility
-
-### Metadata Cache
-
-| API Method | Status | Notes |
-|------------|--------|-------|
-| `getCache()` | ✅ | Full support |
-| `getCacheByPath()` | ✅ | Full support |
-| `getFileCache()` | ✅ | Full support |
-| `on('changed')` | ⚠️ | Basic event support |
-| `getLinks()` | ✅ | Full support |
-| `getTags()` | ✅ | Full support |
-| `getFrontmatter()` | ✅ | Full support |
-
-### Vault API
-
-| API Method | Status | Notes |
-|------------|--------|-------|
-| `create()` | ✅ | Full support |
-| `read()` | ✅ | Full support |
-| `write()` | ✅ | Full support |
-| `delete()` | ✅ | Full support |
-| `rename()` | ✅ | Full support |
-| `createFolder()` | ✅ | Full support |
-| `getAbstractFileByPath()` | ✅ | Full support |
+| Method | Status | Notes |
+|--------|--------|-------|
+| `create(path, data)` | ✅ | Full support |
+| `read(file)` | ✅ | Full support |
+| `write(file, data)` | ✅ | Full support (via adapter) |
+| `delete(file)` | ✅ | Full support |
+| `rename(file, newPath)` | ✅ | Full support |
+| `createFolder(path)` | ✅ | Full support |
+| `getAbstractFileByPath(path)` | ✅ | Full support |
 | `getMarkdownFiles()` | ✅ | Full support |
+| `getFiles()` | ✅ | Full support |
 
-### Workspace API
+### Workspace
 
-| API Method | Status | Notes |
-|------------|--------|-------|
+| Method | Status | Notes |
+|--------|--------|-------|
 | `getActiveFile()` | ✅ | Full support |
-| `getActiveViewOfType()` | ✅ | Full support |
-| `openLinkText()` | ✅ | Full support |
-| `split()` | ⚠️ | Limited support |
-| `toggleSplit()` | ⚠️ | Limited support |
+| `getActiveViewOfType(type)` | ✅ | Generic implementation |
+| `openLinkText(linkText, sourcePath)` | ✅ | Full support |
+| `split()` | 🚧 | Basic support, needs refinement |
+| `toggleSplit()` | 🚧 | Limited support |
+| `getLeaf(newLeaf)` | 🚧 | Partial implementation |
 
-### Commands API
+### Commands
 
-| API Method | Status | Notes |
-|------------|--------|-------|
-| `addCommand()` | ✅ | Full support |
-| `removeCommand()` | ✅ | Full support |
-| `executeCommandById()` | ✅ | Full support |
+| Method | Status | Notes |
+|--------|--------|-------|
+| `addCommand(command)` | ✅ | Full support |
+| `removeCommand(id)` | ✅ | Full support |
+| `executeCommandById(id)` | ✅ | Full support |
+| `findCommand(id)` | ✅ | Full support |
+| `listCommands()` | ✅ | Full support |
 
-## Testing Progress
+### Plugin
 
-- ✅ Unit tests for MetadataCache
-- ✅ Unit tests for Plugin API
-- ⚠️ E2E tests for Dataview
-- ❌ E2E tests for Calendar
-- ❌ E2E tests for Templater
-- ❌ E2E tests for Advanced Tables
-- ❌ E2E tests for Kanban
-- ❌ E2E tests for Tasks
+| Method | Status | Notes |
+|--------|--------|-------|
+| `onload()` | ✅ | Called on load |
+| `onunload()` | ✅ | Called on unload |
+| `loadData()` | ✅ | JSON storage |
+| `saveData(data)` | ✅ | JSON storage |
+| `addCommand(command)` | ✅ | Via app.commands |
+| `addSettingTab(tab)` | ✅ | Full support |
+| `registerView(type, creator)` | 🚧 | API exists, needs testing |
+
+## Known Limitations
+
+### Plugin Loading
+- **Missing**: Dynamic plugin loading from `.obsidian/plugins/`
+- **Missing**: Plugin manifest validation
+- **Missing**: Plugin enable/disable UI
+- **Missing**: Community plugin marketplace integration
+
+### Workspace
+- Split panes work but need refinement
+- View state persistence incomplete
+- Leaf management needs improvement
+
+### Themes
+- CSS variables defined but theme loader incomplete
+- Community theme loading not implemented
+- Theme switching UI not built
+
+### Settings
+- Plugin settings tabs work
+- Hotkey customization UI incomplete
+
+## Testing Status
+
+### Unit Tests
+- ✅ MetadataCache parsing tests
+- ✅ Plugin API basic tests
+- ✅ Workspace basic tests
+
+### E2E Tests
+- 🚧 Test infrastructure exists
+- ❌ Tests need dev server running
+- ❌ Not CI-ready
+
+## Popular Plugin Compatibility
+
+These are theoretical compatibility estimates based on API implementation. Actual testing needed.
+
+| Plugin | Est. Compatibility | Notes |
+|--------|------------------|-------|
+| Dataview | ⚠️ 30% | Metadata cache works, query language missing |
+| Calendar | ⚠️ 40% | Daily notes work, UI not implemented |
+| Templater | ⚠️ 20% | Template syntax supported, execution engine missing |
+| Obsidian Git | ✅ 80% | File operations work, needs testing |
+| Advanced Tables | ⚠️ 50% | Tables parse, editor extensions need work |
+| Kanban | ❌ 10% | Metadata only, UI completely missing |
+| Tasks | ⚠️ 30% | Task parsing works, querying/filtering missing |
 
 ## Priority Improvements
 
-1. **High Priority**:
-   - Implement complex query language for Dataview
-   - Build calendar UI integration
-   - Add template execution engine
+1. **Plugin Loader** (High)
+   - Load plugins from `.obsidian/plugins/`
+   - Validate manifests
+   - Enable/disable UI
 
-2. **Medium Priority**:
-   - Kanban board UI
-   - Task filtering and querying
-   - Enhanced workspace splitting
+2. **Workspace Refinement** (High)
+   - Proper split pane handling
+   - View state persistence
+   - Leaf management
 
-3. **Low Priority**:
-   - DataviewJS support
-   - Custom template functions
-   - Advanced task management features
+3. **Theme System** (Medium)
+   - Load community themes
+   - Theme switching UI
+   - CSS snippets
+
+4. **Settings UI** (Medium)
+   - Hotkey editor
+   - About panel
+   - Plugin management UI
 
 ## Contributing
 
-To test a plugin:
-1. Install the plugin in a test vault
-2. Run the app with the plugin loaded
-3. Test core functionality
-4. Document results in this matrix
-5. Create tests for verified functionality
+Want to help improve plugin compatibility?
+
+1. **Test a plugin**: Load a plugin and document what works/doesn't
+2. **Implement missing APIs**: Check the obsidian/ folder for incomplete implementations
+3. **Write tests**: Add tests for API methods
+4. **Report bugs**: File issues with plugin compatibility problems
+
+## Notes
+
+- This compatibility layer is a work in progress
+- The goal is full Obsidian API compatibility
+- Community contributions welcome
+- See `src/obsidian/` for implementation details
+- See `examples/` for example plugins

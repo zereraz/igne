@@ -1,23 +1,59 @@
 # Igne
 
-A fast, extensible knowledge base application with Obsidian plugin compatibility.
+A fast, extensible knowledge base application with Obsidian compatibility.
+
+> **Status**: Active Development - Core features implemented, state persistence in progress.
 
 ## Features
 
-- **Fast & Lightweight**: Built with Rust (Tauri) backend and React frontend
-- **Plugin System**: Compatible with Obsidian plugin API
-- **Wikilinks**: Full support for `[[wikilinks]]` with autocomplete
-- **Search**: Powerful full-text search with MiniSearch
-- **Markdown**: Complete Markdown support with CodeMirror editor
-- **Live Preview**: Real-time markdown rendering
-- **Backlinks**: See all backlinks to your notes
-- **Tags**: Organize notes with tags
-- **File Tree**: Navigate your vault with a file tree
-- **Quick Switcher**: Fast file switching with keyboard shortcut (Cmd+P)
-- **Tab Management**: Multiple files open in tabs
-- **Customizable**: Extensible with plugins
+### Currently Implemented
+
+**Editor & Markdown**
+- CodeMirror 6 editor with markdown support
+- Wikilink support `[[link]]` with autocomplete
+- Live preview with inline formatting
+- Enhanced markdown: Math (KaTeX), Mermaid diagrams, Callouts, Footnotes, Definition Lists
+- Image paste & drag-drop support
+- Syntax highlighting for code blocks
+
+**Navigation & Organization**
+- File tree with folder structure
+- Quick switcher (Cmd+P)
+- Tab management for multiple open files
+- Backlinks panel
+- Outline/TOC panel with heading tracking
+- Tags panel with nested tag support
+- Graph view (D3.js force-directed layout)
+
+**Productivity**
+- Daily notes with templates and date navigation
+- Template system with variable substitution
+- Advanced search with operators (`tag:`, `file:`, `path:`)
+- Split view support
+- Command palette (Cmd+Shift+P)
+
+**Obsidian Compatibility**
+- Plugin API compatibility layer
+- `.obsidian` folder structure support
+- Metadata cache for markdown parsing
+- Workspace layout management
+- Settings system foundation
+
+### Planned Features
+
+- [ ] State persistence (vaults, workspace, settings between sessions)
+- [ ] Theme system (community themes)
+- [ ] Enhanced plugin loader (load community plugins)
+- [ ] E2E test suite
+- [ ] Performance optimization for large vaults
+- [ ] Mobile support
 
 ## Quick Start
+
+### Prerequisites
+
+- Node.js 18+ and [Bun](https://bun.sh)
+- Rust (for Tauri desktop app)
 
 ### Installation
 
@@ -30,7 +66,7 @@ cd igne
 bun install
 
 # Run development server
-bun run dev
+bun run tauri:dev
 ```
 
 ### Building
@@ -39,7 +75,7 @@ bun run dev
 # Build for development
 bun run build
 
-# Build Tauri app
+# Build Tauri app for production
 bun run tauri:build
 ```
 
@@ -47,113 +83,106 @@ bun run tauri:build
 
 ### Scripts
 
-- `bun run dev` - Start development server
-- `bun run build` - Build for production
-- `bun run test` - Run unit tests
-- `bun run test:ui` - Run tests with UI
-- `bun run test:e2e` - Run E2E tests with Playwright
-- `bun run tauri:dev` - Run Tauri development mode
+| Command | Description |
+|---------|-------------|
+| `bun run dev` | Start Vite dev server (web only) |
+| `bun run tauri:dev` | Run full Tauri desktop app |
+| `bun run build` | Build frontend for production |
+| `bun run tauri:build` | Build desktop app bundle |
+| `bun run test` | Run unit tests with Vitest |
+| `bun run test:ui` | Run tests with Vitest UI |
+| `bun run test:e2e` | Run E2E tests (requires dev server) |
 
-### Testing
+### Project Structure
 
-```bash
-# Unit tests
-bun run test
-
-# E2E tests
-bun run test:e2e
-
-# Performance benchmarks
-bun run test tests/performance/benchmark.test.ts
 ```
-
-## Plugin Development
-
-Igne supports plugins compatible with the Obsidian plugin API. See the [Plugin Development Guide](docs/plugin-development.md) for details.
-
-### Example Plugin
-
-```typescript
-import { Plugin, Notice } from 'igne';
-
-export default class MyPlugin extends Plugin {
-  async onload() {
-    this.addCommand({
-      id: 'my-command',
-      name: 'My Command',
-      callback: () => {
-        new Notice('Hello from Igne!');
-      }
-    });
-  }
-}
+igne/
+├── src/
+│   ├── components/      # React components (Editor, FileTree, etc.)
+│   ├── obsidian/        # Obsidian API compatibility layer
+│   ├── stores/          # State management
+│   ├── extensions/      # CodeMirror extensions
+│   └── utils/           # Utility functions
+├── src-tauri/           # Rust backend (Tauri)
+├── tests/               # Unit and E2E tests
+├── docs/                # Documentation
+└── examples/            # Example plugins
 ```
-
-See [examples/](examples/) for more plugin examples.
 
 ## Documentation
 
 - **[Plugin Development Guide](docs/plugin-development.md)** - Create plugins
-- **[Plugin Compatibility](docs/PLUGIN_COMPATIBILITY.md)** - Check plugin compatibility
+- **[Plugin Compatibility](docs/PLUGIN_COMPATIBILITY.md)** - API compatibility status
 - **[Documentation Index](docs/README.md)** - All documentation
 
 ## Architecture
 
-- **Backend**: Rust with Tauri
+- **Backend**: Rust with Tauri (file system, native dialogs)
 - **Frontend**: React with TypeScript
 - **Editor**: CodeMirror 6
-- **Styling**: TailwindCSS
-- **Testing**: Vitest + Playwright
+- **State**: React hooks + Zustand stores
+- **Styling**: CSS variables + custom design system
 
 ## Key Technologies
 
-- **Tauri** - Cross-platform desktop framework
-- **React** - UI framework
-- **CodeMirror** - Markdown editor
-- **MiniSearch** - Full-text search
-- **Fuse.js** - Fuzzy search
-- **Vitest** - Unit testing
-- **Playwright** - E2E testing
+| Technology | Purpose |
+|------------|---------|
+| [Tauri](https://tauri.app) | Cross-platform desktop framework |
+| [React](https://react.dev) | UI framework |
+| [CodeMirror](https://codemirror.net) | Markdown editor |
+| [MiniSearch](https://lucaong.github.io/minisearch/) | Full-text search |
+| [D3.js](https://d3js.org) | Graph visualization |
+| [Vitest](https://vitest.dev) | Unit testing |
+| [KaTeX](https://katex.org) | Math rendering |
+| [Mermaid](https://mermaid.js.org) | Diagrams |
 
-## Performance
+## Development Status
 
-Igne is optimized for large vaults:
+### ✅ Completed (MVP)
 
-- **Startup**: < 2 seconds for 1000 files
-- **File Switch**: < 100ms
-- **Search**: < 500ms for 1000 files
-- **Memory**: < 500MB for 1000 files
+- Markdown editing with CodeMirror 6
+- Wikilink support with autocomplete
+- File tree navigation
+- Full-text search with operators
+- Backlinks panel
+- Tab management
+- Quick switcher
+- Obsidian API compatibility layer
+- Enhanced markdown (Math, Mermaid, Callouts)
+- Outline/TOC panel
+- Tags panel
+- Graph view
+- Daily notes with templates
+- Template system
+- Inline format preview
+- Image paste & drop
+- Advanced search
+- Split view
 
-See [Performance Utilities](src/utils/performance.ts) for benchmarking tools.
+### 🚧 In Progress
 
-## Project Status
+- State persistence (vaults, workspace, settings)
+- Plugin loader for community plugins
+- E2E test suite
+- Performance optimizations
 
-This is an active development project. See [Issues](https://github.com/zereraz/igne/issues) for roadmap and known issues.
+### 📋 Planned
 
-### Completed Features
-
-- [x] Markdown editing with CodeMirror
-- [x] Wikilink support with autocomplete
-- [x] File tree navigation
-- [x] Full-text search
-- [x] Backlinks panel
-- [x] Tab management
-- [x] Quick switcher
-- [x] Obsidian plugin API compatibility
-- [x] E2E testing with Playwright
-- [x] Performance optimization utilities
-- [x] Plugin documentation
-
-### In Progress
-
-- [ ] Enhanced plugin compatibility
-- [ ] Additional editor features
-- [ ] Theme support
-- [ ] Mobile support
+- Theme system
+- Enhanced plugin compatibility
+- Additional editor features
+- Mobile support
 
 ## Contributing
 
 Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+Areas we'd love help with:
+- State persistence implementation
+- Plugin system testing
+- Performance optimization
+- Documentation improvements
+- Bug fixes
 
 ## License
 

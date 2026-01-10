@@ -1,82 +1,139 @@
 # Igne Documentation
 
-Welcome to the Igne documentation! Igne is a fast, extensible knowledge base application with plugin support compatible with Obsidian.
+Welcome to the Igne documentation! Igne is a fast, extensible knowledge base application with Obsidian plugin compatibility.
+
+**Current Status**: MVP features implemented, state persistence in progress.
 
 ## Documentation
 
 ### For Users
 
-- **[Installation Guide](./installation.md)** - Get started with Igne
-- **[User Manual](./user-guide.md)** - Learn how to use Igne
-- **[Features](./features.md)** - Discover Igne's capabilities
-- **[FAQ](./faq.md)** - Frequently asked questions
+- **[Quick Start](../README.md#quick-start)** - Get started with Igne
+- **[Features](../README.md#features)** - Discover Igne's capabilities
 
 ### For Plugin Developers
 
 - **[Plugin Development Guide](./plugin-development.md)** - Create your first plugin
-- **[API Reference](./api-reference.md)** - Complete API documentation
-- **[Plugin Examples](../examples/)** - Sample plugins to learn from
-- **[Plugin Compatibility](./PLUGIN_COMPATIBILITY.md)** - Check Obsidian plugin compatibility
+- **[Plugin Compatibility Matrix](./PLUGIN_COMPATIBILITY.md)** - Check API compatibility status
+- **[Example Plugins](../examples/)** - Sample plugins to learn from
 
 ### For Contributors
 
-- **[Contributing Guide](./contributing.md)** - How to contribute to Igne
-- **[Architecture](./architecture.md)** - Igne's architecture and design
-- **[Development Guide](./development.md)** - Set up development environment
-- **[Testing Guide](./testing.md)** - How to test Igne
+- **[Contributing Guide](../CONTRIBUTING.md)** - How to contribute to Igne
+- **[Development](../README.md#development)** - Set up development environment
 
 ## Quick Links
 
 ### Getting Started
 
-1. **Install Igne**: See the [Installation Guide](./installation.md)
-2. **Learn the Basics**: Read the [User Manual](./user-guide.md)
-3. **Explore Plugins**: Check out [Plugin Development](./plugin-development.md)
+1. **Install Igne**: See the [Quick Start](../README.md#quick-start)
+2. **Learn the Basics**: Read the [Features](../README.md#features)
 
 ### Plugin Development
 
 1. **Your First Plugin**: Start with the [Plugin Development Guide](./plugin-development.md)
-2. **API Reference**: Consult the [API Documentation](./api-reference.md)
+2. **API Status**: Check the [Compatibility Matrix](./PLUGIN_COMPATIBILITY.md)
 3. **Examples**: Browse [example plugins](../examples/)
 
-### Performance & Testing
+## Implementation Status
 
-1. **Performance Benchmarks**: See [Performance Targets](../tests/performance/)
-2. **E2E Tests**: Check out [E2E testing](../tests/e2e/)
-3. **Compatibility**: View [Plugin Compatibility Matrix](./PLUGIN_COMPATIBILITY.md)
+### ✅ Completed Features
+
+**Editor & Markdown**
+- CodeMirror 6 editor with markdown support
+- Wikilink `[[link]]` autocomplete
+- Live preview with inline formatting
+- Enhanced markdown: Math (KaTeX), Mermaid, Callouts, Footnotes
+- Image paste & drag-drop
+- Syntax highlighting
+
+**Navigation**
+- File tree with folders
+- Quick switcher (Cmd+P)
+- Tab management
+- Backlinks panel
+- Outline/TOC panel
+- Tags panel
+- Graph view (D3.js)
+
+**Productivity**
+- Daily notes with templates
+- Template system
+- Advanced search (`tag:`, `file:`, `path:`)
+- Split view
+- Command palette
+
+**Obsidian Compatibility**
+- Plugin API layer
+- `.obsidian` folder support
+- Metadata cache
+- Workspace management
+- Settings system
+
+### 🚧 In Progress
+
+- State persistence (vaults, workspace, settings)
+- Plugin loader for community plugins
+- E2E test suite
+- Performance optimization
+
+### 📋 Planned
+
+- Theme system
+- Enhanced plugin compatibility
+- Additional editor features
+- Mobile support
 
 ## Key Features
 
-- **Fast & Lightweight**: Built with Rust backend and React frontend
-- **Plugin System**: Compatible with Obsidian plugin API
+- **Fast & Lightweight**: Rust backend with React frontend
+- **Plugin System**: Obsidian plugin API compatibility
 - **Wikilinks**: Full support for `[[wikilinks]]`
-- **Search**: Powerful full-text search
-- **Markdown**: Complete Markdown support with live preview
+- **Search**: Powerful full-text search with operators
+- **Markdown**: Complete markdown with live preview
 - **Backlinks**: See all backlinks to your notes
 - **Tags**: Organize with tags
+- **Graph**: Visualize connections
 - **Customizable**: Extensible with plugins and themes
 
 ## Documentation Structure
 
 ```
 docs/
-├── installation.md          # Installation instructions
-├── user-guide.md            # User manual
-├── features.md              # Feature overview
-├── faq.md                   # Frequently asked questions
-├── plugin-development.md    # Plugin development guide
-├── api-reference.md         # API documentation
-├── PLUGIN_COMPATIBILITY.md  # Plugin compatibility matrix
-├── contributing.md          # Contributing guide
-├── architecture.md          # Architecture documentation
-├── development.md           # Development guide
-└── testing.md               # Testing guide
+├── README.md                    # This file - documentation index
+├── plugin-development.md        # Plugin development guide
+├── PLUGIN_COMPATIBILITY.md      # API compatibility matrix
 
 examples/
-├── hello-world-plugin.ts    # Simple example plugin
-├── word-counter-plugin.ts   # Word counter example
-└── daily-note-plugin.ts     # Daily note example
+├── hello-world-plugin.ts        # Simple example
+├── word-counter-plugin.ts       # Word counter
+├── daily-note-plugin.ts         # Daily notes
+└── test-vault/                  # Example vault
+    ├── Daily Notes/
+    ├── Templates/
+    └── Welcome.md
 ```
+
+## Development Resources
+
+### Testing
+
+```bash
+# Unit tests
+bun run test
+
+# E2E tests (requires dev server running)
+bun run tauri:dev  # In another terminal
+bun run test:e2e
+```
+
+### Performance
+
+- Target: < 2s startup for 1000 files
+- Target: < 100ms file switch
+- Target: < 500ms search for 1000 files
+
+*Note: Performance targets are aspirational. Actual benchmarks pending optimization work.*
 
 ## Community
 
@@ -86,4 +143,4 @@ examples/
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT License - see [LICENSE](../LICENSE) file for details.

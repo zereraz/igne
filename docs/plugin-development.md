@@ -2,6 +2,8 @@
 
 Welcome to the Igne plugin development guide! This guide will help you create plugins that extend Igne's functionality, compatible with the Obsidian plugin API.
 
+> **⚠️ Important Note**: Igne's plugin API is implemented, but the **plugin loader is still under development**. You can develop plugins using the API, but dynamic loading from `.obsidian/plugins/` is not yet functional. Plugins currently need to be manually integrated into the app codebase.
+
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
@@ -46,6 +48,13 @@ my-igne-plugin/
 
 ### Development Workflow
 
+**Current State (Manual Integration)**:
+1. Edit your plugin code in `main.ts`
+2. Build with `bun run build`
+3. Manually import and register in `src/App.tsx` or `src/obsidian/Plugins.ts`
+4. Rebuild the app with `bun run tauri:dev`
+
+**Future State (When Plugin Loader is Complete)**:
 1. Edit your plugin code in `main.ts`
 2. Build with `bun run build`
 3. Copy the compiled JS to your Igne vault's plugins folder
