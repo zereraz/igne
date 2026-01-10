@@ -17,9 +17,16 @@ Welcome to the Igne documentation! Igne is a fast, extensible knowledge base app
 - **[Plugin Compatibility Matrix](./PLUGIN_COMPATIBILITY.md)** - Check API compatibility status
 - **[Example Plugins](../examples/)** - Sample plugins to learn from
 
+### For AI Agents
+
+- **[Agent Onboarding](./AGENT-ONBOARDING.md)** - What to read, by task type
+- **[Agent Quick Reference](./AGENT-QUICK-REF.md)** - Essential constraints and patterns
+- **[UI Skills (Adapted)](./UI-SKILLS-ADAPTED.md)** - Project-specific UI guidelines
+- **[UI Skills (Original)](./UI-SKILLS-ORIGINAL.md)** - Canonical reference
+- **[Mind Garden Template](./MIND-GARDEN-TEMPLATE.md)** - Knowledge organization methodology
+
 ### For Contributors
 
-- **[Contributing Guide](../CONTRIBUTING.md)** - How to contribute to Igne
 - **[Development](../README.md#development)** - Set up development environment
 
 ## Quick Links
@@ -101,6 +108,11 @@ Welcome to the Igne documentation! Igne is a fast, extensible knowledge base app
 ```
 docs/
 ├── README.md                    # This file - documentation index
+├── AGENT-ONBOARDING.md          # AI agent onboarding guide
+├── AGENT-QUICK-REF.md           # Quick reference for agents
+├── UI-SKILLS-ADAPTED.md         # UI guidelines adapted for Igne
+├── UI-SKILLS-ORIGINAL.md        # Original UI Skills reference
+├── MIND-GARDEN-TEMPLATE.md      # Knowledge organization methodology
 ├── plugin-development.md        # Plugin development guide
 ├── PLUGIN_COMPATIBILITY.md      # API compatibility matrix
 

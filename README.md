@@ -173,17 +173,6 @@ igne/
 - Additional editor features
 - Mobile support
 
-## Contributing
-
-Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-Areas we'd love help with:
-- State persistence implementation
-- Plugin system testing
-- Performance optimization
-- Documentation improvements
-- Bug fixes
-
 ## License
 
 MIT License - see LICENSE file for details.
