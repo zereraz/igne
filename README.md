@@ -2,7 +2,7 @@
 
 A fast, extensible knowledge base application with Obsidian compatibility.
 
-> **Status**: Active Development - Core features implemented, state persistence in progress.
+> **Status**: Active Development - State persistence and theme system complete.
 
 ## Features
 
@@ -37,12 +37,28 @@ A fast, extensible knowledge base application with Obsidian compatibility.
 - `.obsidian` folder structure support
 - Metadata cache for markdown parsing
 - Workspace layout management
-- Settings system foundation
+- Settings system
+
+**State Persistence**
+- Vault registry and management
+- Window state persistence (position, size)
+- Global settings storage
+- Vault-level settings (.obsidian/app.json, appearance.json)
+- Workspace and tab persistence across sessions
+- Auto-open last vault on startup
+
+**Theme System**
+- Settings modal (Cmd/Ctrl+, to open)
+- Appearance settings with live preview
+- Light/dark theme toggle
+- Accent color picker
+- Font size slider (12-24px)
+- Font family selection (interface, text, monospace)
+- Community theme selector (scans .obsidian/themes/)
+- CSS snippet toggles (scans .obsidian/snippets/)
 
 ### Planned Features
 
-- [ ] State persistence (vaults, workspace, settings between sessions)
-- [ ] Theme system (community themes)
 - [ ] Enhanced plugin loader (load community plugins)
 - [ ] E2E test suite
 - [ ] Performance optimization for large vaults
@@ -158,17 +174,17 @@ igne/
 - Image paste & drop
 - Advanced search
 - Split view
+- State persistence (vaults, workspace, settings)
+- Theme system (settings, themes, CSS snippets)
 
 ### 🚧 In Progress
 
-- State persistence (vaults, workspace, settings)
 - Plugin loader for community plugins
 - E2E test suite
 - Performance optimizations
 
 ### 📋 Planned
 
-- Theme system
 - Enhanced plugin compatibility
 - Additional editor features
 - Mobile support
