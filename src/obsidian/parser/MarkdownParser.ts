@@ -49,6 +49,16 @@ export class MarkdownParser {
       }
       if (inCodeBlock) continue;
 
+      // Parse inline fields (Key:: value)
+      const inlineFieldMatch = line.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)::\s*(.+)$/);
+      if (inlineFieldMatch) {
+        metadata.frontmatter = metadata.frontmatter || {};
+        const key = inlineFieldMatch[1];
+        const value = inlineFieldMatch[2].trim();
+        // Store inline fields in frontmatter
+        metadata.frontmatter[key] = value;
+      }
+
       // Calculate position for this line
       const getOffset = () => {
         let offset = 0;
@@ -106,7 +116,7 @@ export class MarkdownParser {
         metadata.tags = metadata.tags || [];
         metadata.tags.push({
           position: createPos(tagMatch.index, tagMatch.index + tagMatch[0].length),
-          tag: tagMatch[1],
+          tag: '#' + tagMatch[1], // Include the # prefix for compatibility
         });
       }
 

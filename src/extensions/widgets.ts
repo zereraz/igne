@@ -14,36 +14,19 @@ export class WikilinkWidget extends WidgetType {
     span.className = `cm-wikilink ${this.exists ? 'cm-wikilink-exists' : 'cm-wikilink-missing'}`;
     span.textContent = this.display;
     span.dataset.target = this.target;
-    span.style.cursor = 'pointer';
-
-    console.log('[WikilinkWidget] Creating widget:', {
-      target: this.target,
-      display: this.display,
-      hasOnClick: !!this.onClick,
-      hasOnCmdClick: !!this.onCmdClick,
-    });
+    span.dataset.wikilink = 'true';
 
     span.addEventListener('click', (e) => {
-      console.log('[WikilinkWidget] Click event:', {
-        metaKey: e.metaKey,
-        ctrlKey: e.ctrlKey,
-        target: this.target,
-        hasOnClick: !!this.onClick,
-        hasOnCmdClick: !!this.onCmdClick,
-      });
-
       if (e.metaKey || e.ctrlKey) {
-        console.log('[WikilinkWidget] Cmd/Ctrl+Click detected, calling onCmdClick');
-        // Cmd/Ctrl + click - open/switch to note
+        // Cmd+click: open in new tab (or switch if already open)
         if (this.onCmdClick) {
           this.onCmdClick(this.target);
-        } else {
-          console.warn('[WikilinkWidget] onCmdClick is not defined!');
         }
       } else {
-        console.log('[WikilinkWidget] Regular click detected, calling onClick');
-        // Regular click - just trigger onClick
-        this.onClick(this.target);
+        // Regular click: open in same tab
+        if (this.onClick) {
+          this.onClick(this.target);
+        }
       }
     });
 
@@ -58,8 +41,8 @@ export class WikilinkWidget extends WidgetType {
   }
 
   ignoreEvent(event: Event): boolean {
-    // Handle click events ourselves, let CodeMirror handle everything else
-    return event.type === 'mousedown' || event.type === 'mouseup' || event.type === 'click';
+    // Let CodeMirror handle cursor positioning, but we still get click events
+    return event.type !== 'click';
   }
 }
 
@@ -284,10 +267,13 @@ export class CalloutWidget extends WidgetType {
 
   getIcon(): string {
     const icons: Record<string, string> = {
-      note: '📝', info: 'ℹ️', tip: '💡', warning: '⚠️',
-      danger: '🔥', example: '📋', quote: '💬', bug: '🐛',
-      success: '✅', failure: '❌', question: '❓', important: '❗',
-      caution: '⚡',
+      note: '📝', info: 'ℹ️', tip: '💡', hint: '💡',
+      important: '❗', success: '✅', check: '✅', done: '✅',
+      warning: '⚠️', caution: '⚠️', attention: '⚠️',
+      danger: '🔥', error: '❌', failure: '❌', bug: '🐛',
+      example: '📋', quote: '💬', cite: '💬',
+      question: '❓', faq: '❓',
+      abstract: '🔖', summary: '🔖', tldr: '🔖',
     };
     return icons[this.type] || '📌';
   }

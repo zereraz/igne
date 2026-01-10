@@ -234,23 +234,8 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
   let parentStack: { name: string; from: number; to: number }[] = [];
 
   // === SYNTAX TREE ITERATION ===
-  let wikilinkCount = 0;
-  const seenNodes = new Set<string>();
-
   syntaxTree(view.state).iterate({
     enter(node) {
-      // Track all node names for debugging
-      if (seenNodes.size < 30) {
-        seenNodes.add(node.name);
-      }
-
-      // Debug: log all wikilink nodes found
-      if (node.name === 'Wikilink') {
-        wikilinkCount++;
-        const text = doc.sliceString(node.from, node.to);
-        console.log('[livePreview] Found Wikilink node:', { text, from: node.from, to: node.to });
-      }
-
       // Track container nodes
       if (CONTAINER_NODES.includes(node.name)) {
         parentStack.push({ name: node.name, from: node.from, to: node.to });
@@ -350,9 +335,9 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
 
       // === WIDGETS ===
 
-      // Wikilinks - always render as pills (not just when cursor outside)
-      // This enables click interaction on the wikilink
-      if (node.name === 'Wikilink') {
+      // Wikilinks - render as pills when cursor is NOT inside
+      // When cursor touches the wikilink, show raw [[link]] for editing
+      if (node.name === 'Wikilink' && !cursorInParent) {
         const text = doc.sliceString(node.from, node.to);
         const match = text.match(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/);
         if (match) {
@@ -376,7 +361,8 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       }
 
       // Handle Link nodes that are actually wikilinks (parsed as links by standard parser)
-      if (node.name === 'Link' || node.name === 'URL') {
+      // Only render as widget when cursor is NOT inside
+      if ((node.name === 'Link' || node.name === 'URL') && !cursorInParent) {
         const text = doc.sliceString(node.from, node.to);
         // Check if this looks like a wikilink [[...]]
         const wikilinkMatch = text.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
@@ -553,13 +539,6 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       }).range(callout.from, callout.to)
     );
   }
-
-  console.log('[livePreview] Built decorations:', {
-    totalDecorations: decorations.length,
-    wikilinkCount,
-    cursorLine,
-    seenNodes: Array.from(seenNodes),
-  });
 
   return Decoration.set(decorations, true);
 }

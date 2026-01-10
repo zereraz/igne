@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import {
   Info,
   AlertTriangle,
@@ -10,12 +11,15 @@ import {
   Bookmark,
   X,
   Zap,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 
 interface CalloutProps {
   type: string;
   title?: string;
   children: React.ReactNode;
+  collapsed?: boolean;
 }
 
 // Premium design: left accent border for status visibility
@@ -48,7 +52,8 @@ const CALLOUT_TYPES: Record<
   tldr: { icon: Bookmark, color: '#818cf8', bgColor: 'rgba(129, 140, 248, 0.1)', borderColor: '#6366f1' },
 };
 
-export function Callout({ type, title, children }: CalloutProps) {
+export function Callout({ type, title, children, collapsed = false }: CalloutProps) {
+  const [isCollapsed, setIsCollapsed] = useState(collapsed);
   const config = CALLOUT_TYPES[type.toLowerCase()] || CALLOUT_TYPES.note;
   const Icon = config.icon;
   const displayTitle = title || type.charAt(0).toUpperCase() + type.slice(1);
@@ -69,27 +74,37 @@ export function Callout({ type, title, children }: CalloutProps) {
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          marginBottom: title ? '8px' : '0',
+          marginBottom: (title || !isCollapsed) ? '8px' : '0',
           fontSize: '12px',
           fontWeight: 500,
           color: config.color,
           fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
+          cursor: 'pointer',
+          userSelect: 'none',
         }}
+        onClick={() => setIsCollapsed(!isCollapsed)}
       >
         <Icon size={16} style={{ flexShrink: 0 }} />
-        <span>{displayTitle}</span>
+        <span style={{ flex: 1 }}>{displayTitle}</span>
+        {isCollapsed ? (
+          <ChevronRight size={14} style={{ flexShrink: 0 }} />
+        ) : (
+          <ChevronDown size={14} style={{ flexShrink: 0 }} />
+        )}
       </div>
-      <div
-        style={{
-          fontSize: '14px',
-          lineHeight: 1.6,
-          color: '#e4e4e7',
-        }}
-      >
-        {children}
-      </div>
+      {!isCollapsed && (
+        <div
+          style={{
+            fontSize: '14px',
+            lineHeight: 1.6,
+            color: '#e4e4e7',
+          }}
+        >
+          {children}
+        </div>
+      )}
     </div>
   );
 }

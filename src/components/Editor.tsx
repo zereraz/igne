@@ -7,6 +7,8 @@ import { searchWikilinks } from '../utils/wikilinkCompletion';
 import { createLivePreview } from '../extensions/livePreview';
 import { createMarkdownLanguage } from '../extensions/markdownLanguage';
 import { searchStore } from '../stores/searchStore';
+import { handleImagePaste, handleImageDrop } from '../utils/imageHandler';
+import { SearchReplacePanel, FindOptions } from './SearchReplacePanel';
 import type { WikilinkSearchResult, EditorChangeHandler, WikilinkClickHandler } from '../types';
 
 interface WikilinkSearchState {
@@ -19,15 +21,24 @@ interface EditorProps {
   onChange: EditorChangeHandler;
   onWikilinkClick?: WikilinkClickHandler;
   onWikilinkCmdClick?: WikilinkClickHandler;
+  onCursorPositionChange?: (line: number) => void;
+  onScrollToPosition?: (position: number) => void;
+  vaultPath?: string | null;
+  currentFilePath?: string | null;
+  scrollPosition?: number; // New prop for external scroll control
 }
 
-export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick }: EditorProps) {
+export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick, onCursorPositionChange, vaultPath, currentFilePath, scrollPosition }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const [wikilinkSearch, setWikilinkSearch] = useState<WikilinkSearchState | null>(null);
   const [searchResults, setSearchResults] = useState<WikilinkSearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showSearchPanel, setShowSearchPanel] = useState(false);
+  const [searchResultCount, setSearchResultCount] = useState<number | undefined>();
+  const [currentResultIndex, setCurrentResultIndex] = useState<number | undefined>();
+  const scrollPositionRef = useRef<number>(0);
 
   // Keep onChange ref updated
   onChangeRef.current = onChange;
@@ -43,29 +54,25 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick 
     const view = viewRef.current;
     if (!view || !wikilinkSearch) return;
 
-    const insertText = name;
-
-    // Find the [[]] pattern and replace the inner ]]
     const docText = view.state.doc.toString();
     const cursorPos = view.state.selection.main.head;
 
-    // Look backward from cursor for [[ followed by ]]
-    // The cursor is between the ] characters, so we need to find [[ before and ]] after
-    const beforeCursor = docText.slice(0, cursorPos);
-    const afterCursor = docText.slice(cursorPos);
+    // After the keymap inserts []], the cursor is between the ]] characters
+    // So beforeCursor ends with [[]] and afterCursor starts with ]]
+    // We need to find the last [[ before cursor and first ]] after cursor
 
-    // Match [[ at the end of beforeCursor
-    const openMatch = beforeCursor.match(/\[\[$/);
-    // Match ]] at the start of afterCursor
-    const closeMatch = afterCursor.match(/^\]\]/);
+    // Find the last [[ before cursor
+    const lastOpen = docText.lastIndexOf('[[', cursorPos);
+    // Find the first ]] after cursor
+    const firstClose = docText.indexOf(']]', cursorPos);
 
-    if (openMatch && closeMatch) {
-      // Found [[]] with cursor in the middle
-      const from = cursorPos - 2; // Position of first [
-      const to = cursorPos + 2; // Position after second ]
+    if (lastOpen !== -1 && firstClose !== -1 && lastOpen < firstClose) {
+      // Found [[...]] pattern with cursor inside
+      const from = lastOpen;
+      const to = firstClose + 2;
       view.dispatch({
-        changes: { from, to, insert: `[[${insertText}]]` },
-        selection: { anchor: from + insertText.length + 4 }, // After the closing ]]
+        changes: { from, to, insert: `[[${name}]]` },
+        selection: { anchor: from + name.length + 4 },
       });
       setWikilinkSearch(null);
       return;
@@ -76,11 +83,10 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick 
     let match;
     while ((match = pattern.exec(docText)) !== null) {
       const matchPos = match.index;
-      // Check if this [[]] is near the cursor
       if (matchPos <= cursorPos && matchPos + 4 >= cursorPos) {
         view.dispatch({
-          changes: { from: matchPos, to: matchPos + 4, insert: `[[${insertText}]]` },
-          selection: { anchor: matchPos + insertText.length + 4 },
+          changes: { from: matchPos, to: matchPos + 4, insert: `[[${name}]]` },
+          selection: { anchor: matchPos + name.length + 4 },
         });
         setWikilinkSearch(null);
         return;
@@ -107,13 +113,195 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick 
     }
   }, [searchResults, selectedIndex, selectWikilink]);
 
+  // Handle find in search panel
+  const handleFind = useCallback((query: string, options: FindOptions) => {
+    const view = viewRef.current;
+    if (!view || !query.trim()) return;
+
+    try {
+      const doc = view.state.doc.toString();
+      const cursor = view.state.selection.main.head;
+
+      // Parse search operators
+      let searchPattern = query;
+
+      // Check for advanced search operators
+      const tagMatch = query.match(/^tag:(.+)$/i);
+      const fileMatch = query.match(/^file:(.+)$/i);
+      const pathMatch = query.match(/^path:(.+)$/i);
+      const hashTagMatch = query.match(/^#(.+)$/);
+
+      if (tagMatch) {
+        // Search for tags: #tag
+        const tag = tagMatch[1].trim();
+        searchPattern = `#${tag}`;
+      } else if (fileMatch) {
+        // Search in filenames only
+        const fileName = fileMatch[1].trim();
+        // This is a meta-search - search through all files
+        console.log('File search:', fileName);
+        setSearchResultCount(0);
+        setCurrentResultIndex(undefined);
+        return; // File search requires different handling
+      } else if (pathMatch) {
+        // Search in specific path
+        const folderPath = pathMatch[1].trim();
+        console.log('Path search:', folderPath);
+        setSearchResultCount(0);
+        setCurrentResultIndex(undefined);
+        return; // Path search requires different handling
+      } else if (hashTagMatch) {
+        // Alternative hashtag syntax
+        const tag = hashTagMatch[1].trim();
+        searchPattern = `#${tag}`;
+      } else {
+        // Regular search
+        if (options.wholeWord) {
+          searchPattern = `\\b${query}\\b`;
+        }
+      }
+
+      const flags = options.caseSensitive ? 'g' : 'gi';
+      const pattern = options.regex
+        ? new RegExp(searchPattern, flags)
+        : new RegExp(searchPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+
+      // Find all matches
+      const matches: Array<{ index: number; length: number }> = [];
+      let match;
+      pattern.lastIndex = 0;
+
+      while ((match = pattern.exec(doc)) !== null) {
+        matches.push({ index: match.index, length: match[0].length });
+      }
+
+      if (matches.length === 0) {
+        setSearchResultCount(0);
+        setCurrentResultIndex(undefined);
+        return;
+      }
+
+      setSearchResultCount(matches.length);
+
+      // Find next match after cursor
+      let nextMatch = matches.find(m => m.index > cursor);
+      if (!nextMatch) {
+        // Wrap around to first match
+        nextMatch = matches[0];
+        setCurrentResultIndex(1);
+      } else {
+        const indexBefore = matches.filter(m => m.index <= cursor).length;
+        setCurrentResultIndex(indexBefore + 1);
+      }
+
+      // Select the match
+      view.dispatch({
+        selection: {
+          anchor: nextMatch.index,
+          head: nextMatch.index + nextMatch.length,
+        },
+        scrollIntoView: true,
+      });
+    } catch (e) {
+      console.error('Search error:', e);
+      setSearchResultCount(0);
+    }
+  }, []);
+
+  // Handle replace in search panel
+  const handleReplace = useCallback((query: string, replacement: string, options: FindOptions) => {
+    const view = viewRef.current;
+    if (!view || !query.trim()) return;
+
+    try {
+      const selection = view.state.selection.main;
+      const selectedText = view.state.doc.sliceString(selection.from, selection.to);
+
+      // Create search pattern
+      let searchPattern = query;
+      if (options.wholeWord) {
+        searchPattern = `\\b${query}\\b`;
+      }
+
+      const flags = options.caseSensitive ? '' : 'i';
+      const pattern = options.regex
+        ? new RegExp(searchPattern, flags)
+        : new RegExp(searchPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+
+      // Replace if selection matches
+      if (pattern.test(selectedText)) {
+        view.dispatch({
+          changes: {
+            from: selection.from,
+            to: selection.to,
+            insert: replacement,
+          },
+        });
+      }
+    } catch (e) {
+      console.error('Replace error:', e);
+    }
+  }, []);
+
+  // Handle replace all
+  const handleReplaceAll = useCallback((query: string, replacement: string, options: FindOptions) => {
+    const view = viewRef.current;
+    if (!view || !query.trim()) return;
+
+    try {
+      const doc = view.state.doc.toString();
+
+      // Create search pattern
+      let searchPattern = query;
+      if (options.wholeWord) {
+        searchPattern = `\\b${query}\\b`;
+      }
+
+      const flags = options.caseSensitive ? 'g' : 'gi';
+      const pattern = options.regex
+        ? new RegExp(searchPattern, flags)
+        : new RegExp(searchPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+
+      let match;
+      const changes: { from: number; to: number; insert: string }[] = [];
+
+      // Find all matches and create replacement changes
+      pattern.lastIndex = 0;
+      while ((match = pattern.exec(doc)) !== null) {
+        changes.push({
+          from: match.index,
+          to: match.index + match[0].length,
+          insert: replacement,
+        });
+      }
+
+      if (changes.length > 0) {
+        view.dispatch({
+          changes,
+        });
+      }
+    } catch (e) {
+      console.error('Replace all error:', e);
+    }
+  }, []);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
     const extensions = [
       oneDark,
       history(),
-      keymap.of([...defaultKeymap, ...historyKeymap]),
+      keymap.of([
+        ...defaultKeymap,
+        ...historyKeymap,
+        {
+          key: 'Mod-f',
+          run: () => {
+            setShowSearchPanel(true);
+            return true;
+          },
+        },
+      ]),
       createMarkdownLanguage(),
       // Keymap to auto-close [ and trigger wikilink search for [[
       keymap.of([
@@ -166,6 +354,11 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick 
         if (update.docChanged) {
           const newContent = update.state.doc.toString();
           onChangeRef.current(newContent);
+        }
+        if (update.selectionSet) {
+          const cursorPos = update.state.selection.main.head;
+          const line = update.state.doc.lineAt(cursorPos);
+          onCursorPositionChange?.(line.number);
         }
       }),
       EditorView.theme({
@@ -531,6 +724,84 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick 
     }
   }, [content]);
 
+  // Handle scroll to position
+  useEffect(() => {
+    if (scrollPosition !== undefined && scrollPosition !== scrollPositionRef.current) {
+      const view = viewRef.current;
+      if (!view) return;
+
+      scrollPositionRef.current = scrollPosition;
+
+      // Scroll to the position
+      view.dispatch({
+        selection: { anchor: scrollPosition, head: scrollPosition },
+        scrollIntoView: true,
+      });
+    }
+  }, [scrollPosition]);
+
+  // Handle image paste and drop
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !vaultPath || !currentFilePath) return;
+
+    const handlePaste = async (e: ClipboardEvent) => {
+      const handled = await handleImagePaste(e.clipboardData, {
+        vaultPath,
+        currentFilePath,
+        onInsert: (markdown) => {
+          const view = viewRef.current;
+          if (!view) return;
+
+          const pos = view.state.selection.main.head;
+          view.dispatch({
+            changes: { from: pos, to: pos, insert: markdown },
+          });
+        },
+      });
+
+      if (handled) {
+        e.preventDefault();
+      }
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      if (!e.dataTransfer) return;
+      const handled = await handleImageDrop(e.dataTransfer, {
+        vaultPath,
+        currentFilePath,
+        onInsert: (markdown) => {
+          const view = viewRef.current;
+          if (!view) return;
+
+          const pos = view.state.selection.main.head;
+          view.dispatch({
+            changes: { from: pos, to: pos, insert: markdown },
+          });
+        },
+      });
+
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    container.addEventListener('paste', handlePaste as any);
+    container.addEventListener('drop', handleDrop as any);
+    container.addEventListener('dragover', handleDragOver as any);
+
+    return () => {
+      container.removeEventListener('paste', handlePaste as any);
+      container.removeEventListener('drop', handleDrop as any);
+      container.removeEventListener('dragover', handleDragOver as any);
+    };
+  }, [vaultPath, currentFilePath]);
+
   return (
     <div
       ref={containerRef}
@@ -627,6 +898,18 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick 
             </div>
           )}
         </div>
+      )}
+
+      {/* Search and Replace Panel */}
+      {showSearchPanel && (
+        <SearchReplacePanel
+          onFind={handleFind}
+          onReplace={handleReplace}
+          onReplaceAll={handleReplaceAll}
+          onClose={() => setShowSearchPanel(false)}
+          resultCount={searchResultCount}
+          currentResult={currentResultIndex}
+        />
       )}
     </div>
   );

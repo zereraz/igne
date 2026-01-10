@@ -12,7 +12,10 @@
     "tauri:build": "tauri build",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "repository": {
     "type": "git",
@@ -38,17 +41,21 @@
     "@tauri-apps/plugin-dialog": "^2.5.0",
     "@tauri-apps/plugin-fs": "^2.4.5",
     "codemirror": "^6.0.2",
+    "d3": "^7.9.0",
     "fuse.js": "^7.1.0",
     "katex": "^0.16.27",
     "mermaid": "^11.12.2",
     "minisearch": "^7.2.0",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "remark-footnotes": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4.1.18",
     "@tauri-apps/cli": "^2.9.6",
     "@testing-library/react": "^16.3.1",
+    "@types/jsdom": "^27.0.0",
     "@types/node": "^25.0.3",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
@@ -57,6 +64,7 @@
     "@vitest/ui": "^4.0.16",
     "autoprefixer": "^10.4.23",
     "clsx": "^2.1.1",
+    "happy-dom": "^20.1.0",
     "jsdom": "^27.4.0",
     "lucide-react": "^0.562.0",
     "postcss": "^8.5.6",

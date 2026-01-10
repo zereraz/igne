@@ -3,6 +3,56 @@
 // =============================================================================
 
 // =============================================================================
+// Workspace Type (forward declaration)
+// =============================================================================
+
+export interface Workspace {
+  leftSplit: any;
+  rightSplit: any;
+  leftRibbon: any;
+  rightRibbon: any;
+  rootSplit: any;
+  activeLeaf: WorkspaceLeaf | null;
+  activeEditor: any;
+  layoutReady: boolean;
+  viewTypes: Map<string, any>;
+  editorExtensions: any[];
+  getLeaf(newLeaf?: boolean | PaneType): WorkspaceLeaf;
+  splitActiveLeaf(direction?: SplitDirection): WorkspaceLeaf;
+  getActiveViewOfType<T extends any>(viewType: new (...args: any[]) => T): T | null;
+  registerView(type: string, viewCreator: any): void;
+  unregisterView(type: string): void;
+  registerEditorExtension(extension: any): void;
+  openLinkText(linktext: string, sourcePath?: string, newLeaf?: boolean | PaneType, openState?: any): Promise<void>;
+  getLayout(): any;
+  setLayout(layout: any): Promise<void>;
+  on(name: string, callback: (...args: any[]) => any): EventRef;
+  trigger(name: string, ...args: any[]): void;
+}
+
+// View interface to avoid circular dependency
+export interface View {
+  getViewType(): string;
+  getDisplayText(): string;
+  getIcon(): IconName;
+  onOpen(): Promise<void>;
+  onClose(): Promise<void>;
+  getState(): any;
+  setState(state: any, result: ViewStateResult): Promise<void>;
+}
+
+// =============================================================================
+// Events Base Class (needed before Workspace)
+// =============================================================================
+
+export interface Events {
+  on(name: string, callback: (...args: any[]) => any): EventRef;
+  off(name: string, ref: EventRef): void;
+  trigger(name: string, ...args: any[]): void;
+  tryTrigger(evt: string, ...args: any[]): void;
+}
+
+// =============================================================================
 // Core File Types
 // =============================================================================
 
@@ -54,6 +104,12 @@ export interface CachedMetadata {
   blocks?: Record<string, BlockCache>;
   listItems?: ListItemCache[];
   frontmatterPosition?: Pos;
+  file?: {
+    path: string;
+    basename: string;
+    extension: string;
+    stat?: FileStats;
+  };
 }
 
 export interface HeadingCache {
@@ -109,6 +165,26 @@ export interface PluginManifest {
   isDesktopOnly: boolean;
 }
 
+export interface PluginSettingTab {
+  app: App;
+  containerEl: HTMLElement;
+  display(): void;
+  hide(): void;
+}
+
+export interface Plugin {
+  app: App;
+  manifest: PluginManifest;
+  onload(): void | Promise<void>;
+  onunload(): void;
+  loadData(): Promise<any>;
+  saveData(data: any): Promise<void>;
+  addCommand(command: Command): Command;
+  addSettingTab(settingTab: PluginSettingTab): void;
+  registerView(type: string, viewCreator: ViewCreator): void;
+  registerEditorExtension(extension: any): void;
+}
+
 // =============================================================================
 // Command Types
 // =============================================================================
@@ -146,21 +222,24 @@ export type PaneType =
   | 'search'
   | 'custom';
 
+// Forward declarations to avoid circular dependencies
 export interface WorkspaceLeaf {
-  view: View | null;
-  parent: WorkspaceItem | null;
+  view: any; // View instance - using any to avoid circular dependency
+  parent: any; // WorkspaceItem instance - using any to avoid circular dependency
 }
 
 export interface WorkspaceItem {
   type?: 'split' | 'leaf';
   direction?: SplitDirection;
   children?: WorkspaceItem[];
+  parent?: WorkspaceItem | null;
+  leaf?: any; // WorkspaceLeaf instance
 }
 
 export interface ViewState {
   type: string;
-  state: any;
-  active: boolean;
+  state?: any;
+  active?: boolean;
 }
 
 // =============================================================================
@@ -173,40 +252,7 @@ export interface Constructor<T> {
   new (...args: any[]): T;
 }
 
-export type ViewCreator = (leaf: WorkspaceLeaf) => View;
-
-export abstract class View {
-  leaf: WorkspaceLeaf;
-  icon: IconName;
-  navigation: boolean;
-
-  constructor(leaf: WorkspaceLeaf) {
-    this.leaf = leaf;
-    this.icon = 'file-text';
-    this.navigation = true;
-  }
-
-  abstract getViewType(): string;
-  abstract getDisplayText(): string;
-  abstract onOpen(): void;
-  async onClose(): Promise<void> {}
-}
-
-export class MarkdownView extends View {
-  editor!: Editor;
-
-  getViewType(): string {
-    return 'markdown';
-  }
-
-  getDisplayText(): string {
-    return 'Markdown';
-  }
-
-  onOpen(): void {
-    // Implementation in later phase
-  }
-}
+export type ViewCreator = (leaf: any) => any; // Using any to avoid circular dependency
 
 // =============================================================================
 // Editor Types
@@ -240,42 +286,37 @@ export interface EditorDocument {
   getLine(line: number): string;
 }
 
-export class Editor {
-  getDoc(): EditorDocument {
-    // Implementation in later phase
-    return {} as EditorDocument;
-  }
+// Editor is implemented in Editor.ts - this is just the type export
+export interface Editor {
+  getDoc(): EditorDocument;
+  getValue(): string;
+  setValue(value: string): void;
+  getSelection(): string;
+  setSelection(anchor: EditorPosition, head?: EditorPosition): void;
+  replaceSelection(text: string): void;
+  getCursor(pos?: 'from' | 'to' | 'head' | 'anchor'): EditorPosition;
+  setCursor(pos: EditorPosition | number, ch?: number): void;
+  somethingSelected(): boolean;
+  hasFocus(): boolean;
+  offsetToPos(offset: number): EditorPosition;
+  posToOffset(pos: EditorPosition): number;
+  getLine(line: number): string;
+  lineCount(): number;
+  lastLine(): number;
+  getRange(from: EditorPosition, to: EditorPosition): string;
+  replaceRange(text: string, from?: EditorPosition, to?: EditorPosition): void;
+  focus(): void;
+  blur(): void;
+}
 
-  getValue(): string {
-    // Implementation in later phase
-    return '';
-  }
-
-  setValue(_value: string): void {
-    // Implementation in later phase
-  }
-
-  getSelection(): EditorSelection {
-    // Implementation in later phase
-    return { anchor: { line: 0, ch: 0 }, head: { line: 0, ch: 0 } };
-  }
-
-  setSelection(_anchor: EditorPosition, _head?: EditorPosition): void {
-    // Implementation in later phase
-  }
-
-  replaceSelection(_text: string): void {
-    // Implementation in later phase
-  }
-
-  getCursor(): EditorPosition {
-    // Implementation in later phase
-    return { line: 0, ch: 0 };
-  }
-
-  setCursor(_line: number, _ch?: number): void {
-    // Implementation in later phase
-  }
+// Forward declaration for MarkdownView
+export interface MarkdownView {
+  file: TFile | null;
+  editor: Editor;
+  view: any;
+  data: string;
+  getMode(): string;
+  setMode(mode: string): void;
 }
 
 // =============================================================================
@@ -299,4 +340,36 @@ export type EventName =
   | 'css-change'
   | 'quit'
   | 'codemirror';
+
+// =============================================================================
+// App Types
+// =============================================================================
+
+export interface App {
+  vault: any;
+  workspace: any;
+  metadataCache: any;
+  fileManager: any;
+  keymap: any;
+  scope: any;
+  plugins: any;
+  commands: any;
+  setting: any;
+  themeManager: any;
+  isMobile: boolean;
+  appId: string;
+  lastActiveFile: TFile | null;
+  loadLocalStorage(key: string): string | null;
+  saveLocalStorage(key: string, value: string): void;
+}
+
+export interface ViewStateResult {
+  state?: any;
+  error?: string;
+}
+
+export interface OpenViewState {
+  state?: any;
+  active?: boolean;
+}
 

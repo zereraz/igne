@@ -19,17 +19,62 @@ export class MetadataCache extends Events {
   }
 
   /**
+   * Initialize the metadata cache with a vault path
+   * Alias for rebuildCache for compatibility
+   */
+  async initialize(vaultPath: string): Promise<void> {
+    // For now, just rebuild the cache
+    // In the future, this could load from disk cache
+    await this.rebuildCache();
+  }
+
+  /**
    * Get cached metadata for a file
+   * Includes file metadata in the cache
    */
   getFileCache(file: TFile): CachedMetadata | null {
-    return this.cache.get(file.path) || null;
+    const metadata = this.cache.get(file.path) || null;
+    if (metadata && !metadata.file) {
+      // Augment cache with file metadata
+      metadata.file = {
+        path: file.path,
+        basename: file.basename,
+        extension: file.extension,
+        stat: file.stat,
+      };
+    }
+    return metadata;
   }
 
   /**
    * Get cached metadata by path
+   * Includes file metadata if available
    */
   getCache(path: string): CachedMetadata | null {
-    return this.cache.get(path) || null;
+    const metadata = this.cache.get(path) || null;
+    if (metadata && !metadata.file) {
+      // Try to find file in vault and augment with file metadata
+      const file = this.app.vault.getFileByPath(path);
+      if (file) {
+        metadata.file = {
+          path: file.path,
+          basename: file.basename,
+          extension: file.extension,
+          stat: file.stat,
+        };
+      } else {
+        // Derive basename from path
+        const parts = path.split('/');
+        const filename = parts[parts.length - 1] || '';
+        const basename = filename.replace(/\.[^/.]+$/, '');
+        metadata.file = {
+          path,
+          basename,
+          extension: filename.includes('.') ? filename.split('.').pop() || 'md' : 'md',
+        };
+      }
+    }
+    return metadata;
   }
 
   /**

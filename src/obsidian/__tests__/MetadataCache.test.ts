@@ -45,8 +45,8 @@ describe('MarkdownParser', () => {
     const result = parser.parse(content, 'test.md');
 
     expect(result.tags).toHaveLength(2);
-    expect(result.tags![0].tag).toBe('tag');
-    expect(result.tags![1].tag).toBe('multi-word-tag');
+    expect(result.tags![0].tag).toBe('#tag');
+    expect(result.tags![1].tag).toBe('#multi-word-tag');
   });
 
   it('should parse block IDs', () => {

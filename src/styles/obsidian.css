@@ -1,0 +1,784 @@
+/* =============================================================================
+   Obsidian Theme CSS Variables
+   Full compatibility with Obsidian community themes
+   ============================================================================= */
+
+/* =============================================================================
+   BASE COLORS - Color palette used throughout the UI
+   ============================================================================= */
+:root {
+  /* Base grayscale - 100 steps */
+  --color-base-00: #1e1e1e; /* Darkest background */
+  --color-base-05: #212121;
+  --color-base-10: #242424;
+  --color-base-15: #272727;
+  --color-base-20: #2a2a2a;
+  --color-base-25: #2d2d2d;
+  --color-base-30: #303030;
+  --color-base-35: #333333;
+  --color-base-40: #363636;
+  --color-base-45: #3a3a3a;
+  --color-base-50: #3d3d3d;
+  --color-base-55: #404040;
+  --color-base-60: #444444;
+  --color-base-65: #484848;
+  --color-base-70: #4c4c4c;
+  --color-base-75: #505050;
+  --color-base-80: #545454;
+  --color-base-85: #585858;
+  --color-base-90: #5c5c5c;
+  --color-base-95: #606060;
+  --color-base-100: #646464; /* Lightest gray */
+}
+
+/* =============================================================================
+   ACCENT COLORS - Primary theme accent
+   ============================================================================= */
+:root {
+  --color-accent: #7c3aed;
+  --color-accent-1: #8b5cf6;
+  --color-accent-2: #6d28d9;
+  --color-accent-hover: #8b5cf6;
+  --color-accent-rgb: 124, 58, 237;
+}
+
+/* =============================================================================
+   SEMANTIC COLORS - Status and functional colors
+   ============================================================================= */
+:root {
+  /* Red */
+  --color-red: #fb464c;
+  --color-red-rgb: 251, 70, 76;
+  --color-red-1: #fc5e63;
+  --color-red-2: #fa2e35;
+  --color-red-3: #dc1a26;
+
+  /* Green */
+  --color-green: #3cc945;
+  --color-green-rgb: 60, 201, 69;
+  --color-green-1: #5bd363;
+  --color-green-2: #2ab933;
+  --color-green-3: #1a9a23;
+
+  /* Blue */
+  --color-blue: #4d8af0;
+  --color-blue-rgb: 77, 138, 240;
+  --color-blue-1: #6b9af5;
+  --color-blue-2: #337aed;
+  --color-blue-3: #0f6ae3;
+
+  /* Yellow */
+  --color-yellow: #fad25c;
+  --color-yellow-rgb: 250, 210, 92;
+  --color-yellow-1: #fadf76;
+  --color-yellow-2: #f9c542;
+  --color-yellow-3: #f7b028;
+
+  /* Orange */
+  --color-orange: #fb9f48;
+  --color-orange-rgb: 251, 159, 72;
+  --color-orange-1: #fcb360;
+  --color-orange-2: #fa8b2c;
+  --color-orange-3: #f27510;
+
+  /* Purple */
+  --color-purple: #a88afc;
+  --color-purple-rgb: 168, 138, 252;
+  --color-purple-1: #b9a6fd;
+  --color-purple-2: #9780fb;
+  --color-purple-3: #7a5efa;
+
+  /* Pink */
+  --color-pink: #fc7dbb;
+  --color-pink-rgb: 252, 125, 187;
+  --color-pink-1: #fd95c9;
+  --color-pink-2: #fb65ad;
+  --color-pink-3: #f93d9a;
+
+  /* Cyan */
+  --color-cyan: #4dcede;
+  --color-cyan-rgb: 77, 206, 238;
+  --color-cyan-1: #73d9e5;
+  --color-cyan-2: #27c1d7;
+  --color-cyan-3: #00a3bd;
+}
+
+/* =============================================================================
+   BACKGROUND COLORS - Dark theme (default)
+   ============================================================================= */
+.theme-dark {
+  /* Primary backgrounds */
+  --background-primary: var(--color-base-00);
+  --background-primary-alt: var(--color-base-10);
+  --background-secondary: var(--color-base-10);
+  --background-secondary-alt: var(--color-base-20);
+  --background-tertiary: var(--color-base-20);
+  --background-modifier-hover: rgba(255, 255, 255, 0.08);
+  --background-modifier-active-hover: rgba(255, 255, 255, 0.12);
+  --background-modifier-border: var(--color-base-30);
+  --background-modifier-border-hover: var(--color-base-35);
+  --background-modifier-border-focus: var(--color-accent);
+  --background-modifier-error: rgba(251, 70, 76, 0.15);
+  --background-modifier-error-hover: rgba(251, 70, 76, 0.2);
+  --background-modifier-success: rgba(60, 201, 69, 0.15);
+  --background-modifier-success-hover: rgba(60, 201, 69, 0.2);
+  --background-modifier-message: rgba(251, 159, 72, 0.1);
+
+  /* Header backgrounds */
+  --background-header: var(--color-base-10);
+  --background-table-odd: var(--color-base-05);
+  --background-table-even: var(--color-base-10);
+
+  /* Special backgrounds */
+  --background-divider: var(--color-base-30);
+  --background-toggle-handle: #ffffff;
+}
+
+/* =============================================================================
+   BACKGROUND COLORS - Light theme
+   ============================================================================= */
+.theme-light {
+  /* Base colors override for light theme */
+  --color-base-00: #ffffff;
+  --color-base-10: #f5f6f8;
+  --color-base-20: #e6e8eb;
+  --color-base-30: #d1d5db;
+
+  /* Primary backgrounds */
+  --background-primary: #ffffff;
+  --background-primary-alt: #f5f6f8;
+  --background-secondary: #f5f6f8;
+  --background-secondary-alt: #e6e8eb;
+  --background-tertiary: #e6e8eb;
+  --background-modifier-hover: rgba(0, 0, 0, 0.05);
+  --background-modifier-active-hover: rgba(0, 0, 0, 0.08);
+  --background-modifier-border: #e6e8eb;
+  --background-modifier-border-hover: #d1d5db;
+  --background-modifier-border-focus: var(--color-accent);
+  --background-modifier-error: rgba(251, 70, 76, 0.1);
+  --background-modifier-error-hover: rgba(251, 70, 76, 0.15);
+  --background-modifier-success: rgba(60, 201, 69, 0.1);
+  --background-modifier-success-hover: rgba(60, 201, 69, 0.15);
+  --background-modifier-message: rgba(251, 159, 72, 0.08);
+
+  /* Header backgrounds */
+  --background-header: #f5f6f8;
+  --background-table-odd: #fafafa;
+  --background-table-even: #f5f6f8;
+
+  /* Special backgrounds */
+  --background-divider: #e6e8eb;
+  --background-toggle-handle: #ffffff;
+}
+
+/* =============================================================================
+   TEXT COLORS - Dark theme (default)
+   ============================================================================= */
+.theme-dark {
+  --text-normal: var(--color-base-100);
+  --text-muted: var(--color-base-70);
+  --text-faint: var(--color-base-50);
+  --text-on-accent: #ffffff;
+  --text-accent: var(--color-accent);
+  --text-accent-hover: var(--color-accent-1);
+  --text-error: var(--color-red);
+  --text-success: var(--color-green);
+  --text-warning: var(--color-orange);
+  --text-link: var(--color-blue);
+  --text-link-hover: var(--color-blue-1);
+
+  /* Text selection */
+  --text-highlight-bg: rgba(255, 255, 0, 0.4);
+  --text-highlight-bg-active: rgba(255, 215, 0, 0.4);
+  --text-highlight-text: var(--text-normal);
+
+  /* Code block colors */
+  --code-background: var(--color-base-15);
+  --code-font: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* =============================================================================
+   TEXT COLORS - Light theme
+   ============================================================================= */
+.theme-light {
+  --text-normal: #2e3440;
+  --text-muted: #7f8499;
+  --text-faint: #9aa0b6;
+  --text-on-accent: #ffffff;
+  --text-accent: var(--color-accent);
+  --text-accent-hover: var(--color-accent-1);
+  --text-error: var(--color-red);
+  --text-success: var(--color-green);
+  --text-warning: var(--color-orange);
+  --text-link: var(--color-blue);
+  --text-link-hover: var(--color-blue-1);
+
+  /* Text selection */
+  --text-highlight-bg: rgba(255, 255, 0, 0.4);
+  --text-highlight-bg-active: rgba(255, 215, 0, 0.4);
+  --text-highlight-text: var(--text-normal);
+
+  /* Code block colors */
+  --code-background: #f3f4f6;
+  --code-font: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* =============================================================================
+   TYPOGRAPHY - Font settings
+   ============================================================================= */
+:root {
+  --font-default: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+  --font-interface: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+  --font-monospace: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+
+  /* Font sizes */
+  --font-text-size: 16px;
+  --font-ui-smaller: 11px;
+  --font-ui-small: 12px;
+  --font-ui-medium: 13px;
+  --font-ui-large: 15px;
+  --font-ui-larger: 16px;
+
+  /* Line heights */
+  --line-height-normal: 1.5;
+  --line-height-tight: 1.3;
+
+  /* Font weights */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+}
+
+/* =============================================================================
+   EDITOR VARIABLES - Markdown editor colors
+   ============================================================================= */
+body {
+  /* Headings */
+  --h1-color: var(--text-normal);
+  --h2-color: var(--text-normal);
+  --h3-color: var(--text-normal);
+  --h4-color: var(--text-normal);
+  --h5-color: var(--text-normal);
+  --h6-color: var(--text-normal);
+
+  /* Heading sizes */
+  --h1-font: 2em;
+  --h2-font: 1.5em;
+  --h3-font: 1.25em;
+  --h4-font: 1em;
+  --h5-font: 0.875em;
+  --h6-font: 0.85em;
+
+  /* Heading weights */
+  --h1-weight: 700;
+  --h2-weight: 600;
+  --h3-weight: 600;
+  --h4-weight: 600;
+  --h5-weight: 600;
+  --h6-weight: 600;
+
+  /* Links */
+  --link-color: var(--color-blue);
+  --link-color-hover: var(--color-blue-1);
+  --link-decoration: none;
+  --link-decoration-hover: underline;
+  --link-external-color: var(--color-accent);
+  --link-external-color-hover: var(--color-accent-1);
+  --link-external-decoration: none;
+  --link-external-decoration-hover: underline;
+  --link-unresolved-color: var(--text-muted);
+  --link-unresolved-opacity: 0.7;
+  --link-unresolved-decoration: none;
+  --link-unresolved-decoration-hover: underline;
+
+  /* Tags */
+  --tag-color: var(--text-muted);
+  --tag-background: var(--background-secondary);
+  --tag-background-hover: var(--background-modifier-hover);
+  --tag-border-color: var(--background-modifier-border);
+  --tag-border-radius: 4px;
+  --tag-padding-x: 6px;
+  --tag-padding-y: 2px;
+  --tag-size: var(--font-ui-small);
+
+  /* Code blocks */
+  --code-size: 0.9em;
+  --code-line-height: var(--line-height-normal);
+  --code-color: var(--text-muted);
+  --code-background-hover: var(--background-modifier-hover);
+  --code-normal-font-weight: 400;
+
+  /* Inline code */
+  --code-inline-bg: var(--background-secondary);
+  --code-inline-color: var(--text-accent);
+  --code-inline-padding: 0.2em 0.4em;
+
+  /* Code blocks */
+  --code-block-bg: var(--code-background);
+  --code-block-border: var(--background-modifier-border);
+
+  /* Blockquotes */
+  --blockquote-color: var(--text-muted);
+  --blockquote-border-color: var(--background-modifier-border);
+  --blockquote-border-thickness: 2px;
+  --blockquote-border-style: solid;
+  --blockquote-padding: 1em 1.5em;
+  --blockquote-font-style: normal;
+
+  /* Horizontal rules */
+  --hr-color: var(--background-modifier-border);
+  --hr-thickness: 2px;
+
+  /* Lists */
+  --list-spacing: 0.075em;
+  --list-bullet-size: 0.4em;
+
+  /* Checkboxes */
+  --checkbox-size: 18px;
+  --checkbox-radius: 3px;
+  --checkbox-color: var(--background-modifier-border);
+  --checkbox-color-hover: var(--text-muted);
+  --checkbox-border-color: var(--background-modifier-border);
+  --checkbox-border-color-hover: var(--text-accent);
+  --checkbox-background: var(--background-primary);
+  --checkbox-background-checked: var(--color-accent);
+
+  /* Tables */
+  --table-text-size: 0.9em;
+  --table-column-min-width: 6em;
+  --table-edge-cell-padding: 4px 12px;
+  --table-cell-padding: 4px 12px;
+  --table-header-background: var(--background-secondary);
+  --table-header-color: var(--text-muted);
+  --table-header-weight: var(--font-semibold);
+  --table-header-border: var(--background-modifier-border);
+  --table-border: var(--background-modifier-border);
+  --table-row-background-hover: var(--background-modifier-hover);
+
+  /* Embeds */
+  --embed-border: var(--background-modifier-border);
+  --embed-border-left: 4px solid var(--background-modifier-border);
+  --embed-background: var(--background-primary);
+  --embed-padding: var(--spacing-md);
+
+  /* Footnotes */
+  --footnote-color: var(--text-muted);
+  --footnote-border-color: var(--background-modifier-border);
+
+  /* Callouts */
+  --callout-padding: var(--spacing-md);
+  --callout-radius: var(--radius-md);
+  --callout-icon-size: var(--icon-size);
+}
+
+/* =============================================================================
+   COMPONENT VARIABLES - UI component specific styles
+   ============================================================================= */
+body {
+  /* Navigation items (file tree, etc.) */
+  --nav-item-color: var(--text-muted);
+  --nav-item-color-hover: var(--text-normal);
+  --nav-item-color-active: var(--text-accent);
+  --nav-item-color-selected: var(--text-normal);
+  --nav-item-color-disabled: var(--text-faint);
+  --nav-item-background-hover: var(--background-modifier-hover);
+  --nav-item-background-active: var(--background-modifier-active-hover);
+  --nav-item-background-selected: var(--background-secondary);
+  --nav-item-padding: var(--size-4-2) var(--size-4-3);
+  --nav-item-weight: var(--font-normal);
+  --nav-item-weight-active: var(--font-semibold);
+  --nav-item-white-space: nowrap;
+  --nav-item-overflow: ellipsis;
+  --nav-item-chevron: 0;
+
+  /* Indentation guide */
+  --nav-indentation-guide-color: var(--background-modifier-border);
+  --nav-indentation-guide-width: 1px;
+
+  /* Collapse icon */
+  --nav-collapse-icon-color: var(--text-faint);
+  --nav-collapse-icon-color-collapsed: var(--text-muted);
+
+  /* Tabs */
+  --tab-text-color: var(--text-faint);
+  --tab-text-color-active: var(--text-normal);
+  --tab-text-color-focused: var(--text-accent);
+  --tab-background-active: var(--background-primary);
+  --tab-background: var(--background-secondary);
+  --tab-container-background: var(--background-secondary);
+  --tab-divider-color: var(--background-modifier-border);
+  --tab-font-size: var(--font-ui-small);
+  --tab-font-weight: var(--font-semibold);
+  --tab-height: 40px;
+  --tab-max-width: 200px;
+  --tab-cursor: pointer;
+
+  /* Status bar */
+  --status-bar-background: var(--background-secondary);
+  --status-bar-border: var(--background-modifier-border);
+  --status-bar-text-color: var(--text-muted);
+  --status-bar-font-size: var(--font-ui-smaller);
+  --status-bar-height: 24px;
+
+  /* Title bar */
+  --titlebar-background: var(--background-secondary);
+  --titlebar-background-focused: var(--background-secondary);
+  --titlebar-text-color: var(--text-muted);
+  --titlebar-text-color-focused: var(--text-normal);
+  --titlebar-height: 30px;
+
+  /* Scrollbars */
+  --scrollbar-bg: var(--background-primary);
+  --scrollbar-thumb-bg: var(--background-modifier-border-hover);
+  --scrollbar-thumb-hover-bg: var(--text-faint);
+  --scrollbar-active-thumb-bg: var(--text-muted);
+  --scrollbar-width: 8px;
+  --scrollbar-thickness: 8px;
+
+  /* Buttons */
+  --button-radius: var(--radius-md);
+  --button-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+
+  /* Primary button */
+  --interactive-normal: var(--background-secondary);
+  --interactive-hover: var(--background-modifier-hover);
+  --interactive-active: var(--background-modifier-active-hover);
+  --interactive-accent: var(--color-accent);
+  --interactive-accent-hover: var(--color-accent-1);
+  --interactive-accent-text: #ffffff;
+  --interactive-success: var(--color-green);
+
+  /* Modals */
+  --modal-background: var(--background-primary);
+  --modal-border: var(--background-modifier-border);
+  --modal-radius: var(--radius-lg);
+  --modal-width: 90%;
+  --modal-max-width: 600px;
+  --modal-max-height: 80vh;
+  --modal-community-sidebar-width: 280px;
+
+  /* Inputs */
+  --input-height: 36px;
+  --input-radius: var(--radius-md);
+  --input-background: var(--background-primary);
+  --input-border: var(--background-modifier-border);
+  --input-border-hover: var(--background-modifier-border-hover);
+  --input-border-focus: var(--background-modifier-border-focus);
+  --input-shadow: 0 0 0 2px var(--background-modifier-hover);
+  --input-padding: 8px 12px;
+  --input-font-size: var(--font-ui-medium);
+  --input-color: var(--text-normal);
+
+  /* Textarea */
+  --textarea-background: var(--background-primary);
+  --textarea-border: var(--background-modifier-border);
+  --textarea-border-focus: var(--background-modifier-border-focus);
+
+  /* Dropdowns */
+  --dropdown-background: var(--background-primary);
+  --dropdown-border: var(--background-modifier-border);
+  --dropdown-radius: var(--radius-md);
+  --dropdown-padding: 4px 0;
+
+  /* Suggesters/autocompletes */
+  --suggestion-background: var(--background-primary);
+  --suggestion-border: var(--background-modifier-border);
+  --suggestion-hover: var(--background-modifier-hover);
+  --suggestion-selected: var(--background-modifier-active-hover);
+
+  /* Sidebars */
+  --sidebar-background: var(--background-secondary);
+  --sidebar-border: var(--background-modifier-border);
+  --sidebar-width: 280px;
+  --sidebar-max-width: 400px;
+  --sidebar-margin: 0;
+
+  /* Ribbons (icon bars) */
+  --ribbon-background: var(--background-secondary);
+  --ribbon-border: var(--background-modifier-border);
+  --ribbon-width: 44px;
+  --ribbon-gap: 0;
+
+  /* Panes */
+  --pane-background: var(--background-primary);
+  --pane-border: var(--background-modifier-border);
+  --pane-header-height: 40px;
+  --pane-padding: var(--size-4-4);
+
+  /* Dragging */
+  --drag-ghost-background: var(--background-secondary);
+  --drag-ghost-border: var(--color-accent);
+  --drag-ghost-text: var(--text-normal);
+
+  /* Search */
+  --search-result-background: var(--background-primary);
+  --search-result-border: var(--background-modifier-border);
+  --search-result-title-background: var(--background-secondary);
+  --search-result-match-background: rgba(255, 215, 0, 0.3);
+  --search-result-match-highlight-background: rgba(255, 215, 0, 0.5);
+  --search-result-match-border: var(--background-modifier-border);
+
+  /* Graph view */
+  --graph-controls-background: var(--background-primary);
+  --graph-node-border: var(--background-modifier-border);
+  --graph-node-text: var(--text-muted);
+  --graph-node-focused-border: var(--color-accent);
+  --graph-node-focused-text: var(--text-accent);
+  --graph-line-color: var(--background-modifier-border);
+  --graph-line-highlight-color: var(--color-accent);
+
+  /* Backlinks */
+  --backlink-background: var(--background-primary);
+  --backlink-border: var(--background-modifier-border);
+  --backlink-title-color: var(--text-muted);
+  --backlink-text-color: var(--text-normal);
+
+  /* Tags */
+  --tag-background: var(--background-secondary);
+  --tag-border-color: var(--background-modifier-border);
+  --tag-border-radius: 12px;
+  --tag-padding-x: 8px;
+  --tag-padding-y: 3px;
+  --tag-size: var(--font-ui-small);
+
+  /* Prompts/notifications */
+  --prompt-background: var(--background-primary);
+  --prompt-border: var(--background-modifier-border);
+  --prompt-border-focus: var(--color-accent);
+  --prompt-radius: var(--radius-md);
+
+  /* Notices/toasts */
+  --notice-max-width: 400px;
+  --notice-border-radius: var(--radius-md);
+  --notice-border: var(--background-modifier-border);
+  --notice-icon-color: var(--text-muted);
+  --notice-text-color: var(--text-normal);
+  --notice-bg: var(--background-primary);
+  --notice-warn-bg: rgba(251, 159, 72, 0.1);
+  --notice-warn-color: var(--color-orange);
+  --notice-error-bg: rgba(251, 70, 76, 0.1);
+  --notice-error-color: var(--color-red);
+
+  /* Progress bars */
+  --progress-bar-background: var(--background-secondary);
+  --progress-bar-fill: var(--color-accent);
+  --progress-bar-radius: 100px;
+  --progress-bar-height: 8px;
+
+  /* Toggles */
+  --toggle-border: var(--background-modifier-border);
+  --toggle-thumb: var(--background-toggle-handle);
+  --toggle-thumb-hover: var(--color-accent);
+
+  /* Tooltips */
+  --tooltip-bg: var(--background-secondary);
+  --tooltip-text: var(--text-normal);
+  --tooltip-border: var(--background-modifier-border);
+  --tooltip-radius: var(--radius-md);
+  --tooltip-padding: 8px 12px;
+  --tooltip-max-width: 300px;
+
+  /* Icons */
+  --icon-color: var(--text-muted);
+  --icon-color-hover: var(--text-normal);
+  --icon-color-active: var(--color-accent);
+  --icon-color-focused: var(--color-accent);
+  --icon-opacity: 0.75;
+  --icon-size: 16px;
+  --icon-stroke: 2px;
+
+  /* Swatch radii */
+  --radius-s: 2px;
+  --radius-m: 4px;
+  --radius-md: 6px;
+  --radius-l: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows */
+  --shadow-s: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --shadow-m: 0 4px 6px rgba(0, 0, 0, 0.15);
+  --shadow-l: 0 10px 15px rgba(0, 0, 0, 0.2);
+
+  /* Z-index layers */
+  --z-index-palette: 10;
+  --z-index-menu: 20;
+  --z-index-popover: 30;
+  --z-index-tooltip: 40;
+  --z-index-modal: 50;
+  --z-index-splash: 100;
+}
+
+/* =============================================================================
+   SPACING & SIZING - Consistent spacing scale (4px base)
+   ============================================================================= */
+:root {
+  --size-2-1: 2px;
+  --size-2-2: 4px;
+  --size-2-3: 6px;
+  --size-2-4: 8px;
+  --size-2-5: 10px;
+  --size-2-6: 12px;
+  --size-2-8: 16px;
+  --size-2-10: 20px;
+  --size-2-12: 24px;
+  --size-2-14: 28px;
+  --size-2-16: 32px;
+  --size-2-18: 36px;
+  --size-2-20: 40px;
+  --size-2-24: 48px;
+  --size-2-32: 64px;
+  --size-2-40: 80px;
+  --size-2-48: 96px;
+  --size-2-64: 128px;
+  --size-2-80: 160px;
+  --size-2-96: 192px;
+
+  --size-4-1: 4px;
+  --size-4-2: 8px;
+  --size-4-3: 12px;
+  --size-4-4: 16px;
+  --size-4-5: 20px;
+  --size-4-6: 24px;
+  --size-4-8: 32px;
+  --size-4-10: 40px;
+  --size-4-12: 48px;
+  --size-4-16: 64px;
+  --size-4-20: 80px;
+  --size-4-24: 96px;
+  --size-4-32: 128px;
+
+  /* Responsive breakpoints */
+  --mobile-width: 640px;
+  --tablet-width: 768px;
+  --desktop-width: 1024px;
+  --wide-width: 1280px;
+}
+
+/* =============================================================================
+   FILE TREE SPECIFIC VARIABLES
+   ============================================================================= */
+body {
+  --file-header-background: var(--background-secondary);
+  --file-header-border: var(--background-modifier-border);
+  --file-header-justify: center;
+  --file-header-font-size: var(--font-ui-small);
+  --file-header-font-weight: var(--font-semibold);
+  --file-header-padding: var(--size-4-2) var(--size-4-3);
+  --file-header-color: var(--text-muted);
+  --folder-color: var(--text-muted);
+  --file-folder-color: var(--text-muted);
+  --file-icon-color: var(--text-muted);
+  --file-icon-hover-color: var(--text-normal);
+  --file-icon-active-color: var(--color-accent);
+}
+
+/* =============================================================================
+   EDITOR SPECIFIC VARIABLES
+   ============================================================================= */
+body {
+  --editor-font: var(--font-default);
+  --editor-font-size: var(--font-text-size);
+  --editor-line-height: var(--line-height-normal);
+  --editor-letter-spacing: 0;
+  --editor-weight: var(--font-normal);
+  --editor-width: 700px;
+  --editor-max-width: 840px;
+  --file-line-width: 700px;
+  --file-folding-offset: 24px;
+  --readable-line-length: 50rem;
+
+  /* Editor gutters */
+  --minimal-focus-mode: 0.9;
+  --fold-offset: 0;
+  --gutter-width: 40px;
+  --line-num-width: 40px;
+  --line-num-color: var(--text-faint);
+  --line-num-color-active: var(--text-muted);
+  --indentation-guide-color: var(--background-modifier-border);
+  --indentation-guide-width: 1px;
+  --cursor-width: 2px;
+  --cursor-color: var(--text-accent);
+
+  /* Inline title */
+  --inline-title-color: var(--text-normal);
+  --inline-title-font: var(--font-interface);
+  --inline-title-size: 1.5em;
+  --inline-title-weight: var(--font-bold);
+  --inline-title-margin-top: var(--size-4-6);
+  --inline-title-margin-bottom: var(--size-4-4);
+}
+
+/* =============================================================================
+   PRINT STYLES
+   ============================================================================= */
+@media print {
+  body {
+    --print-background: #ffffff;
+    --print-color: #000000;
+    --print-font: serif;
+    --print-font-size: 12pt;
+    --print-line-height: 1.2;
+  }
+}
+
+/* =============================================================================
+   COMMAND PALETTE SPECIFIC STYLES
+   ============================================================================= */
+
+/* Command item layout */
+.command-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: var(--size-4-2) !important;
+  padding: var(--size-4-2) var(--size-4-3) !important;
+}
+
+/* Command icon */
+.command-icon {
+  flex-shrink: 0 !important;
+  width: 16px !important;
+  height: 16px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-right: var(--size-4-2) !important;
+  font-size: var(--font-ui-medium) !important;
+}
+
+/* Command name */
+.command-name {
+  flex: 1 !important;
+  font-size: var(--font-ui-medium) !important;
+  color: var(--text-normal) !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* Command hotkey */
+.command-hotkey {
+  flex-shrink: 0 !important;
+  font-size: var(--font-ui-small) !important;
+  color: var(--text-faint) !important;
+  font-family: var(--font-monospace) !important;
+  background: var(--background-secondary) !important;
+  padding: 2px 6px !important;
+  border-radius: var(--radius-s) !important;
+  border: 1px solid var(--background-modifier-border) !important;
+  margin-left: var(--size-4-2) !important;
+}
+
+/* Hover state for command items */
+.command-item:hover .command-hotkey {
+  background: var(--background-modifier-hover) !important;
+  border-color: var(--background-modifier-border-hover) !important;
+}
+
+/* Selected state for command items */
+.suggestion-item.is-selected .command-hotkey {
+  background: var(--background-modifier-active-hover) !important;
+  border-color: var(--background-modifier-border) !important;
+}

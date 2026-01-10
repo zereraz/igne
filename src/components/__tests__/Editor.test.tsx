@@ -35,12 +35,12 @@ describe('Editor - Wikilink Autocomplete', () => {
     vi.clearAllMocks();
 
     // Mock searchStore methods
-    vi.mocked(searchStore.getAllNoteNames).mockReturnValue(['Test Note', 'Another Note']);
-    vi.mocked(searchStore.getFilePathByName).mockImplementation((name) => {
+    (searchStore.getAllNoteNames as any).mockReturnValue(['Test Note', 'Another Note']);
+    (searchStore.getFilePathByName as any).mockImplementation((name: string) => {
       const file = mockFiles.find(f => f.name === name);
       return file?.path || null;
     });
-    vi.mocked(searchStore.searchFiles).mockReturnValue([]);
+    (searchStore.searchFiles as any).mockReturnValue([]);
   });
 
   it('should render editor with initial content', () => {
@@ -129,7 +129,7 @@ describe('Editor - Wikilink Selection Logic', () => {
   });
 
   it('should handle empty note name list gracefully', () => {
-    vi.mocked(searchStore.getAllNoteNames).mockReturnValue([]);
+    (searchStore.getAllNoteNames as any).mockReturnValue([]);
 
     render(<Editor content="test" onChange={vi.fn()} />);
 
@@ -138,7 +138,7 @@ describe('Editor - Wikilink Selection Logic', () => {
   });
 
   it('should handle search store errors gracefully', () => {
-    vi.mocked(searchStore.getAllNoteNames).mockImplementation(() => {
+    (searchStore.getAllNoteNames as any).mockImplementation(() => {
       throw new Error('Search store error');
     });
 

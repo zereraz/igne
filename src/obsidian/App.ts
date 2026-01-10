@@ -9,7 +9,9 @@ import { FileManager } from './FileManager';
 import { Keymap, Scope } from './Keymap';
 import { Plugins } from './Plugins';
 import { Commands } from './Commands';
+import { CommandPalette } from './CommandPalette';
 import { Settings } from './Settings';
+import { ThemeManager } from './ThemeManager';
 import type { TFile } from './types';
 
 export class App {
@@ -22,6 +24,7 @@ export class App {
   plugins: Plugins;
   commands: Commands;
   setting: Settings;
+  themeManager: ThemeManager;
 
   isMobile: boolean = false;
   appId: string;
@@ -41,6 +44,7 @@ export class App {
     this.plugins = new Plugins(this);
     this.commands = new Commands(this);
     this.setting = new Settings(this);
+    this.themeManager = new ThemeManager(this);
   }
 
   async initialize(): Promise<void> {
@@ -48,6 +52,64 @@ export class App {
     await this.vault.initialize();
     // Rebuild metadata cache
     await this.metadataCache.rebuildCache();
+    // Register default commands
+    this.registerDefaultCommands();
+    // Load plugins after vault is ready
+    await this.plugins.loadPlugins();
+  }
+
+  /**
+   * Register default Obsidian commands
+   */
+  private registerDefaultCommands(): void {
+    // Command palette
+    this.commands.addCommand({
+      id: 'command-palette',
+      name: 'Open command palette',
+      hotkeys: [{ key: 'p', modifiers: ['Mod'] }],
+      callback: () => {
+        const palette = new CommandPalette(this);
+        palette.open();
+      }
+    });
+
+    // Settings
+    this.commands.addCommand({
+      id: 'app-settings',
+      name: 'Open settings',
+      hotkeys: [{ key: ',', modifiers: ['Mod'] }],
+      callback: () => {
+        this.setting.open();
+        this.setting.display();
+      }
+    });
+
+    // Help
+    this.commands.addCommand({
+      id: 'help',
+      name: 'Help',
+      callback: () => {
+        this.commands.executeCommandById('command-palette');
+      }
+    });
+
+    // Theme toggle
+    this.commands.addCommand({
+      id: 'theme-toggle',
+      name: 'Toggle light/dark mode',
+      callback: () => {
+        const isDark = document.body.classList.contains('theme-dark');
+        this.themeManager.setThemeMode(isDark ? 'light' : 'dark');
+      }
+    });
+  }
+
+  /**
+   * Open the command palette
+   */
+  openCommandPalette(): void {
+    const palette = new CommandPalette(this);
+    palette.open();
   }
 
   loadLocalStorage(key: string): string | null {

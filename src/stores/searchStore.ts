@@ -110,6 +110,125 @@ class SearchStore {
     });
   }
 
+  // Advanced search with operators (tag:, file:, path:)
+  advancedSearch(query: string) {
+    if (!query.trim()) return [];
+
+    // Parse search operators
+    const operators = this.parseSearchOperators(query);
+    const { searchText, filters } = operators;
+
+    // Get base results from text search
+    let results = searchText
+      ? this.miniSearch.search(searchText, {
+          fuzzy: 0.2,
+          prefix: true,
+        })
+      : Array.from(this.files.values()).map(doc => ({ ...doc }));
+
+    // Apply filters
+    results = this.applyFilters(results, filters);
+
+    return results;
+  }
+
+  private parseSearchOperators(query: string) {
+    const filters: {
+      tags?: string[];
+      file?: string;
+      path?: string;
+    } = {};
+
+    let searchText = query;
+
+    // Extract tag: operator
+    const tagMatches = query.matchAll(/tag:(\S+)/g);
+    const tags: string[] = [];
+    for (const match of tagMatches) {
+      tags.push(match[1]);
+      searchText = searchText.replace(match[0], '');
+    }
+    if (tags.length > 0) {
+      filters.tags = tags;
+    }
+
+    // Extract #tag syntax
+    const hashTagMatches = query.matchAll(/#(\w+)/g);
+    for (const match of hashTagMatches) {
+      tags.push(match[1]);
+      searchText = searchText.replace(match[0], '');
+    }
+    if (tags.length > 0) {
+      filters.tags = tags;
+    }
+
+    // Extract file: operator
+    const fileMatch = query.match(/file:(\S+)/);
+    if (fileMatch) {
+      filters.file = fileMatch[1];
+      searchText = searchText.replace(fileMatch[0], '');
+    }
+
+    // Extract path: operator
+    const pathMatch = query.match(/path:(\S+)/);
+    if (pathMatch) {
+      filters.path = pathMatch[1];
+      searchText = searchText.replace(pathMatch[0], '');
+    }
+
+    return {
+      searchText: searchText.trim(),
+      filters,
+    };
+  }
+
+  private applyFilters(
+    results: any[],
+    filters: { tags?: string[]; file?: string; path?: string }
+  ) {
+    let filtered = results;
+
+    // Filter by tags
+    if (filters.tags && filters.tags.length > 0) {
+      filtered = filtered.filter((result) => {
+        const doc = this.files.get(result.id);
+        if (!doc) return false;
+
+        const content = doc.content.toLowerCase();
+        return filters.tags!.some((tag) => {
+          const tagLower = tag.toLowerCase();
+          // Check both #tag and tag: syntax
+          return (
+            content.includes(`#${tagLower}`) ||
+            content.includes(`tag:${tagLower}`)
+          );
+        });
+      });
+    }
+
+    // Filter by file name
+    if (filters.file) {
+      const fileLower = filters.file.toLowerCase();
+      filtered = filtered.filter((result) => {
+        const doc = this.files.get(result.id);
+        if (!doc) return false;
+        return doc.name.toLowerCase().includes(fileLower);
+      });
+    }
+
+    // Filter by path
+    if (filters.path) {
+      const pathLower = filters.path.toLowerCase();
+      filtered = filtered.filter((result) => {
+        const doc = this.files.get(result.id);
+        if (!doc) return false;
+        return doc.path.toLowerCase().includes(pathLower);
+      });
+    }
+
+    return filtered;
+  }
+
   // Search by file name (Fuse) - for QuickSwitcher
   searchFiles(query: string): SearchDocument[] {
     // Returns SearchDocument for compatibility, can be mapped to SearchResult
