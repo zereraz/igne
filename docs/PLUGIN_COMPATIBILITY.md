@@ -2,13 +2,21 @@
 
 This document tracks the implementation status of the Obsidian API in Igne.
 
+For a task-oriented “drop-in parity” view grounded in real-world Obsidian usage, see `docs/OBSIDIAN_DROP_IN_GAP_REPORT.md`.
+
+## Pinned baseline
+
+Igne targets a **pinned** Obsidian API baseline: `obsidian` npm `1.11.4`.
+
+When this document says “implemented”, it refers to **API shape + expected behavior** at that baseline. If core filesystem/path semantics are off, many plugin-compatibility claims become invalid even if the TypeScript surface exists.
+
 ## Implementation Status
 
 | API Component | Status | Notes |
 |---------------|--------|-------|
 | Events System | ✅ Implemented | Full event bus with on/off/trigger |
 | Metadata Cache | ✅ Implemented | Markdown parsing, headings, links, tags |
-| Vault API | ✅ Implemented | File CRUD, enumeration |
+| Vault API | ⚠️ Partial | API surface exists, but core vault semantics still diverge (path model + FS primitives + file-type handling) |
 | Workspace API | ✅ Partial | Basic layout, needs full split pane |
 | Plugin API | ✅ Partial | Base class exists, loader incomplete |
 | Settings API | ✅ Implemented | Setting components, tabs |
@@ -17,7 +25,7 @@ This document tracks the implementation status of the Obsidian API in Igne.
 | Menu API | ✅ Implemented | Context menus |
 | Notice API | ✅ Implemented | Toast notifications |
 | Modal API | ✅ Implemented | Modal system |
-| Theme System | 🚧 In Progress | CSS variables defined, loader incomplete |
+| Theme System | ⚠️ Partial | Theme loading exists; CSS snippet discovery depends on FS primitives that currently filter non-`.md` files |
 
 ## API Method Compatibility
 
@@ -82,6 +90,16 @@ This document tracks the implementation status of the Obsidian API in Igne.
 
 ## Known Limitations
 
+### Foundational blockers (make most plugin estimates unreliable)
+
+- **Directory listing is capped to a fixed recursion depth** in the backend (`read_directory`), which breaks deeper folder trees and realistic vault layouts.
+- **Obsidian path semantics are not enforced** (vault-absolute vs OS absolute), so portability and plugin assumptions can break.
+- **`DataAdapter` calls backend commands that don’t exist** (`get_file_meta`, `delete_directory`) and `list()` expects the wrong return shape from `read_directory`.
+- **`Vault` builds plain objects but uses `instanceof TFile/TFolder` checks**, so core traversal (`getAbstractFileByPath`, `getMarkdownFiles`, etc.) is unreliable.
+- **Plugin runtime is not realistically compatible yet**:
+  - version gating compares against Igne app version, not the pinned Obsidian baseline,
+  - dynamic `import()` of `.obsidian/plugins/*/main.js` is not a working runtime for most community plugins.
+
 ### Plugin Loading
 - **Missing**: Dynamic plugin loading from `.obsidian/plugins/`
 - **Missing**: Plugin manifest validation
@@ -116,14 +134,14 @@ This document tracks the implementation status of the Obsidian API in Igne.
 
 ## Popular Plugin Compatibility
 
-These are theoretical compatibility estimates based on API implementation. Actual testing needed.
+These are **very early** compatibility guesses based on API surface area only. Until the “Foundational blockers” above are fixed, actual compatibility will often be far lower (or impossible to assess).
 
 | Plugin | Est. Compatibility | Notes |
 |--------|------------------|-------|
 | Dataview | ⚠️ 30% | Metadata cache works, query language missing |
 | Calendar | ⚠️ 40% | Daily notes work, UI not implemented |
 | Templater | ⚠️ 20% | Template syntax supported, execution engine missing |
-| Obsidian Git | ✅ 80% | File operations work, needs testing |
+| Obsidian Git | ⚠️ 20% | Git integration depends on reliable FS primitives + permissions + binary handling |
 | Advanced Tables | ⚠️ 50% | Tables parse, editor extensions need work |
 | Kanban | ❌ 10% | Metadata only, UI completely missing |
 | Tasks | ⚠️ 30% | Task parsing works, querying/filtering missing |

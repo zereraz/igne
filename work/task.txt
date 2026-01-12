@@ -1,0 +1,226 @@
+# Igne: Phase B - Filesystem + Path Semantics (Critical for Obsidian Compatibility)
+
+You are working on the Igne Markdown editor. Complete Phase B tasks from the Obsidian Compatibility Roadmap.
+
+## Context
+
+The current implementation has critical filesystem limitations:
+- Backend directory scanning filters non-`.md` files, breaking attachments, themes, and plugin folders
+- Binary I/O is not implemented (image paste/drop doesn't work properly)
+- Path model is not vault-absolute (uses OS paths in some places)
+
+Reference: `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase B
+
+## Task B1: Fix Directory Listing and Metadata
+
+### B1.1 Replace markdown-only listing
+
+**File to modify:** `src-tauri/src/lib.rs`
+
+The current `read_directory` implementation filters out non-`.md` files. Modify it to:
+- Include ALL files (not just .md)
+- Include the `.obsidian` directory
+- Return file metadata (size, mtime, is_dir)
+
+**Current implementation** filters like:
+```rust
+if !is_dir && !file_name.ends_with(".md") {
+    continue;
+}
+```
+
+**Required changes:**
+1. Remove the .md filter - include all files
+2. Add metadata return structure with: size, modified_time, is_file, is_dir
+3. Create a new `FileMetadata` struct:
+```rust
+#[derive(Serialize, Clone)]
+pub struct FileMetadata {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub size: u64,
+    pub modified: u64,  // timestamp
+    pub children: Option<Vec<FileMetadata>>,
+}
+```
+
+**Success criteria:**
+- [ ] `read_directory` returns ALL files including .png, .jpg, .css, .obsidian folder
+- [ ] File metadata includes size and modified time
+- [ ] Frontend can enumerate theme and snippet folders
+
+### B1.2 Add file metadata command
+
+**File to modify:** `src-tauri/src/lib.rs`
+
+Add a new Tauri command `stat_path` that returns file metadata without reading content:
+
+```rust
+#[tauri::command]
+fn stat_path(path: String) -> Result<FileMetadata, String> {
+    // Use std::fs::metadata() to get file info
+    // Return FileMetadata struct
+}
+```
+
+Add to `invoke_handler!` macro.
+
+**Success criteria:**
+- [ ] `stat_path` command exists and can be called from frontend
+- [ ] Returns exists=true/false for files that don't exist
+- [ ] Returns correct size, is_dir, modified time
+
+### B1.3 Replace "exists" checks with metadata
+
+**Files to modify:** `src/stores/*.ts` (GlobalSettingsStore, VaultConfigStore, etc.)
+
+Many files use `invoke('read_file')` to check if a file exists. This is wrong.
+
+**Find and replace pattern:**
+```typescript
+// OLD (wrong):
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await invoke('read_file', { path });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// NEW (correct):
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    const meta = await invoke('stat_path', { path });
+    return meta.exists;
+  } catch {
+    return false;
+  }
+}
+```
+
+**Success criteria:**
+- [ ] All stores use `stat_path` instead of `read_file` for existence checks
+- [ ] No unnecessary file reads just to check existence
+
+## Task B2: Implement Binary Read/Write
+
+### B2.1 Add binary file commands to backend
+
+**File to modify:** `src-tauri/src/lib.rs`
+
+Add commands for binary file I/O:
+
+```rust
+#[tauri::command]
+fn read_file_binary(path: String) -> Result<Vec<u8>, String> {
+    fs::read(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn write_file_binary(path: String, data: Vec<u8>) -> Result<(), String> {
+    fs::write(&path, data).map_err(|e| e.to_string())
+}
+```
+
+Add to `invoke_handler!` and to `src-tauri/capabilities/default.json` permissions.
+
+**Success criteria:**
+- [ ] `read_file_binary` and `write_file_binary` commands exist
+- [ ] Can read image files without corruption
+- [ ] Can write image files and they open correctly
+
+### B2.2 Update image paste/drop to use binary writes
+
+**File to modify:** `src/utils/imageHandler.ts` (or wherever image handling is)
+
+Current implementation likely uses `write_file` with text encoding.
+
+**Required changes:**
+1. Use `write_file_binary` for image data
+2. Ensure base64/Uint8Array is properly converted to Vec<u8>
+3. Test that pasted images render correctly
+
+**Success criteria:**
+- [ ] Pasting an image creates a valid image file
+- [ ] File size matches original image
+- [ ] Image renders in markdown preview
+
+### B2.3 Update markdown rendering for images
+
+**File to modify:** Check if images render with proper vault-relative paths
+
+**Success criteria:**
+- [ ] Images embedded in markdown display correctly
+- [ ] Image paths work across different vault locations
+
+## Task B3: Canonicalize Paths to Vault-Absolute
+
+### B3.1 Define canonical path helpers
+
+**File to create:** `src/utils/vaultPaths.ts`
+
+```typescript
+/**
+ * Convert OS absolute path to vault-absolute path
+ * Example: /Users/name/Vault/Folder/Note.md -> /Folder/Note.md
+ */
+export function toVaultPath(osPath: string, vaultRoot: string): string {
+  // Remove vaultRoot prefix
+  // Normalize slashes to /
+  // Ensure starts with /
+}
+
+/**
+ * Convert vault-absolute path to OS path
+ * Example: /Folder/Note.md -> /Users/name/Vault/Folder/Note.md
+ */
+export function toOsPath(vaultPath: string, vaultRoot: string): string {
+  // Join vaultRoot with vaultPath
+  // Handle leading /
+  // Normalize for OS (backslashes on Windows)
+}
+```
+
+**Success criteria:**
+- [ ] `toVaultPath` correctly strips vault root
+- [ ] `toOsPath` correctly joins with vault root
+- [ ] Paths are normalized (consistent slashes)
+
+### B3.2 Migrate persisted state to vault paths
+
+**Files to check:**
+- `src/stores/WorkspaceStateManager.ts`
+- `src/stores/VaultsStore.ts`
+- `.obsidian/workspace.json` (after reading)
+
+**Required changes:**
+1. Ensure saved open tabs use vault paths
+2. Ensure last opened file uses vault paths
+3. Convert legacy OS paths to vault paths on load
+
+**Success criteria:**
+- [ ] `.obsidian/workspace.json` contains only vault-relative paths
+- [ ] Opening vault on different machine restores tabs correctly
+
+### B3.3 Update file watcher and search index
+
+**Files to modify:**
+- `src/hooks/useFileWatcher.ts`
+- `src/stores/searchStore.ts`
+
+**Required changes:**
+1. Store vault paths in search index
+2. Emit vault paths in file change events
+3. Convert to OS paths only at backend boundary
+
+**Success criteria:**
+- [ ] Search index uses vault paths internally
+- [ ] File watcher events use vault paths
+
+## Completion
+
+Phase B is complete. All filesystem, binary I/O, and vault path tasks are implemented.
+
+<promise>COMPLETE</promise>

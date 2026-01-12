@@ -7,15 +7,21 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import { convertFileSrc } from '@tauri-apps/api/core';
 import { searchStore } from '../stores/searchStore';
 import { Callout } from './Callout';
 import { NoteEmbed } from './NoteEmbed';
+import { toOsPath } from '../utils/vaultPaths';
 
 interface MarkdownViewerProps {
   content: string;
   onLinkClick?: (targetName: string) => void;
   getEmbedContent?: (noteName: string) => Promise<string | null>;
+  vaultPath?: string;
 }
+
+// Image extensions that should be rendered as images
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico'];
 
 // Helper component to load embed content asynchronously
 function EmbedLoader({ noteName, getEmbedContent, onOpen }: { noteName: string; getEmbedContent: (noteName: string) => Promise<string | null>; onOpen: () => void }) {
@@ -123,7 +129,7 @@ function MermaidBlock({ code }: { code: string }) {
   return <div dangerouslySetInnerHTML={{ __html: svg }} style={{ display: 'flex', justifyContent: 'center', padding: '1rem 0' }} />;
 }
 
-export function MarkdownViewer({ content, onLinkClick, getEmbedContent }: MarkdownViewerProps) {
+export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPath }: MarkdownViewerProps) {
   // Parse math blocks and replace with placeholders
   const parseMath = (text: string): { content: string; mathBlocks: Array<{ latex: string; display: boolean; id: string }> } => {
     const mathBlocks: Array<{ latex: string; display: boolean; id: string }> = [];
@@ -147,12 +153,32 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent }: Markdo
     return { content: processed, mathBlocks };
   };
 
+  // Check if a path is an image based on extension
+  const isImagePath = (path: string): boolean => {
+    const lowerPath = path.toLowerCase();
+    return IMAGE_EXTENSIONS.some(ext => lowerPath.endsWith(ext));
+  };
+
   // Custom renderer for text to handle wikilinks and embeds
   const transformWikilinks = (text: string): string => {
     // First handle embeds: ![[note]] or ![[note|display]]
     let transformed = text.replace(
       /!\[\[([^\]|]+)(\|([^\]]+))?\]\]/g,
       (_match, target, _pipe, display) => {
+        // Check if this is an image file
+        if (isImagePath(target)) {
+          // Convert to markdown image syntax
+          const altText = display || target;
+          // For local files, convert vault-relative path to OS path
+          // target can be "attachments/image.png" or "/attachments/image.png"
+          // toOsPath handles both cases correctly
+          const imagePath = vaultPath
+            ? toOsPath(target, vaultPath)
+            : target;
+          // Use convertFileSrc for Tauri to properly serve local files
+          return `![${altText}](${imagePath})`;
+        }
+        // For non-image embeds, treat as note embeds
         const linkText = display || target;
         return `[${linkText}](embed:${target})`;
       }
@@ -523,6 +549,21 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent }: Markdo
                 );
               }
               return <a href={href}>{children}</a>;
+            },
+            img: ({ src, alt, ...props }) => {
+              // Convert local file paths to Tauri asset URLs
+              if (src && (src.startsWith('/') || src.startsWith('.'))) {
+                const assetSrc = convertFileSrc(src);
+                return (
+                  <img
+                    src={assetSrc}
+                    alt={alt || ''}
+                    {...props}
+                    style={{ maxWidth: '100%', height: 'auto' }}
+                  />
+                );
+              }
+              return <img src={src} alt={alt} {...props} style={{ maxWidth: '100%', height: 'auto' }} />;
             }
           }}
         >

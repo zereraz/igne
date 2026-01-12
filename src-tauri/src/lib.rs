@@ -11,7 +11,20 @@ pub struct FileEntry {
     name: String,
     path: String,
     is_dir: bool,
+    size: u64,
+    modified: u64,
     children: Option<Vec<FileEntry>>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct FileMetadata {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub is_file: bool,
+    pub size: u64,
+    pub modified: u64,
+    pub exists: bool,
 }
 
 #[tauri::command]
@@ -37,18 +50,19 @@ fn read_dir_recursive(
         let entry = entry.map_err(|e| e.to_string())?;
         let file_name = entry.file_name().to_string_lossy().to_string();
 
-        // Skip hidden files and .obsidian folder
-        if file_name.starts_with('.') {
-            continue;
-        }
-
         let file_path = entry.path();
-        let is_dir = file_path.is_dir();
+        let metadata = entry.metadata().map_err(|e| e.to_string())?;
+        let is_dir = metadata.is_dir();
 
-        // Only include .md files and directories
-        if !is_dir && !file_name.ends_with(".md") {
-            continue;
-        }
+        let size = metadata.len();
+        let modified = metadata
+            .modified()
+            .map(|t| {
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+            })
+            .unwrap_or(0);
 
         let children = if is_dir {
             Some(read_dir_recursive(&file_path, depth + 1, max_depth).unwrap_or_default())
@@ -60,6 +74,8 @@ fn read_dir_recursive(
             name: file_name,
             path: file_path.to_string_lossy().to_string(),
             is_dir,
+            size,
+            modified,
             children,
         });
     }
@@ -111,6 +127,62 @@ fn create_directory(path: String) -> Result<(), String> {
 #[tauri::command]
 fn move_file(source: String, destination: String) -> Result<(), String> {
     fs::rename(&source, &destination).map_err(|e| e.to_string())
+}
+
+/// Get file metadata without reading content
+#[tauri::command]
+fn stat_path(path: String) -> Result<FileMetadata, String> {
+    let path_obj = PathBuf::from(&path);
+    let metadata = fs::metadata(&path_obj);
+
+    let name = path_obj
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "".to_string());
+
+    match metadata {
+        Ok(meta) => {
+            let modified = meta
+                .modified()
+                .map(|t| {
+                    t.duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                })
+                .unwrap_or(0);
+
+            Ok(FileMetadata {
+                name,
+                path,
+                is_dir: meta.is_dir(),
+                is_file: meta.is_file(),
+                size: meta.len(),
+                modified,
+                exists: true,
+            })
+        }
+        Err(_) => Ok(FileMetadata {
+            name,
+            path,
+            is_dir: false,
+            is_file: false,
+            size: 0,
+            modified: 0,
+            exists: false,
+        }),
+    }
+}
+
+/// Read binary file (for images, etc.)
+#[tauri::command]
+fn read_file_binary(path: String) -> Result<Vec<u8>, String> {
+    fs::read(&path).map_err(|e| e.to_string())
+}
+
+/// Write binary file (for images, etc.)
+#[tauri::command]
+fn write_file_binary(path: String, data: Vec<u8>) -> Result<(), String> {
+    fs::write(&path, data).map_err(|e| e.to_string())
 }
 
 /// Watch a directory for changes and emit events to the frontend
@@ -179,6 +251,9 @@ pub fn run() {
             read_file,
             write_file,
             file_exists,
+            stat_path,
+            read_file_binary,
+            write_file_binary,
             rename_file,
             delete_file,
             create_directory,

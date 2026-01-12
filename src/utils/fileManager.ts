@@ -1,19 +1,24 @@
 /**
  * File management utilities with link updating
+ *
+ * Path handling:
+ * - All public functions accept OS-absolute paths (for file I/O)
+ * - Internally converts to vault paths for search store operations
+ * - searchStore handles OS path to vault path conversion automatically
  */
 
 import { invoke } from '@tauri-apps/api/core';
 import { searchStore } from '../stores/searchStore';
 
 interface RenameOptions {
-  oldPath: string;
-  newPath: string;
+  oldPath: string; // OS-absolute path
+  newPath: string; // OS-absolute path
   updateLinks?: boolean;
 }
 
 interface MoveOptions {
-  sourcePath: string;
-  destinationPath: string;
+  sourcePath: string; // OS-absolute path
+  destinationPath: string; // OS-absolute path
   updateLinks?: boolean;
 }
 
@@ -32,10 +37,11 @@ export async function renameFileWithLinkUpdates(options: RenameOptions) {
   }
 
   // Get old and new file names
-  const oldName = oldPath.split('/').pop()?.replace('.md', '') || '';
-  const newName = newPath.split('/').pop()?.replace('.md', '') || '';
+  const oldName = oldPath.split(/[/\\]/).pop()?.replace('.md', '') || '';
+  const newName = newPath.split(/[/\\]/).pop()?.replace('.md', '') || '';
 
   // 1. Gather all data FIRST (before any mutations)
+  // searchStore.findBacklinks accepts both OS and vault paths internally
   const backlinks = searchStore.findBacklinks(oldPath);
 
   // 2. Perform rename (if this fails, we abort with no changes)
@@ -68,8 +74,10 @@ export async function renameFileWithLinkUpdates(options: RenameOptions) {
 
     if (newContent !== oldContent) {
       try {
+        // backlink.path is a vault path, convert to OS path for file I/O
+        const backlinkOsPath = searchStore.getOsPath(backlink.path);
         await invoke('write_file', {
-          path: backlink.path,
+          path: backlinkOsPath,
           content: newContent,
         });
         await searchStore.updateFile(backlink.path, newContent);
@@ -102,7 +110,7 @@ export async function moveFile(options: MoveOptions) {
  * Duplicate a file
  */
 export async function duplicateFile(sourcePath: string) {
-  const parts = sourcePath.split('/');
+  const parts = sourcePath.split(/[/\\]/);
   const fileName = parts.pop() || '';
   const folder = parts.join('/');
 
@@ -135,8 +143,8 @@ export async function duplicateFile(sourcePath: string) {
  */
 async function fileExists(path: string): Promise<boolean> {
   try {
-    await invoke('read_file', { path });
-    return true;
+    const meta = await invoke<{ exists: boolean }>('stat_path', { path });
+    return meta.exists;
   } catch {
     return false;
   }
@@ -144,9 +152,11 @@ async function fileExists(path: string): Promise<boolean> {
 
 /**
  * Find all files that link to a given file
+ * Returns array of vault-absolute paths
  */
 export function findIncomingLinks(filePath: string): string[] {
   const backlinks = searchStore.findBacklinks(filePath);
+  // backlinks are already vault paths
   return backlinks.map(link => link.path);
 }
 

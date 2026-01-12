@@ -2,11 +2,13 @@ import MiniSearch from 'minisearch';
 import Fuse from 'fuse.js';
 import { invoke } from '@tauri-apps/api/core';
 import type { FileEntry, SearchDocument } from '../types';
+import { toVaultPath, toOsPath, getVaultBasename } from '../utils/vaultPaths';
 
 class SearchStore {
   private miniSearch: MiniSearch;
   private files: Map<string, SearchDocument>;
   private fuse: Fuse<SearchDocument>;
+  private vaultPath: string = '';
 
   constructor() {
     this.files = new Map();
@@ -22,7 +24,38 @@ class SearchStore {
     });
   }
 
-  async indexFiles(_vaultPath: string, entries: FileEntry[], signal?: AbortSignal) {
+  /**
+   * Set the vault path for OS path conversion
+   * The search store stores vault-absolute paths internally
+   */
+  setVaultPath(vaultPath: string): void {
+    this.vaultPath = vaultPath;
+  }
+
+  /**
+   * Convert OS path to vault-absolute path for storage
+   */
+  private toVaultPath(osPath: string): string {
+    if (!this.vaultPath) {
+      // Fallback: return as-is if vault path not set
+      return osPath;
+    }
+    return toVaultPath(osPath, this.vaultPath);
+  }
+
+  /**
+   * Convert vault-absolute path to OS path for file I/O
+   */
+  private toOsPathForIo(vaultPath: string): string {
+    if (!this.vaultPath) {
+      // Fallback: return as-is if vault path not set
+      return vaultPath;
+    }
+    return toOsPath(vaultPath, this.vaultPath);
+  }
+
+  async indexFiles(vaultPath: string, entries: FileEntry[], signal?: AbortSignal) {
+    this.vaultPath = vaultPath;
     const documents: SearchDocument[] = [];
 
     for (const entry of this.flattenFileTree(entries)) {
@@ -34,6 +67,7 @@ class SearchStore {
 
       if (!entry.is_dir && entry.name.endsWith('.md')) {
         try {
+          // Use OS path for reading file
           const content = await invoke<string>('read_file', { path: entry.path });
 
           // Check again after async operation
@@ -42,14 +76,17 @@ class SearchStore {
             return;
           }
 
+          // Convert to vault-absolute path for storage
+          const vaultAbsolutePath = this.toVaultPath(entry.path);
+
           const doc: SearchDocument = {
-            id: entry.path, // Use file path as unique ID
-            path: entry.path,
+            id: vaultAbsolutePath, // Use vault path as unique ID
+            path: vaultAbsolutePath,
             name: entry.name.replace('.md', ''),
             content,
           };
           documents.push(doc);
-          this.files.set(entry.path, doc);
+          this.files.set(vaultAbsolutePath, doc);
         } catch (error) {
           // Ignore errors if aborted
           if (signal?.aborted) return;
@@ -73,22 +110,25 @@ class SearchStore {
   }
 
   // Update a single file's content in the index (called when file is saved)
+  // Accepts either OS path or vault path
   async updateFile(path: string, content: string) {
-    const existing = this.files.get(path);
-    const name = path.split(/[/\\]/).pop()?.replace('.md', '') || '';
+    // Normalize to vault path for internal storage
+    const vaultPath = this.toVaultPath(path);
+    const existing = this.files.get(vaultPath);
+    const name = getVaultBasename(vaultPath).replace('.md', '') || '';
 
     const doc: SearchDocument = {
-      id: path, // Use file path as unique ID
-      path,
+      id: vaultPath, // Use vault path as unique ID
+      path: vaultPath,
       name,
       content,
     };
 
-    this.files.set(path, doc);
+    this.files.set(vaultPath, doc);
 
     if (existing) {
       // Discard old version and add new
-      this.miniSearch.discard(path);
+      this.miniSearch.discard(vaultPath);
       this.miniSearch.add(doc);
     } else {
       // Add new document
@@ -104,9 +144,11 @@ class SearchStore {
   }
 
   // Remove a file from the index (called when file is deleted)
+  // Accepts either OS path or vault path
   async removeFile(path: string) {
-    this.files.delete(path);
-    this.miniSearch.discard(path);
+    const vaultPath = this.toVaultPath(path);
+    this.files.delete(vaultPath);
+    this.miniSearch.discard(vaultPath);
 
     this.fuse = new Fuse(Array.from(this.files.values()), {
       keys: ['name'],
@@ -258,8 +300,22 @@ class SearchStore {
     return results.map((result) => result.item);
   }
 
+  /**
+   * Search files and return results with OS paths for file I/O
+   * Use this for QuickSwitcher and similar components that need to open files
+   */
+  searchFilesWithOsPaths(query: string): Array<{ path: string; name: string }> {
+    const docs = this.searchFiles(query);
+    return docs.map(doc => ({
+      path: this.toOsPathForIo(doc.path),
+      name: doc.name,
+    }));
+  }
+
   findBacklinks(filePath: string): SearchDocument[] {
-    const fileName = filePath.split(/[/\\]/).pop()?.replace('.md', '') || '';
+    // Normalize input to vault path
+    const vaultPath = this.toVaultPath(filePath);
+    const fileName = getVaultBasename(vaultPath).replace('.md', '') || '';
     const backlinks: SearchDocument[] = [];
 
     for (const doc of this.files.values()) {
@@ -268,12 +324,20 @@ class SearchStore {
         'g'
       );
 
-      if (doc.path !== filePath && wikilinkPattern.test(doc.content)) {
+      if (doc.path !== vaultPath && wikilinkPattern.test(doc.content)) {
         backlinks.push(doc);
       }
     }
 
     return backlinks;
+  }
+
+  /**
+   * Get OS path for a vault path
+   * Useful when you need to read the actual file
+   */
+  getOsPath(vaultPath: string): string {
+    return this.toOsPathForIo(vaultPath);
   }
 
   resolveWikilink(wikilink: string): SearchDocument | null {
@@ -298,7 +362,23 @@ class SearchStore {
     );
   }
 
+  /**
+   * Get file path by note name
+   * Returns OS path for backward compatibility (use for file I/O)
+   */
   getFilePathByName(name: string): string | null {
+    const doc = Array.from(this.files.values()).find(
+      (doc) => doc.name.toLowerCase() === name.toLowerCase()
+    );
+    // Return OS path for file reading
+    return doc ? this.toOsPathForIo(doc.path) : null;
+  }
+
+  /**
+   * Get vault-absolute path by note name
+   * Returns vault path for storage in workspace/config
+   */
+  getVaultPathByName(name: string): string | null {
     const doc = Array.from(this.files.values()).find(
       (doc) => doc.name.toLowerCase() === name.toLowerCase()
     );

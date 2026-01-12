@@ -62,7 +62,7 @@ export function CommandPalette({
 
       setResults(filteredCommands);
     } else if (currentMode === 'files' && onSelectFile) {
-      const searchResults = searchStore.searchFiles(searchQuery);
+      const searchResults = searchStore.searchFilesWithOsPaths(searchQuery);
       setResults(searchResults.map(doc => ({ ...doc, type: 'file' as const })));
     } else if (currentMode === 'tags') {
       // Search for tags in files

@@ -1,0 +1,85 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Unit tests - run on all platforms
+  unit-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:run
+
+  # E2E tests - only on Linux (Tauri WebDriver requirement)
+  e2e-tests:
+    runs-on: ubuntu-latest
+    # Only run on main branch or when e2e tests change
+    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.files, 'tests/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: x86_64-unknown-linux-gnu
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y webkit2gtk-driver
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - name: Build Tauri app
+        run: cargo tauri build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Start tauri-driver
+        run: |
+          tauri-driver --port 4444 &
+          sleep 3
+
+      - name: Run E2E tests
+        run: npx playwright test --project=tauri
+        timeout-minutes: 10
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+
+      - name: Stop tauri-driver
+        if: always()
+        run: |
+          pkill -f tauri-driver || true

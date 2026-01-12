@@ -1,12 +1,18 @@
 /**
  * Image handling utilities for paste and drag-drop
+ *
+ * Path handling:
+ * - vaultPath: OS-absolute path to vault root
+ * - currentFilePath: OS-absolute path to current note
+ * - Returns: vault-absolute relative path for wikilinks (e.g., "attachments/image.png")
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { toVaultPath } from './vaultPaths';
 
 interface ImagePasteOptions {
-  vaultPath: string;
-  currentFilePath: string;
+  vaultPath: string; // OS-absolute path to vault root
+  currentFilePath: string; // OS-absolute path to current note
   attachmentsFolder?: string;
   onInsert: (markdown: string) => void;
 }
@@ -66,6 +72,10 @@ export async function handleImageDrop(
 
 /**
  * Save an image file to the attachments folder
+ *
+ * @param file - The image file to save
+ * @param options - Image paste options
+ * @returns Vault-relative path for wikilink (e.g., "attachments/image.png")
  */
 async function saveImage(
   file: File,
@@ -73,19 +83,23 @@ async function saveImage(
 ): Promise<string> {
   const { vaultPath, currentFilePath, attachmentsFolder = 'attachments' } = options;
 
-  // Determine attachments folder path
-  let folderPath: string;
-  let relativePath: string;
+  // Determine attachments folder path (OS-absolute for file I/O)
+  let folderPath: string; // OS-absolute path
+  let relativePath: string; // Vault-relative path for wikilinks
 
   if (attachmentsFolder.includes('{{note}}')) {
     // Use note-specific folder: attachments/{note}/
-    const noteName = currentFilePath.split('/').pop()?.replace('.md', '') || 'untitled';
+    // Convert currentFilePath (OS-absolute) to vault path to extract note name
+    const vaultNotePath = toVaultPath(currentFilePath, vaultPath);
+    const noteName = vaultNotePath.split('/').pop()?.replace('.md', '') || 'untitled';
     folderPath = `${vaultPath}/attachments/${noteName}`;
     relativePath = `attachments/${noteName}`;
   } else {
     // Use global attachments folder
     folderPath = `${vaultPath}/${attachmentsFolder}`;
-    relativePath = attachmentsFolder;
+    relativePath = attachmentsFolder.startsWith('/')
+      ? attachmentsFolder.slice(1)
+      : attachmentsFolder;
   }
 
   // Create folder if it doesn't exist
@@ -102,16 +116,17 @@ async function saveImage(
   const fileName = `${baseName}-${timestamp}.${extension}`;
   const imagePath = `${folderPath}/${fileName}`;
 
-  // Convert file to ArrayBuffer and save
+  // Convert file to ArrayBuffer and save as binary
   const arrayBuffer = await file.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
 
-  await invoke('write_file', {
+  // Use binary write to avoid encoding issues
+  await invoke('write_file_binary', {
     path: imagePath,
-    content: uint8Array,
+    data: Array.from(uint8Array),
   });
 
-  // Return relative path for wikilink
+  // Return vault-relative path for wikilink (without leading /)
   return `${relativePath}/${fileName}`;
 }
 

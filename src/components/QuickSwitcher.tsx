@@ -17,14 +17,13 @@ export function QuickSwitcher({ isOpen, onClose, onSelectFile }: QuickSwitcherPr
     if (isOpen && inputRef.current) {
       inputRef.current.focus();
       setQuery('');
-      setResults(searchStore.searchFiles('').map((doc) => ({ path: doc.path, name: doc.name })));
+      setResults(searchStore.searchFilesWithOsPaths(''));
       setSelectedIndex(0);
     }
   }, [isOpen]);
 
   useEffect(() => {
-    const searchResults = searchStore.searchFiles(query);
-    setResults(searchResults.map((doc) => ({ path: doc.path, name: doc.name })));
+    setResults(searchStore.searchFilesWithOsPaths(query));
     setSelectedIndex(0);
   }, [query]);
 

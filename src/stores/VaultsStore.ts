@@ -4,8 +4,8 @@ import type { VaultsRegistry, VaultEntry } from '../types';
 // Helper function to check if a file exists
 async function fileExists(path: string): Promise<boolean> {
   try {
-    await invoke('read_file', { path });
-    return true;
+    const meta = await invoke<{ exists: boolean }>('stat_path', { path });
+    return meta.exists;
   } catch {
     return false;
   }

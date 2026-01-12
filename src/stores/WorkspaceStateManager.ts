@@ -1,5 +1,6 @@
 import { vaultConfigStore } from './VaultConfigStore';
 import type { WorkspaceState, OpenFile } from '../types';
+import { toOsPath, toVaultPath, isVaultAbsolutePath } from '../utils/vaultPaths';
 
 class WorkspaceStateManager {
   private state: WorkspaceState | null = null;
@@ -7,13 +8,28 @@ class WorkspaceStateManager {
   private currentOpenFiles: OpenFile[] = [];
   private currentActiveTab: string | null = null;
   private currentLastOpenFiles: string[] = [];
+  private vaultPath: string | null = null;
 
-  // Restore workspace from saved state
-  async restore(): Promise<{
+  /**
+   * Set the current vault path for path conversions
+   */
+  setVaultPath(vaultPath: string): void {
+    this.vaultPath = vaultPath;
+  }
+
+  /**
+   * Restore workspace from saved state
+   * Converts stored vault paths to OS paths if needed
+   */
+  async restore(vaultPath?: string): Promise<{
     openFiles: OpenFile[];
     activeTab: string | null;
     lastOpenFiles: string[];
   }> {
+    if (vaultPath) {
+      this.vaultPath = vaultPath;
+    }
+
     this.state = vaultConfigStore.getWorkspace();
 
     if (!this.state) {
@@ -28,17 +44,23 @@ class WorkspaceStateManager {
     try {
       console.log('[WorkspaceStateManager] Restoring workspace state');
 
-      // Extract open files from workspace state
+      // Extract open files from workspace state and convert vault paths to OS paths
       const openFiles = this.extractOpenFiles(this.state);
       const activeTab = this.state.active || null;
-      const lastOpenFiles = this.state.lastOpenFiles || [];
+      const lastOpenFiles = (this.state.lastOpenFiles || []).map(p =>
+        this.vaultPath && isVaultAbsolutePath(p)
+          ? toOsPath(p, this.vaultPath)
+          : p
+      );
 
       this.currentOpenFiles = openFiles;
-      this.currentActiveTab = activeTab;
+      this.currentActiveTab = activeTab && this.vaultPath && isVaultAbsolutePath(activeTab)
+        ? toOsPath(activeTab, this.vaultPath)
+        : activeTab;
 
       return {
         openFiles,
-        activeTab,
+        activeTab: this.currentActiveTab,
         lastOpenFiles,
       };
     } catch (e) {
@@ -53,6 +75,7 @@ class WorkspaceStateManager {
 
   private extractOpenFiles(state: WorkspaceState): OpenFile[] {
     const files: OpenFile[] = [];
+    const vaultPath = this.vaultPath;
 
     // Helper function to traverse the workspace tree
     function traverse(node: any): void {
@@ -61,9 +84,14 @@ class WorkspaceStateManager {
         if (node.children) {
           for (const child of node.children) {
             if (child.type === 'leaf' && child.state?.file) {
+              let filePath = child.state.file;
+              // Convert vault path to OS path if needed
+              if (vaultPath && isVaultAbsolutePath(filePath)) {
+                filePath = toOsPath(filePath, vaultPath);
+              }
               files.push({
-                path: child.state.file,
-                name: child.state.file.split(/[/\\]/).pop() || '',
+                path: filePath,
+                name: filePath.split(/[/\\]/).pop() || '',
                 content: '', // Will be loaded separately
                 isDirty: false,
               });
@@ -86,14 +114,23 @@ class WorkspaceStateManager {
   }
 
   // Capture current workspace state
+  // Converts OS paths to vault paths for storage
   capture(openFiles: OpenFile[], activeTab: string | null, lastOpenFiles: string[]): WorkspaceState {
+    // Convert OS paths to vault paths for storage
+    const getVaultPath = (osPath: string): string => {
+      if (this.vaultPath) {
+        return toVaultPath(osPath, this.vaultPath);
+      }
+      return osPath;
+    };
+
     // Create a simplified workspace state from current app state
     const tabsChildren = openFiles.map((file, index) => ({
       id: `leaf-${index}`,
       type: 'leaf' as const,
       state: {
         type: 'markdown',
-        file: file.path,
+        file: getVaultPath(file.path),
         mode: 'source' as const,
       },
       pinned: false,
@@ -135,8 +172,8 @@ class WorkspaceStateManager {
         activeTabs: {},
         tabs: [],
       },
-      active: activeTab,
-      lastOpenFiles: lastOpenFiles.slice(0, 10),
+      active: activeTab ? getVaultPath(activeTab) : null,
+      lastOpenFiles: lastOpenFiles.slice(0, 10).map(getVaultPath),
       leftRibbon: {
         hiddenItems: [],
       },

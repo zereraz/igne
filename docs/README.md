@@ -29,6 +29,7 @@ For project overview, features, and quick start, see the **[main README](../READ
 |----------|-------------|
 | [Agent Onboarding](./AGENT-ONBOARDING.md) | Start here |
 | [Agent Quick Reference](./AGENT-QUICK-REF.md) | Essentials & patterns |
+| [Obsidian Drop-in Gap Report](./OBSIDIAN_DROP_IN_GAP_REPORT.md) | What’s supported vs what’s required (taskable gaps) |
 | [UI Skills](./UI-SKILLS.md) | UI guidelines (source) |
 | [UI Skills — Igne Notes](./UI-SKILLS-ADAPTED.md) | Project adaptations |
 | [Mind Garden](./MIND-GARDEN.md) | Knowledge organization |

@@ -71,7 +71,8 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
 
             // Check if plugin has settings (main.js exists)
             const mainJsPath = `${pluginsDir}/${pluginId}/main.js`;
-            const hasMainJs = await invoke<boolean>('file_exists', { path: mainJsPath });
+            const meta = await invoke<{ exists: boolean }>('stat_path', { path: mainJsPath });
+            const hasMainJs = meta.exists;
 
             discovered.push({
               id: pluginId,

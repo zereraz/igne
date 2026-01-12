@@ -6,7 +6,23 @@ export interface FileEntry {
   name: string;
   path: string;
   is_dir: boolean;
+  size?: number;
+  modified?: number;
   children?: FileEntry[];
+}
+
+/**
+ * File metadata returned by stat_path backend command
+ * Used for checking file existence without reading content
+ */
+export interface FileMetadata {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  is_file: boolean;
+  size: number;
+  modified: number;
+  exists: boolean;
 }
 
 export interface OpenFile {
