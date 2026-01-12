@@ -1,260 +1,141 @@
-# Phase D: Command Registry + Tool Layer
+# Phase H: AI-First Layer (Claude-Code-like Planning + Multi-Agent)
 
-Build unified command/tool surface that UI, plugins, and AI all use.
+Make AI a first-class workflow layer using the same tool/command surface.
 
 ## Context
 
-Currently, UI actions are scattered throughout components with no unified interface. Plugins and future AI agents need a consistent way to invoke capabilities.
+AI should be able to:
+- Plan operations with user approval
+- Execute tools via the command registry
+- Show diffs before applying changes
+- Be audited like any other action
 
-**Reference:** `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase D
+**Reference:** `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase H
 
 ## Goal
 
-Create a tool/command layer where:
-- Every capability is a "tool" (pure function)
-- Every user action is a "command" (uses tools)
-- UI, plugins, and AI all use the same commands
-- All actions are logged for audit trail
+- AI uses command/tool layer (not direct invoke)
+- Plan → approve → execute workflow
+- All AI actions logged and reversible
+- Optional MCP server for external tools
 
 ---
 
-## Task D1: Define Tool Interface
+## Task H1: Agent Tool API
 
-### D1.1 Create tool types
+### H1.1 Define tool schema for agents
 
-**File to create:** `src/tools/types.ts`
+**File to create:** `src/agent/tools.ts`
 
-Define Tool<TInput, TResult> interface and ToolContext
+**Define tools that map to commands:**
+```typescript
+export const AGENT_TOOLS = {
+  // File operations
+  note_read: { schema: { path: "string" }, command: "file.read" },
+  note_write: { schema: { path: "string", content: "string" }, command: "file.write" },
+  note_create: { schema: { path: "string", content: "string" }, command: "file.new" },
+  note_rename: { schema: { oldPath: "string", newPath: "string" }, command: "file.rename" },
+  
+  // Search
+  search_query: { schema: { query: "string" }, command: "search.query" },
+  
+  // Navigation
+  nav_open: { schema: { path: "string" }, command: "file.open" },
+  
+  // Workspace
+  ws_new_pane: { schema: { direction: "horizontal|vertical" }, command: "workspace.split" },
+}
+```
 
 **Success criteria:**
-- [ ] src/tools/types.ts created
-- [ ] Tool interface defined with execute(context, input) -> Promise<Result>
-- [ ] ToolContext interface defined (includes vaultPath, source for audit)
+- [ ] Agent tools defined with schemas
+- [ ] Each tool maps to a command ID
+- [ ] Tools can be invoked via CommandRegistry
 
----
+### H1.2 Implement plan → approvals → execution loop
 
-## Task D2: Create Vault Tools
+**File to create:** `src/agent/executor.ts`
 
-### D2.1 Implement file operation tools
-
-**File to create:** `src/tools/vault.ts`
-
-Implement tools: createFile, readFile, writeFile, deleteFile, renameFile, statPath, listDir
-
-**Backend commands to use:**
-- `read_file`, `write_file`, `delete_file`, `rename_file`
-- `stat_path`, `read_directory`
-
-**Success criteria:**
-- [ ] All 7 vault tools implemented
-- [ ] Each tool wraps Tauri commands
-- [ ] Proper error handling with Result type
-- [ ] Exported as named exports
-
----
-
-## Task D3: Create Workspace Tools
-
-### D3.1 Implement workspace tools
-
-**File to create:** `src/tools/workspace.ts`
-
-Implement: openFile, closeFile, setActiveFile
-
-For now these can be stubs that interact with App state/stores.
+**Implement:**
+```typescript
+export class AgentExecutor {
+  // Agent proposes steps
+  async proposePlan(steps: ProposedStep[]): Promise<Plan>
+  
+  // User approves (all or step-by-step)
+  async approveStep(stepId: string): Promise<void>
+  async approveAll(): Promise<void>
+  
+  // Execute approved steps via CommandRegistry
+  async executeStep(stepId: string): Promise<Result>
+  
+  // Get diff before executing
+  async getDiff(step: ProposedStep): Promise<string>
+}
+```
 
 **Success criteria:**
-- [ ] src/tools/workspace.ts created
-- [ ] 3 workspace tools defined with proper signatures
-- [ ] Tools interact with App state
+- [ ] Can propose multi-step plan
+- [ ] User can approve individual steps or all
+- [ ] Each step executes via CommandRegistry
+- [ ] Diffs shown before write operations
+- [ ] All steps logged to audit
 
 ---
 
-## Task D4: Create Command Registry
+## Task H2: In-App Agent UI
 
-### D4.1 Implement command registry
+### H2.1 Create Agent panel component
 
-**File to create:** `src/commands/registry.ts`
+**File to create:** `src/components/AgentPanel.tsx`
 
-Create CommandRegistry class with:
-- register(command: Command): void
-- unregister(id: string): void
-- execute(id: string, ...args): Promise<any>
-- get(id: string): Command | undefined
-- getAll(): Command[]
-- onCommandExecuted(callback): EventRef
+**UI sections:**
+1. Conversation (chat history)
+2. Plan checklist (current step, completed, pending)
+3. Tool execution log (what ran, result, duration)
+4. Diff viewer (before/after for edits)
 
 **Success criteria:**
-- [ ] CommandRegistry class created
-- [ ] Singleton exported as default
-- [ ] All methods work
-- [ ] Commands stored in Map
+- [ ] Agent panel shows all 4 sections
+- [ ] Can approve/reject individual steps
+- [ ] Can approve all steps at once
+- [ ] See diff before applying changes
+- [ ] Tool execution shows in real-time
 
----
+### H2.2 Add scoped context controls
 
-## Task D5: Define Command Type
+**File to create:** `src/components/AgentContext.tsx`
 
-### D5.1 Create command types
-
-**File to create:** `src/commands/types.ts`
-
-Define Command interface:
-- id: string
-- name: string
-- label?: string
-- icon?: string
-- callback: (...args) => any
-- hotkeys?: Hotkey[]
+**Controls:**
+- Select folders/notes to include
+- Attach currently open note
+- Limit to read-only mode
+- Set max iterations
 
 **Success criteria:**
-- [ ] Command interface defined
-- [ ] Hotkey type imported or defined
-- [ ] Exported
+- [ ] Can select folder scope
+- [ ] Can attach open note
+- [ ] Read-only mode prevents writes
+- [ ] Max iterations enforced
 
 ---
 
-## Task D6: Register Core Commands
+## Task H3: Add Tests
 
-### D6.1 Register commands in App.tsx
+### H3.1 Create agent tests
 
-**File to modify:** `src/App.tsx`
-
-Register at least 10 core commands:
-1. file.new - Create new note
-2. file.save - Save current file
-3. file.open - Open file
-4. view.toggleGraph - Toggle graph view
-5. view.toggleSettings - Toggle settings modal
-6. editor.togglePreview - Toggle preview mode
-7. workspace.quickSwitcher - Quick file switcher
-8. edit.undo - Undo
-9. edit.redo - Redo
-10. format.bold - Bold selection
-
-**Success criteria:**
-- [ ] CommandRegistry imported and initialized in App
-- [ ] 10+ commands registered in useEffect
-- [ ] Each has id, name, callback
-- [ ] Callbacks use existing handlers or tools
-
----
-
-## Task D7: Add Audit Log
-
-### D7.1 Create audit log
-
-**File to create:** `src/commands/audit.ts`
-
-AuditLog class with:
-- log(event: AuditEvent): void
-- getEvents(limit?: number): AuditEvent[]
-- clear(): void
-- exportToJson(): string
-
-AuditEvent should include:
-- timestamp
-- commandId
-- source ('ui' | 'plugin' | 'agent')
-- success: boolean
-- metadata?
-
-**Success criteria:**
-- [ ] AuditLog class created
-- [ ] Events stored in memory array
-- [ ] Singleton exported
-- [ ] Can export to JSON
-
----
-
-## Task D8: Wire Audit Log to Registry
-
-### D8.1 Update CommandRegistry to log executions
-
-**File to modify:** `src/commands/registry.ts`
-
-Import AuditLog and log each command execution.
-
-**Success criteria:**
-- [ ] execute() method logs to AuditLog
-- [ ] Logs success/failure
-- [ ] Includes commandId and source
-
----
-
-## Task D9: Update Keyboard Shortcuts
-
-### D9.1 Update useKeyboardShortcuts
-
-**File to modify:** `src/hooks/useKeyboardShortcuts.ts`
-
-Refactor to use CommandRegistry.execute() instead of direct handlers.
-
-**Success criteria:**
-- [ ] Imports CommandRegistry
-- [ ] All shortcuts call registry.execute()
-- [ ] No direct App handler calls
-
----
-
-## Task D10: Update TitleBar
-
-### D10.1 Update TitleBar component
-
-**File to modify:** `src/components/TitleBar.tsx`
-
-Refactor buttons to use CommandRegistry.execute().
-
-**Success criteria:**
-- [ ] Buttons work via command registry
-- [ ] No direct callbacks in TitleBar
-- [ ] Commands logged to audit
-
----
-
-## Task D11: Update CreateVaultDialog
-
-### D11.1 Update create vault flow
-
-**File to modify:** `src/components/CreateVaultDialog.tsx`
-
-Use CommandRegistry for vault creation.
-
-**Success criteria:**
-- [ ] Vault create goes through command registry
-- [ ] Command registered in App
-
----
-
-## Task D12: Add Tests for Core Functionality
-
-### D12.1 Create tests for registry and tools
-
-**Files to create:**
-- `src/tools/__tests__/vault.test.ts`
-- `src/commands/__tests__/registry.test.ts`
-- `src/commands/__tests__/audit.test.ts`
+**File to create:** `src/agent/__tests__/executor.test.ts`
 
 **Test coverage:**
-
-Registry tests:
-- [ ] register() adds command
-- [ ] unregister() removes command
-- [ ] execute() calls command callback
-- [ ] execute() logs to audit log
-
-Vault tools tests:
-- [ ] readFile() reads from backend
-- [ ] writeFile() writes to backend
-- [ ] statPath() returns metadata
-
-Audit tests:
-- [ ] log() stores event
-- [ ] getEvents() returns events
-- [ ] clear() empties log
+- [ ] Plan creation from proposed steps
+- [ ] Step approval workflow
+- [ ] Execution via CommandRegistry
+- [ ] Diff generation
+- [ ] Audit logging
 
 **Success criteria:**
 - [ ] All tests pass
-- [ ] Basic coverage for core flows
+- [ ] Agent executor works correctly
 
 ---
 

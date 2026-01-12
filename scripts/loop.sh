@@ -49,7 +49,7 @@ while true; do
 
     # Start log viewer in background
     log "Starting log viewer..."
-    claude-log-viewer "$SESSION_LOG" 2>/dev/null &
+    claude-log-viewer -F "$SESSION_LOG" 2>/dev/null &
     TAIL_PID=$!
 
     # Run Claude with GLM directly (no cz wrapper)
