@@ -47,10 +47,7 @@ while true; do
     # Path to Claude session log
     SESSION_LOG="$HOME/.claude/projects/-Users-zereraz-Code-Zereraz-igne/$SESSION_ID.jsonl"
 
-    # Start log viewer in background
-    log "Starting log viewer..."
-    claude-log-viewer -F "$SESSION_LOG" 2>/dev/null &
-    TAIL_PID=$!
+    # Skip log viewer (blocking issue)
 
     # Run Claude with GLM directly (no cz wrapper)
     GEMINI_API_KEY="" \
@@ -72,9 +69,6 @@ while true; do
         --dangerously-skip-permissions \
         --session-id "$SESSION_ID" \
         2>&1 | tee "$OUTPUT_FILE"
-
-    # Kill the log viewer process
-    kill $TAIL_PID 2>/dev/null || true
 
     # Check for completion signals (multiple formats for flexibility)
     if grep -qE '<promise>COMPLETE</promise>|ALL_TASKS_COMPLETE|ALL_PHASES_COMPLETE' "$OUTPUT_FILE"; then

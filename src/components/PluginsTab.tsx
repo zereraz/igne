@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Puzzle, Power, Settings as SettingsIcon, Check, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Puzzle, Power, Settings as SettingsIcon, Check, AlertCircle, AlertTriangle, Shield, Info } from 'lucide-react';
 import { isPluginCompatible, OBSIDIAN_COMPAT_VERSION, compareVersions } from '../utils/semver';
+import { detectPluginTier, getTierName, getTierColor, getPermissionName, type PluginTier, type PluginTierInfo } from '../utils/plugin-tiers';
 
 interface PluginManifest {
   id: string;
@@ -21,6 +22,7 @@ interface DiscoveredPlugin {
   hasSettings: boolean;
   error?: string;
   compatibilityError?: string;
+  tierInfo?: PluginTierInfo;
 }
 
 interface PluginsTabProps {
@@ -82,12 +84,30 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
             const meta = await invoke<{ exists: boolean }>('stat_path', { path: mainJsPath });
             const hasMainJs = meta.exists;
 
+            // Detect plugin tier by analyzing main.js
+            let tierInfo: PluginTierInfo | undefined;
+            if (hasMainJs && !compatibilityError) {
+              try {
+                const mainJsContent = await invoke<string>('read_file', { path: mainJsPath });
+                tierInfo = await detectPluginTier(mainJsContent);
+              } catch (error) {
+                console.warn(`[PluginsTab] Failed to analyze tier for ${pluginId}:`, error);
+                tierInfo = {
+                  tier: 0,
+                  permissions: [],
+                  blockedReasons: [],
+                  isCompatible: true,
+                };
+              }
+            }
+
             discovered.push({
               id: pluginId,
               manifest,
               isEnabled: enabledList.includes(pluginId),
               hasSettings: hasMainJs,
               compatibilityError,
+              tierInfo,
             });
           } catch (error) {
             console.warn(`[PluginsTab] Failed to load plugin ${pluginId}:`, error);
@@ -405,6 +425,25 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                         Desktop only
                       </span>
                     )}
+                    {plugin.tierInfo && (
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          color: getTierColor(plugin.tierInfo.tier).text,
+                          backgroundColor: getTierColor(plugin.tierInfo.tier).bg,
+                          padding: '2px 6px',
+                          borderRadius: '2px',
+                          border: `1px solid ${getTierColor(plugin.tierInfo.tier).border}`,
+                          fontFamily,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <Shield size={10} />
+                        {getTierName(plugin.tierInfo.tier)}
+                      </span>
+                    )}
                   </div>
                   <p
                     style={{
@@ -454,8 +493,8 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
 
                 {/* Enable/disable toggle */}
                 <button
-                  onClick={() => !plugin.error && togglePlugin(plugin.id)}
-                  disabled={!!plugin.error}
+                  onClick={() => !plugin.error && !plugin.tierInfo?.blockedReasons.length && togglePlugin(plugin.id)}
+                  disabled={!!plugin.error || (plugin.tierInfo?.blockedReasons.length ?? 0) > 0}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -468,20 +507,20 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                     backgroundColor: plugin.isEnabled ? '#7c3aed' : '#18181b',
                     border: plugin.isEnabled ? '1px solid #7c3aed' : '1px solid #3f3f46',
                     borderRadius: '2px',
-                    cursor: plugin.error ? 'not-allowed' : 'pointer',
+                    cursor: plugin.error || (plugin.tierInfo?.blockedReasons.length ?? 0) > 0 ? 'not-allowed' : 'pointer',
                     color: plugin.isEnabled ? 'white' : '#a1a1aa',
-                    opacity: plugin.error ? 0.5 : 1,
+                    opacity: plugin.error || (plugin.tierInfo?.blockedReasons.length ?? 0) > 0 ? 0.5 : 1,
                     transition: 'all 100ms ease',
                     flexShrink: 0,
                   }}
                   onMouseEnter={(e) => {
-                    if (!plugin.error && !plugin.isEnabled) {
+                    if (!plugin.error && !(plugin.tierInfo?.blockedReasons.length ?? 0) && !plugin.isEnabled) {
                       e.currentTarget.style.backgroundColor = '#27272a';
                       e.currentTarget.style.borderColor = '#52525b';
                     }
                   }}
                   onMouseLeave={(e) => {
-                    if (!plugin.error && !plugin.isEnabled) {
+                    if (!plugin.error && !(plugin.tierInfo?.blockedReasons.length ?? 0) && !plugin.isEnabled) {
                       e.currentTarget.style.backgroundColor = '#18181b';
                       e.currentTarget.style.borderColor = '#3f3f46';
                     }
@@ -491,6 +530,119 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                   {plugin.isEnabled ? 'Enabled' : 'Disabled'}
                 </button>
               </div>
+
+              {/* Tier details */}
+              {plugin.tierInfo && (plugin.tierInfo.blockedReasons.length > 0 || plugin.tierInfo.permissions.length > 0) && (
+                <div
+                  style={{
+                    paddingTop: '8px',
+                    borderTop: '1px solid #3f3f46',
+                    marginTop: '8px',
+                  }}
+                >
+                  {plugin.tierInfo.blockedReasons.length > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '8px',
+                        padding: '8px',
+                        backgroundColor: '#450a0a',
+                        border: '1px solid #dc2626',
+                        borderRadius: '2px',
+                        marginBottom: plugin.tierInfo.permissions.length > 0 ? '8px' : 0,
+                      }}
+                    >
+                      <AlertTriangle size={14} style={{ color: '#fca5a5', flexShrink: 0, marginTop: '2px' }} />
+                      <div>
+                        <p
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#fca5a5',
+                            margin: '0 0 4px 0',
+                            fontFamily,
+                          }}
+                        >
+                          This plugin is blocked
+                        </p>
+                        {plugin.tierInfo.blockedReasons.map((reason, i) => (
+                          <p
+                            key={i}
+                            style={{
+                              fontSize: '10px',
+                              color: '#fca5a5',
+                              margin: i === 0 ? '0' : '4px 0 0 0',
+                              fontFamily,
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            • {reason}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {plugin.tierInfo.permissions.length > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '8px',
+                        padding: '8px',
+                        backgroundColor: '#451a03',
+                        border: '1px solid #f59e0b',
+                        borderRadius: '2px',
+                      }}
+                    >
+                      <Info size={14} style={{ color: '#fcd34d', flexShrink: 0, marginTop: '2px' }} />
+                      <div>
+                        <p
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#fcd34d',
+                            margin: '0 0 4px 0',
+                            fontFamily,
+                          }}
+                        >
+                          This plugin requires permissions
+                        </p>
+                        <p
+                          style={{
+                            fontSize: '10px',
+                            color: '#fcd34d',
+                            margin: '0 0 4px 0',
+                            fontFamily,
+                          }}
+                        >
+                          When enabled, this plugin will request access to:
+                        </p>
+                        {plugin.tierInfo.permissions.map((permission) => (
+                          <span
+                            key={permission}
+                            style={{
+                              display: 'inline-block',
+                              fontSize: '10px',
+                              color: '#fcd34d',
+                              backgroundColor: '#27272a',
+                              padding: '2px 6px',
+                              borderRadius: '2px',
+                              border: '1px solid #3f3f46',
+                              fontFamily,
+                              marginRight: '4px',
+                              marginBottom: '4px',
+                            }}
+                          >
+                            {getPermissionName(permission)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Settings button (for plugins with settings) */}
               {plugin.isEnabled && plugin.hasSettings && (
