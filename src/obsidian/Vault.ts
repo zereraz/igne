@@ -5,13 +5,15 @@
 import { invoke } from '@tauri-apps/api/core';
 import { Events } from './events';
 import { DataAdapter } from './DataAdapter';
-import type { TAbstractFile, EventRef } from './types';
+import type { TAbstractFile, EventRef, FileStats } from './types';
 import { TFile, TFolder } from './types';
 
 interface FileEntry {
   name: string;
   path: string;
   is_dir: boolean;
+  size?: number;
+  modified?: number;
   children?: FileEntry[];
 }
 
@@ -25,14 +27,7 @@ export class Vault extends Events {
     super();
     this.configDir = configDir;
     this.adapter = new DataAdapter(rootPath);
-    this.rootFolder = {
-      vault: this,
-      path: '',
-      name: '',
-      parent: null,
-      children: [],
-      isRoot: () => true,
-    } as TFolder;
+    this.rootFolder = new TFolder(this, '', '', null, []);
   }
 
   async initialize(): Promise<void> {
@@ -49,29 +44,18 @@ export class Vault extends Events {
   private buildFileTree(entries: FileEntry[], parentPath: string): TAbstractFile[] {
     return entries.map((entry) => {
       const path = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+      const parent = parentPath ? (this.getAbstractFileByPath(parentPath) as TFolder) : null;
+
       if (entry.is_dir) {
-        return {
-          vault: this,
-          path,
-          name: entry.name,
-          parent: parentPath ? (this.getAbstractFileByPath(parentPath) as TFolder) : null,
-          children: entry.children ? this.buildFileTree(entry.children, path) : [],
-          isRoot: () => false,
-        } as TFolder;
+        const children = entry.children ? this.buildFileTree(entry.children, path) : [];
+        return new TFolder(this, path, entry.name, parent, children);
       } else {
-        return {
-          vault: this,
-          path,
-          name: entry.name,
-          parent: parentPath ? (this.getAbstractFileByPath(parentPath) as TFolder) : null,
-          stat: {
-            ctime: 0,
-            mtime: 0,
-            size: 0,
-          },
-          basename: entry.name.replace(/\.[^/.]+$/, ''),
-          extension: entry.name.split('.').pop() || '',
-        } as TFile;
+        const stat: FileStats = {
+          ctime: entry.modified || 0,
+          mtime: entry.modified || 0,
+          size: entry.size || 0,
+        };
+        return new TFile(this, path, entry.name, parent, stat);
       }
     });
   }
@@ -79,15 +63,9 @@ export class Vault extends Events {
   async create(path: string, data: string): Promise<TFile> {
     await invoke('write_file', { path, content: data });
 
-    const file: TFile = {
-      vault: this,
-      path,
-      name: path.split('/').pop() || '',
-      parent: this.getParentFolder(path),
-      stat: { ctime: Date.now(), mtime: Date.now(), size: data.length },
-      basename: path.split('/').pop()!.replace(/\.[^/.]+$/, ''),
-      extension: path.split('.').pop() || '',
-    };
+    const stat: FileStats = { ctime: Date.now(), mtime: Date.now(), size: data.length };
+    const name = path.split('/').pop() || '';
+    const file = new TFile(this, path, name, this.getParentFolder(path), stat);
 
     // Update metadata cache
     if (this.app?.metadataCache) {
@@ -166,12 +144,18 @@ export class Vault extends Events {
 
   getFileByPath(path: string): TFile | null {
     const file = this.getAbstractFileByPath(path);
-    return file && !(file as any).is_dir ? (file as TFile) : null;
+    if (file instanceof TFile) {
+      return file;
+    }
+    return null;
   }
 
   getFolderByPath(path: string): TFolder | null {
     const folder = this.getAbstractFileByPath(path);
-    return folder && (folder as any).isRoot?.() === false ? (folder as TFolder) : null;
+    if (folder instanceof TFolder) {
+      return folder;
+    }
+    return null;
   }
 
   getMarkdownFiles(): TFile[] {
@@ -193,6 +177,15 @@ export class Vault extends Events {
 
   getRoot(): TFolder {
     return this.rootFolder;
+  }
+
+  /**
+   * Get the resource path for a file.
+   * This is used by plugins to get URLs for images and attachments.
+   * Returns a vault-relative URL in the format `app://local/<path>`
+   */
+  getResourcePath(file: TFile): string {
+    return `app://local/${file.path}`;
   }
 
   private getParentFolder(path: string): TFolder | null {
