@@ -1,16 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { VaultSettings, AppearanceSettings, WorkspaceState } from '../types';
 import { DEFAULT_VAULT_SETTINGS, DEFAULT_APPEARANCE_SETTINGS } from '../types';
-
-// Helper function to check if a file exists
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    const meta = await invoke<{ exists: boolean }>('stat_path', { path });
-    return meta.exists;
-  } catch {
-    return false;
-  }
-}
+import { readJsonSafe, writeJsonSafe, fileExists } from '../utils/safeJson';
 
 class VaultConfigStore {
   private vaultPath: string = '';
@@ -46,21 +37,15 @@ class VaultConfigStore {
   private async loadSettings(): Promise<void> {
     const path = `${this.configDir}/app.json`;
 
-    if (await fileExists(path)) {
-      try {
-        const content = await invoke<string>('read_file', { path });
-        const loaded = JSON.parse(content) as Partial<VaultSettings>;
+    const loaded = await readJsonSafe<Partial<VaultSettings>>(path);
 
-        // Merge with defaults
-        this.settings = {
-          ...DEFAULT_VAULT_SETTINGS,
-          ...loaded,
-        };
-
-        console.log('[VaultConfigStore] Loaded vault settings from app.json');
-      } catch (e) {
-        console.error('[VaultConfigStore] Failed to load app.json:', e);
-      }
+    if (loaded) {
+      // Merge with defaults, preserving any unknown keys
+      this.settings = {
+        ...DEFAULT_VAULT_SETTINGS,
+        ...loaded,
+      };
+      console.log('[VaultConfigStore] Loaded vault settings from app.json');
     } else {
       console.log('[VaultConfigStore] No app.json found, using defaults');
     }
@@ -68,9 +53,9 @@ class VaultConfigStore {
 
   async saveSettings(): Promise<void> {
     const path = `${this.configDir}/app.json`;
-    await invoke('write_file', {
-      path,
-      content: JSON.stringify(this.settings, null, 2),
+    await writeJsonSafe(path, this.settings, {
+      preserveUnknown: true,
+      merge: true,
     });
     console.log('[VaultConfigStore] Saved vault settings to app.json');
   }
@@ -93,21 +78,15 @@ class VaultConfigStore {
   private async loadAppearance(): Promise<void> {
     const path = `${this.configDir}/appearance.json`;
 
-    if (await fileExists(path)) {
-      try {
-        const content = await invoke<string>('read_file', { path });
-        const loaded = JSON.parse(content) as Partial<AppearanceSettings>;
+    const loaded = await readJsonSafe<Partial<AppearanceSettings>>(path);
 
-        // Merge with defaults
-        this.appearance = {
-          ...DEFAULT_APPEARANCE_SETTINGS,
-          ...loaded,
-        };
-
-        console.log('[VaultConfigStore] Loaded appearance settings from appearance.json');
-      } catch (e) {
-        console.error('[VaultConfigStore] Failed to load appearance.json:', e);
-      }
+    if (loaded) {
+      // Merge with defaults, preserving any unknown keys
+      this.appearance = {
+        ...DEFAULT_APPEARANCE_SETTINGS,
+        ...loaded,
+      };
+      console.log('[VaultConfigStore] Loaded appearance settings from appearance.json');
     } else {
       console.log('[VaultConfigStore] No appearance.json found, using defaults');
     }
@@ -115,9 +94,9 @@ class VaultConfigStore {
 
   async saveAppearance(): Promise<void> {
     const path = `${this.configDir}/appearance.json`;
-    await invoke('write_file', {
-      path,
-      content: JSON.stringify(this.appearance, null, 2),
+    await writeJsonSafe(path, this.appearance, {
+      preserveUnknown: true,
+      merge: true,
     });
     console.log('[VaultConfigStore] Saved appearance settings to appearance.json');
   }
@@ -140,27 +119,21 @@ class VaultConfigStore {
   private async loadWorkspace(): Promise<void> {
     const path = `${this.configDir}/workspace.json`;
 
-    if (await fileExists(path)) {
-      try {
-        const content = await invoke<string>('read_file', { path });
-        this.workspace = JSON.parse(content) as WorkspaceState;
-        console.log('[VaultConfigStore] Loaded workspace state from workspace.json');
-      } catch (e) {
-        console.error('[VaultConfigStore] Failed to load workspace.json:', e);
-        this.workspace = null;
-      }
+    this.workspace = await readJsonSafe<WorkspaceState>(path);
+
+    if (this.workspace) {
+      console.log('[VaultConfigStore] Loaded workspace state from workspace.json');
     } else {
       console.log('[VaultConfigStore] No workspace.json found');
-      this.workspace = null;
     }
   }
 
   async saveWorkspace(workspace: WorkspaceState): Promise<void> {
     this.workspace = workspace;
     const path = `${this.configDir}/workspace.json`;
-    await invoke('write_file', {
-      path,
-      content: JSON.stringify(workspace, null, 2),
+    await writeJsonSafe(path, workspace, {
+      preserveUnknown: true,
+      merge: true,
     });
     console.log('[VaultConfigStore] Saved workspace state to workspace.json');
   }
@@ -174,23 +147,14 @@ class VaultConfigStore {
   async loadHotkeys(): Promise<Record<string, any[]>> {
     const path = `${this.configDir}/hotkeys.json`;
 
-    if (await fileExists(path)) {
-      try {
-        const content = await invoke<string>('read_file', { path });
-        return JSON.parse(content) as Record<string, any[]>;
-      } catch (e) {
-        console.error('[VaultConfigStore] Failed to load hotkeys.json:', e);
-      }
-    }
-
-    return {};
+    return (await readJsonSafe<Record<string, any[]>>(path)) || {};
   }
 
   async saveHotkeys(hotkeys: Record<string, any[]>): Promise<void> {
     const path = `${this.configDir}/hotkeys.json`;
-    await invoke('write_file', {
-      path,
-      content: JSON.stringify(hotkeys, null, 2),
+    await writeJsonSafe(path, hotkeys, {
+      preserveUnknown: true,
+      merge: true,
     });
     console.log('[VaultConfigStore] Saved hotkeys to hotkeys.json');
   }
