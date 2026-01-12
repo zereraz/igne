@@ -1,265 +1,98 @@
-# Phase D: Command Registry + Tool Layer
+# Phase A: Lock Baseline (Compatibility Contract)
 
-Build unified command/tool surface that UI, plugins, and AI all use.
+Pin Obsidian API to version 1.11.4 and enforce compatibility gate.
 
 ## Context
 
-Currently, UI actions are scattered throughout components with no unified interface. Plugins and future AI agents need a consistent way to invoke capabilities.
+We need to establish which Obsidian API version we're targeting and prevent plugins that require newer versions from being installed.
 
-**Reference:** `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase D
+**Reference:** `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase A
 
 ## Goal
 
-Create a tool/command layer where:
-- Every capability is a "tool" (pure function)
-- Every user action is a "command" (uses tools)
-- UI, plugins, and AI all use the same commands
-- All actions are logged for audit trail
+- Vendor the obsidian.d.ts snapshot for 1.11.4
+- Implement compatibility gate (block plugins with minAppVersion > 1.11.4)
+- Support versions.json fallback for plugin installation
 
 ---
 
-## Task D1: Define Tool Interface
+## Task A1: Vendor Baseline API Snapshot
 
-### D1.1 Create tool types
+### A1.1 Add vendored obsidian.d.ts
 
-**File to create:** `src/tools/types.ts`
+**Directory to create:** `compat/obsidian-api/`
 
-Define Tool<TInput, TResult> interface and ToolContext
+**Actions:**
+1. Create `compat/obsidian-api/obsidian.d.ts` with Obsidian 1.11.4 types
+2. Create `compat/obsidian-api/metadata.json`:
+   ```json
+   {
+     "obsidianNpmVersion": "1.11.4",
+     "upstreamCommitSha": "<commit>",
+     "upstreamBlobSha": "<blob>",
+     "pinnedAtUtc": "2026-01-13T00:00:00Z"
+   }
+   ```
 
 **Success criteria:**
-- [ ] src/tools/types.ts created
-- [ ] Tool interface defined with execute(context, input) -> Promise<Result>
-- [ ] ToolContext interface defined (includes vaultPath, source for audit)
+- [ ] compat/obsidian-api/obsidian.d.ts created
+- [ ] compat/obsidian-api/metadata.json created with version info
+- [ ] Types reference the pinned 1.11.4 baseline
 
 ---
 
-## Task D2: Create Vault Tools
+## Task A2: Build Compat Gate Utility
 
-### D2.1 Implement file operation tools
+### A2.1 Implement semver compare
 
-**File to create:** `src/tools/vault.ts`
+**File to create:** `src/utils/semver.ts`
 
-Implement tools: createFile, readFile, writeFile, deleteFile, renameFile, statPath, listDir
+Implement semver comparison:
+```typescript
+export function compareVersions(a: string, b: string): number
+// Returns: -1 if a < b, 0 if equal, 1 if a > b
+```
 
-**Backend commands to use:**
-- `read_file`, `write_file`, `delete_file`, `rename_file`
-- `stat_path`, `read_directory`
+### A2.2 Wire into plugin loading
+
+**File to modify:** `src/components/PluginsTab.tsx` or plugin manager
+
+**Actions:**
+1. Check plugin manifest.minAppVersion
+2. Block if minAppVersion > "1.11.4"
+3. Show user-friendly error message
 
 **Success criteria:**
-- [ ] All 7 vault tools implemented
-- [ ] Each tool wraps Tauri commands
-- [ ] Proper error handling with Result type
-- [ ] Exported as named exports
+- [ ] semver.ts created with compareVersions
+- [ ] Plugin with minAppVersion "1.11.5" is blocked
+- [ ] Plugin with minAppVersion "1.11.4" passes gate
+- [ ] User sees why plugin was blocked
 
 ---
 
-## Task D3: Create Workspace Tools
+## Task A3: Mirror versions.json Fallback
 
-### D3.1 Implement workspace tools
+### A3.1 Implement version selection from versions.json
 
-**File to create:** `src/tools/workspace.ts`
+**Context:** When installing from plugin repo, if latest requires > 1.11.4, find newest compatible version.
 
-Implement: openFile, closeFile, setActiveFile
+**File to create or modify:** `src/utils/pluginVersionResolver.ts`
 
-For now these can be stubs that interact with App state/stores.
-
-**Success criteria:**
-- [ ] src/tools/workspace.ts created
-- [ ] 3 workspace tools defined with proper signatures
-- [ ] Tools interact with App state
-
----
-
-## Task D4: Create Command Registry
-
-### D4.1 Implement command registry
-
-**File to create:** `src/commands/registry.ts`
-
-Create CommandRegistry class with:
-- register(command: Command): void
-- unregister(id: string): void
-- execute(id: string, ...args): Promise<any>
-- get(id: string): Command | undefined
-- getAll(): Command[]
-- onCommandExecuted(callback): EventRef
+**Actions:**
+1. Fetch versions.json from plugin repo
+2. Find newest version with minAppVersion <= 1.11.4
+3. Return selected version or null if none compatible
 
 **Success criteria:**
-- [ ] CommandRegistry class created
-- [ ] Singleton exported as default
-- [ ] All methods work
-- [ ] Commands stored in Map
-
----
-
-## Task D5: Define Command Type
-
-### D5.1 Create command types
-
-**File to create:** `src/commands/types.ts`
-
-Define Command interface:
-- id: string
-- name: string
-- label?: string
-- icon?: string
-- callback: (...args) => any
-- hotkeys?: Hotkey[]
-
-**Success criteria:**
-- [ ] Command interface defined
-- [ ] Hotkey type imported or defined
-- [ ] Exported
-
----
-
-## Task D6: Register Core Commands
-
-### D6.1 Register commands in App.tsx
-
-**File to modify:** `src/App.tsx`
-
-Register at least 10 core commands:
-1. file.new - Create new note
-2. file.save - Save current file
-3. file.open - Open file
-4. view.toggleGraph - Toggle graph view
-5. view.toggleSettings - Toggle settings modal
-6. editor.togglePreview - Toggle preview mode
-7. workspace.quickSwitcher - Quick file switcher
-8. edit.undo - Undo
-9. edit.redo - Redo
-10. format.bold - Bold selection
-
-**Success criteria:**
-- [ ] CommandRegistry imported and initialized in App
-- [ ] 10+ commands registered in useEffect
-- [ ] Each has id, name, callback
-- [ ] Callbacks use existing handlers or tools
-
----
-
-## Task D7: Add Audit Log
-
-### D7.1 Create audit log
-
-**File to create:** `src/commands/audit.ts`
-
-AuditLog class with:
-- log(event: AuditEvent): void
-- getEvents(limit?: number): AuditEvent[]
-- clear(): void
-- exportToJson(): string
-
-AuditEvent should include:
-- timestamp
-- commandId
-- source ('ui' | 'plugin' | 'agent')
-- success: boolean
-- metadata?
-
-**Success criteria:**
-- [ ] AuditLog class created
-- [ ] Events stored in memory array
-- [ ] Singleton exported
-- [ ] Can export to JSON
-
----
-
-## Task D8: Wire Audit Log to Registry
-
-### D8.1 Update CommandRegistry to log executions
-
-**File to modify:** `src/commands/registry.ts`
-
-Import AuditLog and log each command execution.
-
-**Success criteria:**
-- [ ] execute() method logs to AuditLog
-- [ ] Logs success/failure
-- [ ] Includes commandId and source
-
----
-
-## Task D9: Update Keyboard Shortcuts
-
-### D9.1 Update useKeyboardShortcuts
-
-**File to modify:** `src/hooks/useKeyboardShortcuts.ts`
-
-Refactor to use CommandRegistry.execute() instead of direct handlers.
-
-**Success criteria:**
-- [ ] Imports CommandRegistry
-- [ ] All shortcuts call registry.execute()
-- [ ] No direct App handler calls
-
----
-
-## Task D10: Update TitleBar
-
-### D10.1 Update TitleBar component
-
-**File to modify:** `src/components/TitleBar.tsx`
-
-Refactor buttons to use CommandRegistry.execute().
-
-**Success criteria:**
-- [ ] Buttons work via command registry
-- [ ] No direct callbacks in TitleBar
-- [ ] Commands logged to audit
-
----
-
-## Task D11: Update CreateVaultDialog
-
-### D11.1 Update create vault flow
-
-**File to modify:** `src/components/CreateVaultDialog.tsx`
-
-Use CommandRegistry for vault creation.
-
-**Success criteria:**
-- [ ] Vault create goes through command registry
-- [ ] Command registered in App
-
----
-
-## Task D12: Add Tests for Core Functionality
-
-### D12.1 Create tests for registry and tools
-
-**Files to create:**
-- `src/tools/__tests__/vault.test.ts`
-- `src/commands/__tests__/registry.test.ts`
-- `src/commands/__tests__/audit.test.ts`
-
-**Test coverage:**
-
-Registry tests:
-- [ ] register() adds command
-- [ ] unregister() removes command
-- [ ] execute() calls command callback
-- [ ] execute() logs to audit log
-
-Vault tools tests:
-- [ ] readFile() reads from backend
-- [ ] writeFile() writes to backend
-- [ ] statPath() returns metadata
-
-Audit tests:
-- [ ] log() stores event
-- [ ] getEvents() returns events
-- [ ] clear() empties log
-
-**Success criteria:**
-- [ ] All tests pass
-- [ ] Basic coverage for core flows
+- [ ] Can parse versions.json format
+- [ ] Selects newest compatible version
+- [ ] Returns null if no compatible version found
+- [ ] UI shows which version was selected and why
 
 ---
 
 ## Completion
 
-When ALL tasks complete and tests pass, add this exact marker on its own line:
+When ALL tasks complete, add this exact marker on its own line:
 
 PROMISE_COMPLETE_TAG

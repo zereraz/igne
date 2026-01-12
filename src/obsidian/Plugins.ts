@@ -6,6 +6,7 @@ import type { App, Plugin, PluginManifest } from './types';
 import type { PluginConstructor } from './Plugin';
 import { invoke } from '@tauri-apps/api/core';
 import type { FileEntry } from '../types';
+import { isPluginCompatible, OBSIDIAN_COMPAT_VERSION } from '../utils/semver';
 
 export interface DiscoveredPlugin {
   id: string;
@@ -20,7 +21,9 @@ export class Plugins {
   private enabledPlugins: Set<string> = new Set();
   private discoveredPlugins: Map<string, PluginManifest> = new Map();
 
-  constructor(private app: App) {}
+  constructor(private app: App) {
+    console.log(`[Plugins] Initialized with compatibility baseline: Obsidian API ${OBSIDIAN_COMPAT_VERSION}`);
+  }
 
   /**
    * Discover all available plugins (both enabled and disabled)
@@ -108,9 +111,13 @@ export class Plugins {
     // Load manifest
     const manifest = await this.loadManifest(pluginId);
 
-    // Verify app version
-    if (!this.checkVersion(manifest.minAppVersion)) {
-      throw new Error(`Plugin ${pluginId} requires minimum app version ${manifest.minAppVersion}`);
+    // Verify app version compatibility
+    if (!isPluginCompatible(manifest.minAppVersion)) {
+      const error = `Plugin "${pluginId}" requires Obsidian ${manifest.minAppVersion} or later. ` +
+        `Igne currently supports Obsidian API ${OBSIDIAN_COMPAT_VERSION} (pinned baseline). ` +
+        `Please check if a compatible version is available.`;
+      console.error(`[Plugins] ${error}`);
+      throw new Error(error);
     }
 
     // Import and instantiate plugin
@@ -124,6 +131,7 @@ export class Plugins {
     this.plugins.set(pluginId, plugin);
     this.manifests.set(pluginId, manifest);
 
+    console.log(`[Plugins] Successfully loaded plugin: ${pluginId} v${manifest.version}`);
     return plugin;
   }
 
@@ -235,34 +243,5 @@ export class Plugins {
       // File doesn't exist or is invalid
       return [];
     }
-  }
-
-  /**
-   * Current app version (should match package.json)
-   */
-  private currentAppVersion = '1.0.0';
-
-  /**
-   * Check if the current app version meets the minimum required version
-   * Uses semver comparison
-   */
-  private checkVersion(minVersion: string): boolean {
-    const parseVersion = (v: string): number[] => {
-      // Remove any non-numeric prefix (like 'v') and split by non-numeric chars
-      const cleaned = v.replace(/^[^\d]+/, '').trim();
-      const parts = cleaned.split(/[.-]/).map(p => parseInt(p, 10));
-      // Ensure we have at least major, minor, patch
-      return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
-    };
-
-    const current = parseVersion(this.currentAppVersion);
-    const minimum = parseVersion(minVersion);
-
-    // Compare major.minor.patch
-    for (let i = 0; i < 3; i++) {
-      if (current[i] > minimum[i]) return true;
-      if (current[i] < minimum[i]) return false;
-    }
-    return true; // Versions are equal
   }
 }
