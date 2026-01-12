@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { AppearanceSettingsTab } from './AppearanceSettingsTab';
+import { PluginsTab } from './PluginsTab';
 import type { VaultSettings, AppearanceSettings } from '../types';
 
 interface SettingsModalProps {
@@ -12,7 +13,7 @@ interface SettingsModalProps {
   vaultPath: string | null;
 }
 
-type SettingsTab = 'general' | 'appearance' | 'editor' | 'hotkeys';
+type SettingsTab = 'general' | 'appearance' | 'plugins' | 'editor' | 'hotkeys';
 
 export function SettingsModal({
   isOpen,
@@ -24,11 +25,23 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('appearance');
 
+  // Close modal on ESC key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   if (!isOpen) return null;
 
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'general', label: 'General' },
     { id: 'appearance', label: 'Appearance' },
+    { id: 'plugins', label: 'Plugins' },
     { id: 'editor', label: 'Editor' },
     { id: 'hotkeys', label: 'Hotkeys' },
   ];
@@ -175,6 +188,7 @@ export function SettingsModal({
                 vaultPath={vaultPath}
               />
             )}
+            {activeTab === 'plugins' && <PluginsTab vaultPath={vaultPath} />}
             {activeTab === 'general' && (
               <div
                 style={{

@@ -25,13 +25,17 @@ interface EditorProps {
   onScrollToPosition?: (position: number) => void;
   vaultPath?: string | null;
   currentFilePath?: string | null;
-  scrollPosition?: number; // New prop for external scroll control
+  scrollPosition?: number;
+  refreshTrigger?: { current: number };
 }
 
-export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick, onCursorPositionChange, vaultPath, currentFilePath, scrollPosition }: EditorProps) {
+export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick, onCursorPositionChange, vaultPath, currentFilePath, scrollPosition, refreshTrigger }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
+  const onWikilinkClickRef = useRef(onWikilinkClick);
+  const onWikilinkCmdClickRef = useRef(onWikilinkCmdClick);
+  const currentFilePathRef = useRef(currentFilePath);
   const [wikilinkSearch, setWikilinkSearch] = useState<WikilinkSearchState | null>(null);
   const [searchResults, setSearchResults] = useState<WikilinkSearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -40,8 +44,11 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
   const [currentResultIndex, setCurrentResultIndex] = useState<number | undefined>();
   const scrollPositionRef = useRef<number>(0);
 
-  // Keep onChange ref updated
+  // Keep refs updated
   onChangeRef.current = onChange;
+  onWikilinkClickRef.current = onWikilinkClick;
+  onWikilinkCmdClickRef.current = onWikilinkCmdClick;
+  currentFilePathRef.current = currentFilePath;
 
   // Search when query changes
   const performSearch = useCallback((query: string) => {
@@ -342,18 +349,19 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         },
       ]),
       createLivePreview({
-        onWikilinkClick: onWikilinkClick || (() => {}),
-        onWikilinkCmdClick: onWikilinkCmdClick || (() => {}),
+        onWikilinkClick: (target: string) => onWikilinkClickRef.current?.(target),
+        onWikilinkCmdClick: (target: string) => onWikilinkCmdClickRef.current?.(target),
         resolveWikilink: (target: string) => {
           const exists = searchStore.noteExists(target);
           return exists ? { exists: true } : { exists: false };
         },
+        refreshTrigger,
       }),
       placeholder('Start writing...'),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           const newContent = update.state.doc.toString();
-          onChangeRef.current(newContent);
+          onChangeRef.current(currentFilePathRef.current || '', newContent);
         }
         if (update.selectionSet) {
           const cursorPos = update.state.selection.main.head;

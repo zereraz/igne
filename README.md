@@ -60,7 +60,6 @@ A fast, extensible knowledge base application with Obsidian compatibility.
 ### Planned Features
 
 - [ ] Enhanced plugin loader (load community plugins)
-- [ ] E2E test suite
 - [ ] Performance optimization for large vaults
 - [ ] Mobile support
 
@@ -107,7 +106,8 @@ bun run tauri:build
 | `bun run tauri:build` | Build desktop app bundle |
 | `bun run test` | Run unit tests with Vitest |
 | `bun run test:ui` | Run tests with Vitest UI |
-| `bun run test:e2e` | Run E2E tests (requires dev server) |
+| `bun run test:run` | Run unit tests (no watch) |
+| `npm run test:e2e` | Run E2E tests (CI/Linux only) |
 
 ### Project Structure
 
@@ -149,8 +149,24 @@ igne/
 | [MiniSearch](https://lucaong.github.io/minisearch/) | Full-text search |
 | [D3.js](https://d3js.org) | Graph visualization |
 | [Vitest](https://vitest.dev) | Unit testing |
+| [Playwright](https://playwright.dev) | E2E testing |
 | [KaTeX](https://katex.org) | Math rendering |
 | [Mermaid](https://mermaid.js.org) | Diagrams |
+
+## Testing
+
+### Unit Tests (227 tests)
+```bash
+npm run test:run     # Run all tests
+npm run test:ui      # Open Vitest UI
+```
+
+### E2E Tests (43 tests)
+E2E tests run on GitHub Actions (Linux only - Tauri WebDriver requirement):
+```bash
+npm run test:e2e   # Runs on CI (Linux)
+```
+See [TESTING.md](TESTING.md) for details.
 
 ## Development Status
 
@@ -176,11 +192,11 @@ igne/
 - Split view
 - State persistence (vaults, workspace, settings)
 - Theme system (settings, themes, CSS snippets)
+- E2E test suite (43 tests via Playwright + Tauri WebDriver)
 
 ### 🚧 In Progress
 
 - Plugin loader for community plugins
-- E2E test suite
 - Performance optimizations
 
 ### 📋 Planned

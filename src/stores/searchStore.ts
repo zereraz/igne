@@ -22,13 +22,26 @@ class SearchStore {
     });
   }
 
-  async indexFiles(_vaultPath: string, entries: FileEntry[]) {
+  async indexFiles(_vaultPath: string, entries: FileEntry[], signal?: AbortSignal) {
     const documents: SearchDocument[] = [];
 
     for (const entry of this.flattenFileTree(entries)) {
+      // Check if aborted
+      if (signal?.aborted) {
+        console.log('[searchStore] Indexing aborted');
+        return;
+      }
+
       if (!entry.is_dir && entry.name.endsWith('.md')) {
         try {
           const content = await invoke<string>('read_file', { path: entry.path });
+
+          // Check again after async operation
+          if (signal?.aborted) {
+            console.log('[searchStore] Indexing aborted after file read');
+            return;
+          }
+
           const doc: SearchDocument = {
             id: entry.path, // Use file path as unique ID
             path: entry.path,
@@ -38,6 +51,8 @@ class SearchStore {
           documents.push(doc);
           this.files.set(entry.path, doc);
         } catch (error) {
+          // Ignore errors if aborted
+          if (signal?.aborted) return;
           console.error(`Failed to read file ${entry.path}:`, error);
         }
       }
@@ -288,6 +303,11 @@ class SearchStore {
       (doc) => doc.name.toLowerCase() === name.toLowerCase()
     );
     return doc?.path || null;
+  }
+
+  // Refresh the vault index - can be called after file creation to update immediately
+  async refreshVault(vaultPath: string, entries: FileEntry[]): Promise<void> {
+    await this.indexFiles(vaultPath, entries);
   }
 
   private flattenFileTree(entries: FileEntry[]): FileEntry[] {

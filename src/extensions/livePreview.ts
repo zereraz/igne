@@ -21,6 +21,8 @@ export interface LivePreviewConfig {
   onCalloutToggle?: (pos: number) => void;
   resolveWikilink?: (target: string) => { exists: boolean; content?: string } | null;
   resolveImage?: (src: string) => string;
+  /** External trigger to force decoration rebuild when files change */
+  refreshTrigger?: { current: number };
 }
 
 const DEFAULT_CONFIG: Required<LivePreviewConfig> = {
@@ -31,6 +33,7 @@ const DEFAULT_CONFIG: Required<LivePreviewConfig> = {
   onCalloutToggle: () => {},
   resolveWikilink: () => null,
   resolveImage: (src) => src,
+  refreshTrigger: { current: 0 },
 };
 
 const CONTAINER_NODES = [
@@ -544,17 +547,28 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
 }
 
 export function createLivePreview(config: LivePreviewConfig = {}) {
+  const resolvedConfig = { ...DEFAULT_CONFIG, ...config };
+  const refreshTrigger = resolvedConfig.refreshTrigger;
+  let lastRefreshTrigger = refreshTrigger?.current ?? 0;
+
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
 
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view, config);
+        this.decorations = buildDecorations(view, resolvedConfig);
       }
 
       update(update: ViewUpdate) {
-        if (update.docChanged || update.selectionSet || update.viewportChanged) {
-          this.decorations = buildDecorations(update.view, config);
+        // Rebuild decorations when files change (refreshTrigger incremented)
+        const currentTrigger = refreshTrigger?.current ?? 0;
+        const triggerChanged = currentTrigger !== lastRefreshTrigger;
+
+        if (update.docChanged || update.selectionSet || update.viewportChanged || triggerChanged) {
+          this.decorations = buildDecorations(update.view, resolvedConfig);
+          if (triggerChanged) {
+            lastRefreshTrigger = currentTrigger;
+          }
         }
       }
     },

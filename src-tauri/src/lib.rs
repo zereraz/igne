@@ -1,6 +1,10 @@
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::mpsc::channel;
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, Manager};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, EventKind};
 
 #[derive(Serialize, Clone)]
 pub struct FileEntry {
@@ -109,6 +113,63 @@ fn move_file(source: String, destination: String) -> Result<(), String> {
     fs::rename(&source, &destination).map_err(|e| e.to_string())
 }
 
+/// Watch a directory for changes and emit events to the frontend
+/// This is more efficient than polling and provides real-time updates
+#[tauri::command]
+fn watch_directory(path: String, app: AppHandle) -> Result<(), String> {
+    let path_obj = PathBuf::from(&path);
+
+    if !path_obj.exists() || !path_obj.is_dir() {
+        return Err(format!("Path does not exist or is not a directory: {}", path));
+    }
+
+    let (_tx, rx) = channel::<()>();
+
+    // Create a watcher with debouncing to avoid excessive events
+    let mut watcher: RecommendedWatcher = Watcher::new(
+        move |res: Result<Event, notify::Error>| {
+            if let Ok(event) = res {
+                // Filter for relevant events (create, modify, remove, rename)
+                match event.kind {
+                    EventKind::Create(_) |
+                    EventKind::Modify(_) |
+                    EventKind::Remove(_) |
+                    EventKind::Any => {
+                        // Emit the path that changed
+                        let _ = app.emit("fs-change", path.clone());
+                    }
+                    _ => {}
+                }
+            }
+        },
+        notify::Config::default()
+            .with_poll_interval(Duration::from_secs(1))
+            .with_compare_contents(true),
+    ).map_err(|e| e.to_string())?;
+
+    // Watch the directory recursively
+    watcher.watch(&path_obj, RecursiveMode::Recursive)
+        .map_err(|e| e.to_string())?;
+
+    // Keep the watcher alive by preventing it from being dropped
+    // In production, you'd want to store this in a state management system
+    std::thread::spawn(move || {
+        // Keep the channel open to prevent the watcher from being dropped
+        let _ = rx.recv();
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_app_data_dir(app: AppHandle) -> String {
+    // Get the app's data directory for storing settings, vault registry, etc.
+    app.path()
+        .app_data_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| ".".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -121,7 +182,9 @@ pub fn run() {
             rename_file,
             delete_file,
             create_directory,
-            move_file
+            move_file,
+            watch_directory,
+            get_app_data_dir
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,26 @@
-import { readTextFile, writeTextFile, exists } from '@tauri-apps/plugin-fs';
-import { appDataDir, join } from '@tauri-apps/api/path';
+import { invoke } from '@tauri-apps/api/core';
 import type { VaultsRegistry, VaultEntry } from '../types';
+
+// Helper function to check if a file exists
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await invoke('read_file', { path });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Helper function to get app data directory
+async function getAppDataDir(): Promise<string> {
+  try {
+    const dir = await invoke<string>('get_app_data_dir');
+    return dir;
+  } catch {
+    // Fallback to a default location
+    return '';
+  }
+}
 
 class VaultsStore {
   private registry: VaultsRegistry = {
@@ -13,13 +33,13 @@ class VaultsStore {
 
   async init(): Promise<void> {
     try {
-      const appData = await appDataDir();
-      this.vaultsPath = await join(appData, 'vaults.json');
+      const appData = await getAppDataDir();
+      this.vaultsPath = `${appData}/vaults.json`;
 
       // Load existing registry
-      if (await exists(this.vaultsPath)) {
+      if (await fileExists(this.vaultsPath)) {
         try {
-          const content = await readTextFile(this.vaultsPath);
+          const content = await invoke<string>('read_file', { path: this.vaultsPath });
           const loaded = JSON.parse(content) as Partial<VaultsRegistry>;
 
           // Merge with defaults to handle version upgrades
@@ -48,11 +68,14 @@ class VaultsStore {
   async save(): Promise<void> {
     try {
       if (!this.vaultsPath) {
-        const appData = await appDataDir();
-        this.vaultsPath = await join(appData, 'vaults.json');
+        const appData = await getAppDataDir();
+        this.vaultsPath = `${appData}/vaults.json`;
       }
 
-      await writeTextFile(this.vaultsPath, JSON.stringify(this.registry, null, 2));
+      await invoke('write_file', {
+        path: this.vaultsPath,
+        content: JSON.stringify(this.registry, null, 2),
+      });
       console.log('[VaultsStore] Saved vaults registry');
     } catch (e) {
       console.error('[VaultsStore] Failed to save vaults registry:', e);

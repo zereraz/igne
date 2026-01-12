@@ -121,19 +121,24 @@ export async function insertTemplateIntoFile(
   currentContent: string,
   cursorPosition: number
 ): Promise<{ content: string; newPosition: number }> {
+  // Validate inputs - handle null/undefined content
+  const safeContent = currentContent ?? '';
+  // Clamp cursor position to valid range
+  const safePosition = Math.max(0, Math.min(cursorPosition, safeContent.length));
+
   const templateContent = await invoke<string>('read_file', { path: templatePath });
   const variables = getDefaultTemplateVariables();
   const processedContent = applyTemplate(templateContent, variables);
 
   const newContent =
-    currentContent.slice(0, cursorPosition) +
+    safeContent.slice(0, safePosition) +
     '\n' +
     processedContent +
     '\n' +
-    currentContent.slice(cursorPosition);
+    safeContent.slice(safePosition);
 
   return {
     content: newContent,
-    newPosition: cursorPosition + processedContent.length + 2, // +2 for the newlines
+    newPosition: safePosition + processedContent.length + 2, // +2 for the newlines
   };
 }

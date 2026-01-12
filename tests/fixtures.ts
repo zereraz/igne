@@ -1,10 +1,16 @@
-import { test as base, Page } from '@playwright/test';
+import { test as base, Page, BrowserContext } from '@playwright/test';
 
-type AppFixtures = {
+export interface AppFixtures {
   app: AppPage;
   vault: TestVault;
-};
+}
 
+/**
+ * TestVault - Helper for creating test files in the vault
+ *
+ * Note: In dev mode, files are created in the browser's localStorage.
+ * In WebDriver mode, files are created via the Tauri file system API.
+ */
 export class TestVault {
   private testFiles: Map<string, string> = new Map();
 
@@ -31,6 +37,14 @@ export class TestVault {
   }
 }
 
+/**
+ * AppPage - Page object for the Igne editor application
+ *
+ * Provides helpers for:
+ * - Navigation and file operations
+ * - Editor interaction (via CodeMirror API)
+ * - Widget testing (wikilinks, tags, tasks)
+ */
 export class AppPage {
   constructor(public page: Page) {}
 
@@ -39,8 +53,11 @@ export class AppPage {
   }
 
   async createNewFile(filename: string): Promise<void> {
+    // Click the create file button
     await this.page.click('[data-testid="create-file-button"]');
+    // Fill in the file name
     await this.page.fill('[data-testid="new-file-name-input"]', filename);
+    // Confirm creation
     await this.page.click('[data-testid="confirm-create-file"]');
   }
 
@@ -48,60 +65,119 @@ export class AppPage {
     await this.page.click(`[data-file="${filename}"]`);
   }
 
+  /**
+   * Editor helpers - Access CodeMirror editor via JavaScript API
+   */
   get editor() {
     return {
+      /**
+       * Type text into the editor
+       */
       type: async (text: string) => {
         const editor = this.page.locator('.cm-content');
         await editor.click();
         await editor.type(text);
       },
+
+      /**
+       * Get text content from editor
+       */
       getText: async () => {
         const editor = this.page.locator('.cm-content');
         return await editor.innerText();
       },
+
+      /**
+       * Wait for specific text to appear in editor
+       */
       waitForContent: async (text: string) => {
         const editor = this.page.locator('.cm-content');
         await editor.waitFor({ state: 'visible' });
         return await editor.getByText(text).waitFor();
       },
-      // Wikilink helpers
+
+      // ===== Wikilink helpers =====
+
+      /**
+       * Check if a wikilink widget is visible
+       */
       hasWikilink: async (targetName: string) => {
         const wikilink = this.page.locator(`.cm-wikilink[data-target="${targetName}"]`);
         return await wikilink.isVisible();
       },
+
+      /**
+       * Click on a wikilink widget
+       */
       clickWikilink: async (targetName: string) => {
         const wikilink = this.page.locator(`.cm-wikilink[data-target="${targetName}"]`);
         await wikilink.click();
       },
+
+      /**
+       * Wait for wikilink widgets to render
+       */
       waitForWikilinkWidget: async () => {
         await this.page.locator('.cm-wikilink').first().waitFor({ state: 'visible' });
       },
-      // Tag helpers
+
+      // ===== Tag helpers =====
+
+      /**
+       * Check if a tag pill is visible
+       */
       hasTag: async (tagName: string) => {
         const tag = this.page.locator(`.cm-tag-pill:has-text("#${tagName}")`);
         return await tag.isVisible();
       },
+
+      /**
+       * Click on a tag pill
+       */
       clickTag: async (tagName: string) => {
         const tag = this.page.locator(`.cm-tag-pill:has-text("#${tagName}")`);
         await tag.click();
       },
+
+      /**
+       * Wait for tag widgets to render
+       */
       waitForTagWidget: async () => {
         await this.page.locator('.cm-tag-pill').first().waitFor({ state: 'visible' });
       },
-      // Task checkbox helpers
+
+      // ===== Task checkbox helpers =====
+
+      /**
+       * Check if a task checkbox exists
+       */
       hasTaskCheckbox: async () => {
         const checkbox = this.page.locator('.cm-task-checkbox');
         return await checkbox.isVisible();
       },
+
+      /**
+       * Click on a task checkbox to toggle it
+       */
       clickTaskCheckbox: async () => {
         const checkbox = this.page.locator('.cm-task-checkbox');
         await checkbox.click();
       },
+
+      /**
+       * Check if the task checkbox is checked
+       */
       isCheckboxChecked: async () => {
         const checkbox = this.page.locator('.cm-task-checkbox');
         return await checkbox.isChecked();
       },
-      // Get CodeMirror content via API
+
+      // ===== CodeMirror API access =====
+
+      /**
+       * Get the full content of the CodeMirror editor
+       * Uses CodeMirror's internal API for accurate content
+       */
       getCodeMirrorContent: async (): Promise<string> => {
         return await this.page.evaluate(() => {
           const editor = document.querySelector('.cm-editor') as any;
@@ -111,7 +187,11 @@ export class AppPage {
           return '';
         });
       },
-      // Set CodeMirror content via API
+
+      /**
+       * Set the content of the CodeMirror editor
+       * Uses CodeMirror's internal API for accurate replacement
+       */
       setCodeMirrorContent: async (content: string) => {
         await this.page.evaluate((text) => {
           const editor = document.querySelector('.cm-editor') as any;
@@ -122,22 +202,58 @@ export class AppPage {
             });
           }
         }, content);
-      }
+      },
+
+      // ===== Selection helpers =====
+
+      /**
+       * Move cursor to the end of the document
+       */
+      moveCursorToEnd: async () => {
+        await this.page.keyboard.press('End');
+      },
+
+      /**
+       * Move cursor to the start of the document
+       */
+      moveCursorToStart: async () => {
+        await this.page.keyboard.press('Home');
+      },
     };
   }
 
+  /**
+   * File tree helpers
+   */
   get fileTree() {
     return {
+      /**
+       * Wait for specific files to appear in the sidebar
+       */
       waitForFiles: async (filenames: string[]) => {
         for (const filename of filenames) {
           await this.page.locator(`[data-file="${filename}"]`).waitFor();
         }
       },
+
+      /**
+       * Get the count of files in the sidebar
+       */
       getFileCount: async () => {
         return await this.page.locator('[data-file]').count();
-      }
+      },
+
+      /**
+       * Check if a file exists in the sidebar
+       */
+      hasFile: async (filename: string) => {
+        const file = this.page.locator(`[data-file="${filename}"]`);
+        return await file.isVisible();
+      },
     };
   }
+
+  // ===== Quick Actions =====
 
   async openQuickSwitcher(): Promise<void> {
     await this.page.keyboard.press('Meta+K');
@@ -155,8 +271,29 @@ export class AppPage {
     const items = await this.page.locator('[data-backlink]').allTextContents();
     return items;
   }
+
+  // ===== Tab helpers =====
+
+  async closeTab(tabName: string): Promise<void> {
+    await this.page.click(`[data-testid="close-tab-${tabName}"]`);
+  }
+
+  async getTabCount(): Promise<number> {
+    return await this.page.locator('[data-testid="tab"]').count();
+  }
+
+  async pressEnter(): Promise<void> {
+    await this.page.keyboard.press('Enter');
+  }
+
+  async switchToTab(tabName: string): Promise<void> {
+    await this.page.click(`[data-file="${tabName}"]`);
+  }
 }
 
+/**
+ * Playwright test fixtures
+ */
 export const test = base.extend<AppFixtures>({
   app: async ({ page }, use) => {
     const app = new AppPage(page);

@@ -35,21 +35,30 @@ export async function renameFileWithLinkUpdates(options: RenameOptions) {
   const oldName = oldPath.split('/').pop()?.replace('.md', '') || '';
   const newName = newPath.split('/').pop()?.replace('.md', '') || '';
 
-  // Find all files that link to the old name
+  // 1. Gather all data FIRST (before any mutations)
   const backlinks = searchStore.findBacklinks(oldPath);
 
-  // Rename the file
-  await invoke('rename_file', {
-    oldPath,
-    newPath,
-  });
+  // 2. Perform rename (if this fails, we abort with no changes)
+  try {
+    await invoke('rename_file', {
+      oldPath,
+      newPath,
+    });
+  } catch (e) {
+    throw new Error(`Failed to rename file: ${e}`);
+  }
 
-  // Update search index
-  await searchStore.removeFile(oldPath);
-  const content = await invoke<string>('read_file', { path: newPath });
-  await searchStore.updateFile(newPath, content);
+  // 3. Update index (file already renamed, must continue even if this fails)
+  try {
+    await searchStore.removeFile(oldPath);
+    const content = await invoke<string>('read_file', { path: newPath });
+    await searchStore.updateFile(newPath, content);
+  } catch (e) {
+    console.error('Search index update failed after rename:', e);
+    // Don't throw - file is already renamed
+  }
 
-  // Update all incoming links
+  // 4. Update all incoming links
   for (const backlink of backlinks) {
     const oldContent = backlink.content;
     const newContent = oldContent.replace(
@@ -58,11 +67,16 @@ export async function renameFileWithLinkUpdates(options: RenameOptions) {
     );
 
     if (newContent !== oldContent) {
-      await invoke('write_file', {
-        path: backlink.path,
-        content: newContent,
-      });
-      await searchStore.updateFile(backlink.path, newContent);
+      try {
+        await invoke('write_file', {
+          path: backlink.path,
+          content: newContent,
+        });
+        await searchStore.updateFile(backlink.path, newContent);
+      } catch (e) {
+        console.error(`Failed to update backlink in ${backlink.path}:`, e);
+        // Continue with other backlinks even if one fails
+      }
     }
   }
 }

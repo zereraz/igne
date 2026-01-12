@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Sun, Moon, Palette, Type } from 'lucide-react';
 import type { AppearanceSettings } from '../types';
-import { vaultConfigStore } from '../stores/VaultConfigStore';
 
 interface AppearanceSettingsTabProps {
   settings: AppearanceSettings;
@@ -57,35 +56,27 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
     loadResources();
   }, [vaultPath]);
 
-  const handleUpdate = async (updates: Partial<AppearanceSettings>) => {
+  const handleUpdate = (updates: Partial<AppearanceSettings>) => {
     onChange(updates);
-    await vaultConfigStore.updateAppearance(updates);
   };
 
-  const toggleThemeMode = async () => {
-    const newMode = settings.baseTheme === 'dark' ? 'light' : 'dark';
-    await handleUpdate({ baseTheme: newMode });
-
-    // Apply theme mode to body
-    document.body.classList.remove('theme-dark', 'theme-light');
-    document.body.classList.add(`theme-${newMode}`);
-  };
-
-  const handleAccentColorChange = async (color: string) => {
-    await handleUpdate({ accentColor: color });
+  const handleAccentColorChange = (color: string) => {
+    handleUpdate({ accentColor: color });
+    // Apply immediately for live preview
     document.documentElement.style.setProperty('--color-accent', color);
   };
 
-  const handleFontSizeChange = async (size: number) => {
-    await handleUpdate({ baseFontSize: size });
+  const handleFontSizeChange = (size: number) => {
+    handleUpdate({ baseFontSize: size });
+    // Apply immediately for live preview
     document.documentElement.style.setProperty('--font-text-size', `${size}px`);
   };
 
-  const handleFontChange = async (
+  const handleFontChange = (
     type: 'interfaceFontFamily' | 'textFontFamily' | 'monospaceFontFamily',
     value: string
   ) => {
-    await handleUpdate({ [type]: value });
+    handleUpdate({ [type]: value });
 
     const cssVar =
       type === 'interfaceFontFamily'
@@ -94,6 +85,7 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
         ? '--font-text-theme'
         : '--font-monospace-theme';
 
+    // Apply immediately for live preview
     if (value) {
       document.documentElement.style.setProperty(cssVar, value);
     } else {
@@ -101,19 +93,19 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
     }
   };
 
-  const handleThemeSelect = async (theme: string) => {
-    await handleUpdate({ cssTheme: theme });
-    // Theme loading is handled by ThemeManager in App.tsx
+  const handleThemeSelect = (theme: string) => {
+    // Trigger onChange to handle theme loading through ThemeManager in App.tsx
+    onChange({ cssTheme: theme });
   };
 
-  const handleSnippetToggle = async (snippet: string, enabled: boolean) => {
+  const handleSnippetToggle = (snippet: string, enabled: boolean) => {
     const currentSnippets = settings.enabledCssSnippets || [];
     const updatedSnippets = enabled
       ? [...currentSnippets, snippet]
       : currentSnippets.filter((s) => s !== snippet);
 
-    await handleUpdate({ enabledCssSnippets: updatedSnippets });
-    // Snippet loading is handled by ThemeManager in App.tsx
+    // Trigger onChange to handle snippet loading through ThemeManager in App.tsx
+    onChange({ enabledCssSnippets: updatedSnippets });
   };
 
   const fontOptions = [
@@ -179,7 +171,12 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
           }}
         >
           <button
-            onClick={() => handleUpdate({ baseTheme: 'dark' })}
+            onClick={() => {
+              handleUpdate({ baseTheme: 'dark' });
+              // Apply theme mode immediately for live preview
+              document.body.classList.remove('theme-dark', 'theme-light');
+              document.body.classList.add('theme-dark');
+            }}
             style={{
               flex: 1,
               display: 'flex',
@@ -214,7 +211,12 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
             Dark
           </button>
           <button
-            onClick={() => handleUpdate({ baseTheme: 'light' })}
+            onClick={() => {
+              handleUpdate({ baseTheme: 'light' });
+              // Apply theme mode immediately for live preview
+              document.body.classList.remove('theme-dark', 'theme-light');
+              document.body.classList.add('theme-light');
+            }}
             style={{
               flex: 1,
               display: 'flex',

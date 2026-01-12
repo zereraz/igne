@@ -1,8 +1,17 @@
 import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
-import { exists } from '@tauri-apps/plugin-fs';
 import { X, FolderOpen } from 'lucide-react';
+
+// Helper function to check if a file/directory exists
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await invoke('read_file', { path });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 interface CreateVaultDialogProps {
   onClose: () => void;
@@ -60,7 +69,7 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
       const vaultPath = `${vaultLocation}/${sanitizedName}`;
 
       // Check if vault already exists
-      if (await exists(vaultPath)) {
+      if (await fileExists(vaultPath)) {
         setError('A folder with this name already exists');
         setIsCreating(false);
         return;
@@ -98,8 +107,10 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
         showDebugMenu: false,
       };
 
-      const { writeTextFile } = await import('@tauri-apps/plugin-fs');
-      await writeTextFile(`${obsidianDir}/app.json`, JSON.stringify(appJson, null, 2));
+      await invoke('write_file', {
+        path: `${obsidianDir}/app.json`,
+        content: JSON.stringify(appJson, null, 2),
+      });
 
       // Create default appearance.json
       const appearanceJson = {
@@ -116,7 +127,10 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
         translucency: false,
       };
 
-      await writeTextFile(`${obsidianDir}/appearance.json`, JSON.stringify(appearanceJson, null, 2));
+      await invoke('write_file', {
+        path: `${obsidianDir}/appearance.json`,
+        content: JSON.stringify(appearanceJson, null, 2),
+      });
 
       // Create default workspace.json
       const workspaceJson = {
@@ -161,7 +175,10 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
         },
       };
 
-      await writeTextFile(`${obsidianDir}/workspace.json`, JSON.stringify(workspaceJson, null, 2));
+      await invoke('write_file', {
+        path: `${obsidianDir}/workspace.json`,
+        content: JSON.stringify(workspaceJson, null, 2),
+      });
 
       console.log('[CreateVaultDialog] Created vault:', vaultPath);
 

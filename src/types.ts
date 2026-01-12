@@ -137,7 +137,7 @@ export interface EditorState {
   } | null;
 }
 
-export type EditorChangeHandler = (content: string) => void;
+export type EditorChangeHandler = (path: string, content: string) => void;
 export type WikilinkClickHandler = (target: string) => void;
 
 // =============================================================================

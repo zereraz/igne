@@ -1,7 +1,27 @@
 import { getCurrentWindow, LogicalPosition, LogicalSize } from '@tauri-apps/api/window';
-import { readTextFile, writeTextFile, exists } from '@tauri-apps/plugin-fs';
-import { appDataDir, join } from '@tauri-apps/api/path';
+import { invoke } from '@tauri-apps/api/core';
 import type { WindowState } from '../types';
+
+// Helper function to check if a file exists
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await invoke('read_file', { path });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Helper function to get app data directory
+async function getAppDataDir(): Promise<string> {
+  try {
+    const dir = await invoke<string>('get_app_data_dir');
+    return dir;
+  } catch {
+    // Fallback to a default location
+    return '';
+  }
+}
 
 class WindowStateStore {
   private state: WindowState = {
@@ -17,12 +37,13 @@ class WindowStateStore {
   private saveDebounceTimer: number | null = null;
   private appWindow: ReturnType<typeof getCurrentWindow> | null = null;
   private statePath: string = '';
+  private stateCheckInterval: number | null = null;
 
   async init(): Promise<void> {
     try {
       this.appWindow = getCurrentWindow();
-      const appData = await appDataDir();
-      this.statePath = await join(appData, 'window-state.json');
+      const appData = await getAppDataDir();
+      this.statePath = `${appData}/window-state.json`;
 
       await this.load();
       await this.restore();
@@ -34,8 +55,8 @@ class WindowStateStore {
 
   private async load(): Promise<void> {
     try {
-      if (this.statePath && await exists(this.statePath)) {
-        const content = await readTextFile(this.statePath);
+      if (this.statePath && await fileExists(this.statePath)) {
+        const content = await invoke<string>('read_file', { path: this.statePath });
         const loaded = JSON.parse(content) as Partial<WindowState>;
 
         // Merge with defaults
@@ -60,11 +81,14 @@ class WindowStateStore {
   private async save(): Promise<void> {
     try {
       if (!this.statePath) {
-        const appData = await appDataDir();
-        this.statePath = await join(appData, 'window-state.json');
+        const appData = await getAppDataDir();
+        this.statePath = `${appData}/window-state.json`;
       }
 
-      await writeTextFile(this.statePath, JSON.stringify(this.state, null, 2));
+      await invoke('write_file', {
+        path: this.statePath,
+        content: JSON.stringify(this.state, null, 2),
+      });
       console.log('[WindowStateStore] Saved window state');
     } catch (e) {
       console.error('[WindowStateStore] Failed to save window state:', e);
@@ -149,8 +173,20 @@ class WindowStateStore {
       }
     };
 
-    // Check state every second
-    setInterval(checkState, 1000);
+    // Check state every second and store the interval ID so we can clear it later
+    this.stateCheckInterval = window.setInterval(checkState, 1000);
+  }
+
+  // Cleanup method to clear the interval
+  destroy(): void {
+    if (this.stateCheckInterval) {
+      clearInterval(this.stateCheckInterval);
+      this.stateCheckInterval = null;
+    }
+    if (this.saveDebounceTimer) {
+      clearTimeout(this.saveDebounceTimer);
+      this.saveDebounceTimer = null;
+    }
   }
 
   // Save immediately (call before app close)

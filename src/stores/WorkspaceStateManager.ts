@@ -6,6 +6,7 @@ class WorkspaceStateManager {
   private saveDebounceTimer: number | null = null;
   private currentOpenFiles: OpenFile[] = [];
   private currentActiveTab: string | null = null;
+  private currentLastOpenFiles: string[] = [];
 
   // Restore workspace from saved state
   async restore(): Promise<{
@@ -149,13 +150,15 @@ class WorkspaceStateManager {
   queueSave(openFiles: OpenFile[], activeTab: string | null, lastOpenFiles: string[]): void {
     this.currentOpenFiles = openFiles;
     this.currentActiveTab = activeTab;
+    this.currentLastOpenFiles = lastOpenFiles;
 
     if (this.saveDebounceTimer) {
       clearTimeout(this.saveDebounceTimer);
     }
 
     this.saveDebounceTimer = window.setTimeout(() => {
-      this.save(openFiles, activeTab, lastOpenFiles);
+      // Use stored values instead of closure values to avoid stale data
+      this.save(this.currentOpenFiles, this.currentActiveTab, this.currentLastOpenFiles);
       this.saveDebounceTimer = null;
     }, 1000);
   }
@@ -181,16 +184,12 @@ class WorkspaceStateManager {
     await this.save(this.currentOpenFiles, this.currentActiveTab, lastOpenFiles);
   }
 
-  // Setup auto-save on events (call this from App component)
-  setupAutoSave(
-    onSave: (openFiles: OpenFile[], activeTab: string | null, lastOpenFiles: string[]) => void
-  ): void {
-    // Save before window close
-    window.addEventListener('beforeunload', () => {
-      this.saveNow([]);
-    });
-
-    console.log('[WorkspaceStateManager] Auto-save setup complete');
+  // Cleanup method to clear any pending timers
+  destroy(): void {
+    if (this.saveDebounceTimer) {
+      clearTimeout(this.saveDebounceTimer);
+      this.saveDebounceTimer = null;
+    }
   }
 }
 

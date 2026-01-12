@@ -1,12 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { exists } from '@tauri-apps/plugin-fs';
 import {
   FolderOpen,
   FileText,
   FilePlus,
 } from 'lucide-react';
+import { useWorkspaceSync } from './hooks/useWorkspaceSync';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useFileWatcher, useDirectoryLoader } from './hooks/useFileWatcher';
+
+// Helper function to check if a file/directory exists
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await invoke('read_file', { path });
+    return true;
+  } catch {
+    return false;
+  }
+}
 import { FileTree } from './components/FileTree';
 import { Editor } from './components/Editor';
 import { TitleBar } from './components/TitleBar';
@@ -37,12 +49,12 @@ import {
 import { renameFileWithLinkUpdates, getLinkUpdateCount } from './utils/fileManager';
 import { loadTemplates, insertTemplateIntoFile, createFileFromTemplate } from './utils/templateLoader';
 
+// Dynamic app styles based on theme - backgroundColor controlled by CSS theme classes
 const styles = {
   app: {
     height: '100vh',
     display: 'flex',
     flexDirection: 'column' as const,
-    backgroundColor: '#18181b',
     fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
   },
   dirtyIndicator: {
@@ -160,7 +172,6 @@ const styles = {
 };
 
 const UNTITLED_BASE = 'Untitled';
-const POLL_INTERVAL = 2000;
 
 interface ContextMenuState {
   path: string;
@@ -183,6 +194,7 @@ function App() {
   const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isVaultReady, setIsVaultReady] = useState(false);
+  const [fileTreeError, setFileTreeError] = useState<string | null>(null);
   const [wikilinkQueue, setWikilinkQueue] = useState<Array<{target: string; newTab: boolean}>>([]);
   const [isQuickSwitcherOpen, setIsQuickSwitcherOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -193,12 +205,21 @@ function App() {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [templates, setTemplates] = useState<Array<{ name: string; path: string }>>([]);
   const [showSettings, setShowSettings] = useState(false);
-  const pollIntervalRef = useRef<number | null>(null);
-  const autoSaveTimerRef = useRef<number | null>(null);
-  const lastOpenFilesRef = useRef<string[]>([]);
+  const switchingVaultRef = useRef(false);
+
+  // Ref for stable access to activeTabPath in closures (fixes stale closure issues)
+  const activeTabPathRef = useRef(activeTabPath);
+  activeTabPathRef.current = activeTabPath;
+
+  // Ref to trigger editor decoration rebuilds when files change
+  // Used by livePreview extension to refresh wikilink colors
+  const editorRefreshTrigger = useRef(0);
 
   // Theme Manager
   const themeManagerRef = useRef<ThemeManager | null>(null);
+
+  // Use hooks for workspace sync, keyboard shortcuts, and file watching
+  useWorkspaceSync({ vaultPath, openTabs, activeTabPath });
 
   // Create a minimal mock App interface for ThemeManager
   const mockApp = useRef<{
@@ -210,55 +231,13 @@ function App() {
     };
   } | null>(null);
 
-  // Initialize stores and auto-open vault on app mount
-  useEffect(() => {
-    async function initializeApp() {
-      try {
-        console.log('[App] Initializing stores...');
-        // Initialize all stores in parallel
-        await Promise.all([
-          vaultsStore.init(),
-          windowStateStore.init(),
-          globalSettingsStore.init(),
-        ]);
-
-        console.log('[App] Stores initialized');
-
-        // Check if we should auto-open last vault
-        const settings = globalSettingsStore.getSettings();
-        const lastVault = vaultsStore.getLastOpenedVault();
-
-        console.log('[App] Global settings:', { openLastVault: settings.openLastVault, lastVault });
-
-        if (settings.openLastVault && lastVault) {
-          // Verify vault still exists
-          if (await exists(lastVault)) {
-            console.log('[App] Auto-opening last vault:', lastVault);
-            await handleOpenVaultPath(lastVault);
-          } else {
-            console.log('[App] Last vault no longer exists, removing from registry');
-            await vaultsStore.removeVault(lastVault);
-            setShowVaultPicker(true);
-          }
-        } else {
-          console.log('[App] Showing vault picker');
-          setShowVaultPicker(true);
-        }
-
-        setIsInitialized(true);
-      } catch (e) {
-        console.error('[App] Failed to initialize:', e);
-        // Still show app even if initialization fails
-        setShowVaultPicker(true);
-        setIsInitialized(true);
-      }
-    }
-
-    initializeApp();
-  }, []);
-
   // Helper to open a vault by path (used during init and vault switching)
   const handleOpenVaultPath = useCallback(async (path: string) => {
+    if (switchingVaultRef.current) {
+      console.warn('[App] Vault switch already in progress, ignoring');
+      return;
+    }
+    switchingVaultRef.current = true;
     try {
       console.log('[App] Opening vault:', path);
 
@@ -345,13 +324,63 @@ function App() {
       setActiveTabPath(activeTab);
       setVaultSettings(vaultSettings);
       setAppearanceSettings(appearance);
-      lastOpenFilesRef.current = lastOpenFiles;
       setShowVaultPicker(false);
     } catch (e) {
       console.error('[App] Failed to open vault:', e);
       alert('Failed to open vault: ' + (e as Error).message);
+    } finally {
+      switchingVaultRef.current = false;
     }
-  }, [vaultPath, openTabs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // No deps - read vaultPath/openTabs at call time to avoid circular dependency
+
+  // Initialize stores and auto-open vault on app mount
+  useEffect(() => {
+    async function initializeApp() {
+      try {
+        console.log('[App] Initializing stores...');
+        // Initialize all stores in parallel
+        await Promise.all([
+          vaultsStore.init(),
+          windowStateStore.init(),
+          globalSettingsStore.init(),
+        ]);
+
+        console.log('[App] Stores initialized');
+
+        // Check if we should auto-open last vault
+        const settings = globalSettingsStore.getSettings();
+        const lastVault = vaultsStore.getLastOpenedVault();
+
+        console.log('[App] Global settings:', { openLastVault: settings.openLastVault, lastVault });
+
+        if (settings.openLastVault && lastVault) {
+          // Verify vault still exists
+          if (await fileExists(lastVault)) {
+            console.log('[App] Auto-opening last vault:', lastVault);
+            await handleOpenVaultPath(lastVault);
+          } else {
+            console.log('[App] Last vault no longer exists, removing from registry');
+            await vaultsStore.removeVault(lastVault);
+            setShowVaultPicker(true);
+          }
+        } else {
+          console.log('[App] Showing vault picker');
+          setShowVaultPicker(true);
+        }
+
+        setIsInitialized(true);
+      } catch (e) {
+        console.error('[App] Failed to initialize:', e);
+        // Still show app even if initialization fails
+        setShowVaultPicker(true);
+        setIsInitialized(true);
+      }
+    }
+
+    initializeApp();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount - handleOpenVaultPath is stable
 
   // Apply appearance settings when they change
   useEffect(() => {
@@ -364,6 +393,11 @@ function App() {
     // Apply theme mode
     document.body.classList.remove('theme-dark', 'theme-light');
     document.body.classList.add(`theme-${appearanceSettings.baseTheme}`);
+
+    // Sync theme mode with ThemeManager
+    if (themeManagerRef.current) {
+      themeManagerRef.current.setThemeMode(appearanceSettings.baseTheme);
+    }
 
     // Apply accent color
     if (appearanceSettings.accentColor) {
@@ -433,71 +467,45 @@ function App() {
     });
   }, [activeTabPath]);
 
-  // Start/stop file watching - only re-index if file count changes
+  // Use hooks for file watching and directory loading
+  // Reset loading state when vault path changes
   useEffect(() => {
     if (vaultPath) {
-      let lastFileCount = 0;
-
-      pollIntervalRef.current = window.setInterval(async () => {
-        const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
-        const currentFileCount = entries.length;
-
-        // Only re-index if the number of files changed (external add/delete)
-        if (currentFileCount !== lastFileCount) {
-          setFiles(entries);
-          await searchStore.indexFiles(vaultPath, entries);
-          lastFileCount = currentFileCount;
-        } else {
-          setFiles(entries); // Still update the file tree
-        }
-      }, POLL_INTERVAL);
-
-      return () => {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-      };
-    }
-  }, [vaultPath]);
-
-  // Load directory when vault changes
-  useEffect(() => {
-    if (vaultPath) {
-      setIsVaultReady(false); // Reset ready state
+      setIsVaultReady(false);
+      setFileTreeError(null);
       setLoading(true);
-      invoke<FileEntry[]>('read_directory', { path: vaultPath })
-        .then(async (entries) => {
-          setFiles(entries);
-          await searchStore.indexFiles(vaultPath, entries);
-          setIsVaultReady(true); // Mark vault as ready after indexing
-        })
-        .catch((e) => {
-          console.error('Failed to load vault:', e);
-          setIsVaultReady(true); // Still mark as ready even on error
-        })
-        .finally(() => setLoading(false));
     }
   }, [vaultPath]);
 
-  // Process queued wikilink clicks when vault becomes ready
-  useEffect(() => {
-    if (isVaultReady && wikilinkQueue.length > 0) {
-      // Process all queued clicks
-      const queue = [...wikilinkQueue];
-      setWikilinkQueue([]); // Clear queue first
+  useDirectoryLoader({
+    vaultPath,
+    onFilesLoaded: async (entries, signal) => {
+      setFiles(entries);
+      if (vaultPath) {
+        await searchStore.indexFiles(vaultPath, entries, signal);
+      }
+      setFileTreeError(null);
+      setIsVaultReady(true);
+      setLoading(false);
+    },
+    onError: (error) => {
+      setFileTreeError(error);
+      setIsVaultReady(true);
+      setLoading(false);
+    },
+  });
 
-      // Process each queued click
-      queue.forEach(({ target, newTab }) => {
-        const path = searchStore.getFilePathByName(target);
-        if (path) {
-          handleFileSelect(path, newTab);
-        } else {
-          console.warn(`[wikilink] Queued file not found: ${target}`);
-        }
-      });
-    }
-  }, [isVaultReady, wikilinkQueue]);
+  useFileWatcher({
+    vaultPath,
+    onFilesChange: (entries) => {
+      setFiles(entries);
+      // Trigger editor decoration rebuild to refresh wikilink colors
+      editorRefreshTrigger.current++;
+    },
+    onError: (error) => {
+      setFileTreeError(error);
+    },
+  });
 
   const handleOpenVault = async () => {
     try {
@@ -518,21 +526,27 @@ function App() {
   const handleNewFile = useCallback(async () => {
     if (!vaultPath) return;
 
-    // Find the next available untitled filename
-    const existingFiles = files.map(f => f.name);
-    let counter = 0;
-    let fileName: string;
-    do {
-      fileName = counter === 0 ? `${UNTITLED_BASE}.md` : `${UNTITLED_BASE} ${counter}.md`;
-      counter++;
-    } while (existingFiles.includes(fileName));
-
+    // Use timestamp-based naming to avoid collisions even with stale file tree state
+    const timestamp = Date.now();
+    const fileName = `Untitled-${timestamp}.md`;
     const untitledPath = `${vaultPath}/${fileName}`;
 
     // Create the file immediately with empty content
     try {
       await invoke('write_file', { path: untitledPath, content: '' });
-      openTab(untitledPath, fileName, '', false);
+      // Inline openTab logic to avoid circular dependency
+      setOpenTabs(prev => {
+        const existing = prev.find(tab => tab.path === untitledPath);
+        if (existing) {
+          setActiveTabPath(untitledPath);
+          return prev.map(tab =>
+            tab.path === untitledPath ? { ...tab, content: '', isDirty: false } : tab
+          );
+        }
+        const newTab: OpenFile = { path: untitledPath, name: fileName, content: '', isDirty: false };
+        return [...prev, newTab];
+      });
+      setActiveTabPath(untitledPath);
       // Refresh file list and re-index
       const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
       setFiles(entries);
@@ -540,7 +554,7 @@ function App() {
     } catch (e) {
       console.error(e);
     }
-  }, [vaultPath, files, openTab]);
+  }, [vaultPath]);
 
   const handleFileSelect = useCallback(
     (path: string, newTab = false) => {
@@ -572,9 +586,9 @@ function App() {
               return [newTabItem];
             }
 
-            // Replace the active tab's content
+            // Replace the active tab's content (use ref to avoid stale closure)
             return prev.map(tab =>
-              tab.path === activeTabPath ? { path, name, content, isDirty: false } : tab
+              tab.path === activeTabPathRef.current ? { path, name, content, isDirty: false } : tab
             );
           });
 
@@ -583,8 +597,31 @@ function App() {
         })
         .catch(console.error);
     },
-    [activeTabPath]
+    [] // Empty deps - use refs for stable closure
   );
+
+  // Process queued wikilink clicks when vault becomes ready
+  // Uses refs to avoid stale closures
+  useEffect(() => {
+    if (!isVaultReady) return;
+
+    // Use functional update to get latest queue without adding it to deps
+    setWikilinkQueue(queue => {
+      if (queue.length === 0) return queue;
+
+      // Process all queued clicks
+      queue.forEach(({ target, newTab }) => {
+        const path = searchStore.getFilePathByName(target);
+        if (path) {
+          handleFileSelect(path, newTab);
+        } else {
+          console.warn(`[wikilink] Queued file not found: ${target}`);
+        }
+      });
+
+      return []; // Clear queue after processing
+    });
+  }, [isVaultReady, handleFileSelect]); // handleFileSelect is stable (empty deps)
 
   const handleSave = useCallback(async () => {
     const activeTab = getActiveTab();
@@ -610,31 +647,11 @@ function App() {
     }
   }, [getActiveTab, vaultPath]);
 
-  // Auto-save: saves to file after 1 second of inactivity
-  const autoSave = useCallback(async () => {
-    const activeTab = getActiveTab();
-    if (!activeTab) return;
-
-    try {
-      await invoke('write_file', {
-        path: activeTab.path,
-        content: activeTab.content,
-      });
-      setOpenTabs(prev => prev.map(tab =>
-        tab.path === activeTab.path ? { ...tab, isDirty: false } : tab
-      ));
-      // Update search index with new content
-      await searchStore.updateFile(activeTab.path, activeTab.content);
-    } catch (e) {
-      console.error('Auto-save failed:', e);
-    }
-  }, [getActiveTab]);
-
-  const handleContentChange = useCallback((content: string) => {
+  const handleContentChange = useCallback((path: string, content: string) => {
     setOpenTabs(prev => prev.map(tab =>
-      tab.path === activeTabPath ? { ...tab, content, isDirty: true } : tab
+      tab.path === path ? { ...tab, content, isDirty: true } : tab
     ));
-  }, [activeTabPath]);
+  }, []);
 
   const handleFileNameChange = useCallback(async (newName: string) => {
     const activeTab = getActiveTab();
@@ -671,8 +688,13 @@ function App() {
         updateLinks: true,
       });
 
+      // Update tab path/name, explicitly preserving content
+      // Also update activeTabPath to match the new path
+      setActiveTabPath(newPath);
       setOpenTabs(prev => prev.map(tab =>
-        tab.path === activeTab.path ? { ...tab, path: newPath, name: newName } : tab
+        tab.path === activeTab.path
+          ? { ...tab, path: newPath, name: newName, content: tab.content }
+          : tab
       ));
 
       // Refresh file list
@@ -686,29 +708,6 @@ function App() {
       alert('Failed to rename file: ' + (error as Error).message);
     }
   }, [getActiveTab, vaultPath]);
-
-  // Trigger auto-save when content changes (debounced by 1 second)
-  useEffect(() => {
-    const activeTab = getActiveTab();
-    if (!activeTab) return;
-
-    // Clear any pending auto-save
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-    }
-
-    // Schedule auto-save after 1 second
-    autoSaveTimerRef.current = window.setTimeout(() => {
-      autoSave();
-      autoSaveTimerRef.current = null;
-    }, 1000);
-
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-    };
-  }, [getActiveTab()?.content, autoSave, getActiveTab]);
 
   // Daily Notes handlers
   const handleOpenDailyNote = useCallback(async () => {
@@ -725,8 +724,20 @@ function App() {
     setFiles(entries);
     await searchStore.indexFiles(vaultPath, entries);
 
-    openTab(notePath, name, content, false);
-  }, [vaultPath, openTab]);
+    // Inline openTab logic to avoid circular dependency
+    setOpenTabs(prev => {
+      const existing = prev.find(tab => tab.path === notePath);
+      if (existing) {
+        setActiveTabPath(notePath);
+        return prev.map(tab =>
+          tab.path === notePath ? { ...tab, content, isDirty: false } : tab
+        );
+      }
+      const newTab: OpenFile = { path: notePath, name, content, isDirty: false };
+      return [...prev, newTab];
+    });
+    setActiveTabPath(notePath);
+  }, [vaultPath]);
 
   // TODO: Implement daily notes navigation UI to use this function
   // const handleNavigateDailyNotes = useCallback(async (offset: number) => {
@@ -868,16 +879,9 @@ function App() {
   const handleNewFileInFolder = useCallback(async () => {
     if (!contextMenu || !vaultPath) return;
 
-    // Find the next available untitled filename
-    const folderFiles = files.filter(f => f.path.startsWith(contextMenu.path));
-    const existingFiles = folderFiles.map(f => f.name);
-    let counter = 0;
-    let fileName: string;
-    do {
-      fileName = counter === 0 ? `${UNTITLED_BASE}.md` : `${UNTITLED_BASE} ${counter}.md`;
-      counter++;
-    } while (existingFiles.includes(fileName));
-
+    // Use timestamp-based naming to avoid collisions even with stale file tree state
+    const timestamp = Date.now();
+    const fileName = `Untitled-${timestamp}.md`;
     const newFilePath = `${contextMenu.path}/${fileName}`;
 
     // Create the file immediately with empty content
@@ -893,7 +897,7 @@ function App() {
     }
 
     setContextMenu(null);
-  }, [contextMenu, vaultPath, files]);
+  }, [contextMenu, vaultPath, openTab]);
 
   const handleNewFolder = useCallback(async () => {
     if (!contextMenu) return;
@@ -937,10 +941,21 @@ function App() {
         setFiles(entries);
         await searchStore.indexFiles(vaultPath, entries);
 
-        // Open the new file
+        // Open the new file - inline openTab logic
         const parts = newFilePath.split(/[/\\]/);
         const name = parts[parts.length - 1] || '';
-        openTab(newFilePath, name, content, false);
+        setOpenTabs(prev => {
+          const existing = prev.find(tab => tab.path === newFilePath);
+          if (existing) {
+            setActiveTabPath(newFilePath);
+            return prev.map(tab =>
+              tab.path === newFilePath ? { ...tab, content, isDirty: false } : tab
+            );
+          }
+          const newTab: OpenFile = { path: newFilePath, name, content, isDirty: false };
+          return [...prev, newTab];
+        });
+        setActiveTabPath(newFilePath);
       } else {
         // Insert template into current file
         const activeTab = getActiveTab();
@@ -962,7 +977,7 @@ function App() {
         // Update tab content
         setOpenTabs(prev => prev.map(tab =>
           tab.path === activeTab.path
-            ? { ...tab, content: newContent, dirty: true }
+            ? { ...tab, content: newContent, isDirty: true }
             : tab
         ));
 
@@ -975,7 +990,7 @@ function App() {
       console.error('Failed to insert template:', error);
       alert('Failed to insert template: ' + (error as Error).message);
     }
-  }, [vaultPath, getActiveTab, openTab]);
+  }, [vaultPath, getActiveTab]);
 
   const handleOpenTemplateModal = useCallback(async () => {
     if (!vaultPath) return;
@@ -1043,66 +1058,62 @@ function App() {
     }
   }, [appearanceSettings]);
 
-  // Auto-save workspace when tabs change (debounced)
-  useEffect(() => {
-    if (!vaultPath || openTabs.length === 0) return;
+  // Use keyboard shortcuts hook
+  useKeyboardShortcuts({
+    onSave: handleSave,
+    onQuickSwitcher: () => setIsQuickSwitcherOpen(prev => !prev),
+    onOpenDailyNote: handleOpenDailyNote,
+    onOpenTemplateModal: handleOpenTemplateModal,
+    onOpenSettings: () => setShowSettings(true),
+    onCloseSettings: () => setShowSettings(false),
+    isSettingsOpen: showSettings,
+  });
 
-    // Debounce workspace save
-    const timer = window.setTimeout(async () => {
-      const lastOpenFiles = openTabs.map(t => t.path);
-      workspaceStateManager.queueSave(openTabs, activeTabPath, lastOpenFiles);
-      lastOpenFilesRef.current = lastOpenFiles;
-    }, 1000);
+  // Drag and drop handler - must be before early returns
+  const handleDrop = useCallback(async (sourcePath: string, targetPath: string) => {
+    const parts = sourcePath.split(/[/\\]/);
+    const fileName = parts.pop() || sourcePath;
+    const destination = `${targetPath}/${fileName}`;
 
-    return () => clearTimeout(timer);
-  }, [openTabs, activeTabPath, vaultPath]);
+    try {
+      await invoke('move_file', {
+        source: sourcePath,
+        destination: destination,
+      });
 
-  // Save workspace state before window close
-  useEffect(() => {
-    const handleBeforeUnload = async () => {
-      console.log('[App] Saving state before close...');
-
-      // Save window state
-      await windowStateStore.saveNow();
-
-      // Save workspace state if vault open
-      if (vaultPath && openTabs.length > 0) {
-        const lastOpenFiles = openTabs.map(t => t.path);
-        await workspaceStateManager.saveNow(lastOpenFiles);
-        console.log('[App] Saved workspace state');
+      // Refresh file list
+      if (vaultPath) {
+        invoke<FileEntry[]>('read_directory', { path: vaultPath })
+          .then(setFiles)
+          .catch(console.error);
       }
-    };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [vaultPath, openTabs, activeTabPath]);
+      // Update open tabs if file was moved
+      setOpenTabs(prev => prev.map(tab => {
+        if (tab.path === sourcePath) {
+          return { ...tab, path: destination };
+        }
+        return tab;
+      }));
+    } catch (error) {
+      console.error('Failed to move file:', error);
+    }
+  }, [vaultPath]);
 
-  // Keyboard shortcut for save, quick switcher, and settings
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        handleSave();
-      } else if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
-        e.preventDefault();
-        setIsQuickSwitcherOpen(prev => !prev);
-      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'D') {
-        e.preventDefault();
-        handleOpenDailyNote();
-      } else if ((e.metaKey || e.ctrlKey) && e.key === 't') {
-        e.preventDefault();
-        handleOpenTemplateModal();
-      } else if ((e.metaKey || e.ctrlKey) && e.key === ',') {
-        e.preventDefault();
-        setShowSettings(true);
-      } else if (e.key === 'Escape' && showSettings) {
-        setShowSettings(false);
-      }
-    };
+  // Theme toggle handler - must be before early returns
+  const handleToggleTheme = useCallback(async () => {
+    if (!appearanceSettings) return;
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleSave, handleOpenDailyNote, handleOpenTemplateModal, showSettings]);
+    const newMode = appearanceSettings.baseTheme === 'dark' ? 'light' : 'dark';
+    const updated = { ...appearanceSettings, baseTheme: newMode };
+
+    // Apply theme mode immediately
+    document.body.classList.remove('theme-dark', 'theme-light');
+    document.body.classList.add(`theme-${newMode}`);
+
+    setAppearanceSettings(updated);
+    await vaultConfigStore.updateAppearance({ baseTheme: newMode });
+  }, [appearanceSettings]);
 
   // Show loading screen while initializing
   if (!isInitialized) {
@@ -1139,51 +1150,6 @@ function App() {
   if (showVaultPicker) {
     return <VaultPicker onOpen={handleOpenVaultPath} />;
   }
-
-  const handleDrop = useCallback(async (sourcePath: string, targetPath: string) => {
-    const parts = sourcePath.split(/[/\\]/);
-    const fileName = parts.pop() || sourcePath;
-    const destination = `${targetPath}/${fileName}`;
-
-    try {
-      await invoke('move_file', {
-        source: sourcePath,
-        destination: destination,
-      });
-
-      // Refresh file list
-      if (vaultPath) {
-        invoke<FileEntry[]>('read_directory', { path: vaultPath })
-          .then(setFiles)
-          .catch(console.error);
-      }
-
-      // Update open tabs if file was moved
-      setOpenTabs(prev => prev.map(tab => {
-        if (tab.path === sourcePath) {
-          return { ...tab, path: destination };
-        }
-        return tab;
-      }));
-    } catch (error) {
-      console.error('Failed to move file:', error);
-    }
-  }, [vaultPath]);
-
-  // Theme toggle handler
-  const handleToggleTheme = useCallback(async () => {
-    if (!appearanceSettings) return;
-
-    const newMode = appearanceSettings.baseTheme === 'dark' ? 'light' : 'dark';
-    const updated = { ...appearanceSettings, baseTheme: newMode };
-
-    // Apply theme mode immediately
-    document.body.classList.remove('theme-dark', 'theme-light');
-    document.body.classList.add(`theme-${newMode}`);
-
-    setAppearanceSettings(updated);
-    await vaultConfigStore.updateAppearance({ baseTheme: newMode });
-  }, [appearanceSettings]);
 
   return (
     <div style={styles.app}>
@@ -1231,6 +1197,25 @@ function App() {
               </div>
               {loading ? (
                 <div style={styles.loading}>Loading...</div>
+              ) : fileTreeError ? (
+                <div
+                  onClick={() => {
+                    setFileTreeError(null);
+                    // Trigger re-read by clearing files
+                    setFiles([]);
+                  }}
+                  style={{
+                    padding: '16px',
+                    color: '#f87171',
+                    fontSize: '12px',
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                  }}
+                  title="Click to retry"
+                >
+                  {fileTreeError}
+                </div>
               ) : (
                 <FileTree
                   entries={files}
@@ -1377,15 +1362,21 @@ function App() {
                     vaultPath={vaultPath}
                     currentFilePath={activeTab.path}
                     scrollPosition={scrollToPosition}
+                    refreshTrigger={editorRefreshTrigger}
                     onWikilinkClick={(target) => {
+                      console.log('[App] onWikilinkClick called:', target);
                       if (!isVaultReady) {
+                        console.log('[App] Vault not ready, queuing wikilink');
                         // Queue the click for when vault is ready
                         setWikilinkQueue(prev => [...prev, { target, newTab: false }]);
                         return;
                       }
                       const path = searchStore.getFilePathByName(target);
+                      console.log('[App] searchStore.getFilePathByName returned:', path);
                       if (path) {
                         handleFileSelect(path); // Regular click: switch to existing tab or open in current tab
+                      } else {
+                        console.warn('[App] Wikilink target not found:', target);
                       }
                     }}
                     onWikilinkCmdClick={(target) => {

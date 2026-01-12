@@ -27,10 +27,11 @@ For project overview, features, and quick start, see the **[main README](../READ
 
 | Document | Description |
 |----------|-------------|
-| [Agent Onboarding](./AGENT-ONBOARDING.md) | What to read, by task type |
-| [Agent Quick Reference](./AGENT-QUICK-REF.md) | Essential constraints and patterns |
-| [UI Skills (Adapted)](./UI-SKILLS-ADAPTED.md) | Project-specific UI guidelines |
-| [UI Skills (Original)](./UI-SKILLS-ORIGINAL.md) | Canonical reference |
+| [Agent Onboarding](./AGENT-ONBOARDING.md) | Start here |
+| [Agent Quick Reference](./AGENT-QUICK-REF.md) | Essentials & patterns |
+| [UI Skills](./UI-SKILLS.md) | UI guidelines (source) |
+| [UI Skills — Igne Notes](./UI-SKILLS-ADAPTED.md) | Project adaptations |
+| [Mind Garden](./MIND-GARDEN.md) | Knowledge organization |
 
 ### For Contributors
 

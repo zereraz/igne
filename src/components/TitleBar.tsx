@@ -200,9 +200,9 @@ export function TitleBar({
               e.currentTarget.style.backgroundColor = 'transparent';
               e.currentTarget.style.color = '#71717a';
             }}
-            title="Toggle theme"
+            title={`Toggle to ${isDarkMode ? 'light' : 'dark'} theme`}
           >
-            {isDarkMode ? <Moon size={14} /> : <Sun size={14} />}
+            {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
           </button>
         )}
 
@@ -231,7 +231,7 @@ export function TitleBar({
               e.currentTarget.style.backgroundColor = 'transparent';
               e.currentTarget.style.color = '#71717a';
             }}
-            title="Settings (Cmd+Ctrl+,)"
+            title="Settings (Cmd+,)"
           >
             <Settings size={14} />
           </button>

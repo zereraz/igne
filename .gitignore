@@ -1,17 +1,24 @@
-# Igné Ralph Loop
-
+# Igne
 /work/outputs/
 /logs/
+
+# Environment
 .env
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # Node
 node_modules/
 dist/
+dist-ssr/
 build/
 
 # Rust / Tauri
 src-tauri/target/
+src-tauri/Cargo.lock
 *.rlib
 *.rmeta
 *.a
@@ -24,7 +31,45 @@ src-tauri/target/
 .idea/
 *.swp
 *.swo
+.*.sw*
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+
+# Lock files (keep bun.lock)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Test artifacts (generated docs in root should go to docs/archive/)
+docs/archive/
+*_REPORT.md
+*_STATUS.md
+*_SUMMARY.md
+*_COMPLETION*.md
+STATE-PERSISTENCE-SPEC.md
+IMPLEMENTATION_SUMMARY.md
+OBSIDIAN_PLUGIN_SYSTEM_*.md
+PLUGIN_SYSTEM_*.md
+PART4_*.md
+PERSISTENCE_*.md
+test-results/
+playwright-report/
+coverage/
+
+# Generated documentation patterns
+*_COMPLETION_TAG.md
+*_ASSESSMENT.md
+
+# App/Claude Code workspace (user-specific)
+.app-launchpad.json
+.claude/
+
+# Build artifacts
+*.tsbuildinfo

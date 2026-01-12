@@ -1,6 +1,26 @@
-import { readTextFile, writeTextFile, exists } from '@tauri-apps/plugin-fs';
-import { appDataDir, join } from '@tauri-apps/api/path';
+import { invoke } from '@tauri-apps/api/core';
 import type { GlobalSettings } from '../types';
+
+// Helper function to check if a file exists
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await invoke('read_file', { path });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Helper function to get app data directory
+async function getAppDataDir(): Promise<string> {
+  try {
+    const dir = await invoke<string>('get_app_data_dir');
+    return dir;
+  } catch {
+    // Fallback to a default location
+    return '';
+  }
+}
 
 const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   version: 1,
@@ -23,13 +43,13 @@ class GlobalSettingsStore {
 
   async init(): Promise<void> {
     try {
-      const appData = await appDataDir();
-      this.settingsPath = await join(appData, 'settings.json');
+      const appData = await getAppDataDir();
+      this.settingsPath = `${appData}/settings.json`;
 
       // Load existing settings
-      if (this.settingsPath && await exists(this.settingsPath)) {
+      if (this.settingsPath && await fileExists(this.settingsPath)) {
         try {
-          const content = await readTextFile(this.settingsPath);
+          const content = await invoke<string>('read_file', { path: this.settingsPath });
           const loaded = JSON.parse(content) as Partial<GlobalSettings>;
 
           // Merge with defaults to handle version upgrades and missing fields
@@ -58,11 +78,14 @@ class GlobalSettingsStore {
   async save(): Promise<void> {
     try {
       if (!this.settingsPath) {
-        const appData = await appDataDir();
-        this.settingsPath = await join(appData, 'settings.json');
+        const appData = await getAppDataDir();
+        this.settingsPath = `${appData}/settings.json`;
       }
 
-      await writeTextFile(this.settingsPath, JSON.stringify(this.settings, null, 2));
+      await invoke('write_file', {
+        path: this.settingsPath,
+        content: JSON.stringify(this.settings, null, 2),
+      });
       console.log('[GlobalSettingsStore] Saved settings');
     } catch (e) {
       console.error('[GlobalSettingsStore] Failed to save settings:', e);
