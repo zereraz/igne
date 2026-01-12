@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { X, FolderOpen } from 'lucide-react';
+import { CommandRegistry } from '../commands/registry';
+import type { CommandSource } from '../tools/types';
 
 // Helper function to check if a file/directory exists
 async function fileExists(path: string): Promise<boolean> {
@@ -63,6 +65,8 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
 
     setIsCreating(true);
     setError(null);
+
+    const source: CommandSource = 'ui';
 
     try {
       // Create vault path
@@ -181,6 +185,13 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
       });
 
       console.log('[CreateVaultDialog] Created vault:', vaultPath);
+
+      // Log vault creation to command registry (Phase D)
+      try {
+        await CommandRegistry.execute('vault.create', source, vaultPath);
+      } catch (cmdError) {
+        console.warn('[CreateVaultDialog] Failed to log vault.create command:', cmdError);
+      }
 
       // Notify parent component
       onVaultCreated(vaultPath);

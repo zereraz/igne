@@ -48,6 +48,8 @@ import {
 } from './utils/dailyNotes';
 import { renameFileWithLinkUpdates, getLinkUpdateCount } from './utils/fileManager';
 import { loadTemplates, insertTemplateIntoFile, createFileFromTemplate } from './utils/templateLoader';
+import { CommandRegistry } from './commands/registry';
+import { setWorkspaceManager } from './tools/workspace';
 
 // Dynamic app styles based on theme - backgroundColor controlled by CSS theme classes
 const styles = {
@@ -1057,6 +1059,208 @@ function App() {
       }
     }
   }, [appearanceSettings]);
+
+  // Use keyboard shortcuts hook
+  // This must be after all handlers are defined to avoid forward reference issues
+  useEffect(() => {
+    setWorkspaceManager({
+      openFile: async (path: string, newTab?: boolean) => {
+        handleFileSelect(path, newTab);
+      },
+      closeFile: async (path: string) => {
+        closeTab(path);
+      },
+      setActiveFile: async (path: string) => {
+        setActiveTabPath(path);
+      },
+      getOpenFiles: () => openTabs.map(t => t.path),
+      getActiveFile: () => activeTabPath,
+    });
+  }, [handleFileSelect, closeTab, openTabs, activeTabPath]);
+
+  // Register commands on mount (Phase D: Command Registry)
+  // This must be after all handlers are defined to avoid forward reference issues
+  // Note: handleToggleTheme is defined later but captured via closure
+  useEffect(() => {
+    // Register core commands
+    // File commands
+    CommandRegistry.register({
+      id: 'file.new',
+      name: 'New File',
+      icon: 'FilePlus',
+      category: 'file',
+      callback: (...args: unknown[]) => handleNewFile(...(args as [])),
+    });
+
+    CommandRegistry.register({
+      id: 'file.save',
+      name: 'Save File',
+      icon: 'Save',
+      category: 'file',
+      hotkeys: [{ key: 's', modifiers: { meta: true } }],
+      callback: (...args: unknown[]) => handleSave(...(args as [])),
+    });
+
+    CommandRegistry.register({
+      id: 'file.open',
+      name: 'Open File',
+      icon: 'FolderOpen',
+      category: 'file',
+      callback: (...args: unknown[]) => handleFileSelect(...(args as [string, boolean?])),
+    });
+
+    // View commands
+    CommandRegistry.register({
+      id: 'view.toggleGraph',
+      name: 'Toggle Graph View',
+      icon: 'Graph',
+      category: 'view',
+      callback: () => setRightPanel(prev => prev === 'graph' ? 'backlinks' : 'graph'),
+    });
+
+    CommandRegistry.register({
+      id: 'view.toggleSettings',
+      name: 'Toggle Settings',
+      icon: 'Settings',
+      category: 'view',
+      hotkeys: [{ key: ',', modifiers: { meta: true } }],
+      callback: () => setShowSettings(prev => !prev),
+    });
+
+    CommandRegistry.register({
+      id: 'view.toggleBacklinks',
+      name: 'Toggle Backlinks Panel',
+      icon: 'Link2',
+      category: 'view',
+      callback: () => setRightPanel(prev => prev === 'backlinks' ? 'outline' : 'backlinks'),
+    });
+
+    CommandRegistry.register({
+      id: 'view.toggleOutline',
+      name: 'Toggle Outline Panel',
+      icon: 'List',
+      category: 'view',
+      callback: () => setRightPanel(prev => prev === 'outline' ? 'tags' : 'outline'),
+    });
+
+    CommandRegistry.register({
+      id: 'view.toggleTags',
+      name: 'Toggle Tags Panel',
+      icon: 'Tags',
+      category: 'view',
+      callback: () => setRightPanel(prev => prev === 'tags' ? 'starred' : 'tags'),
+    });
+
+    // Workspace commands
+    CommandRegistry.register({
+      id: 'workspace.quickSwitcher',
+      name: 'Quick Switcher',
+      icon: 'Search',
+      category: 'workspace',
+      hotkeys: [{ key: 'p', modifiers: { meta: true } }],
+      callback: () => setIsQuickSwitcherOpen(prev => !prev),
+    });
+
+    CommandRegistry.register({
+      id: 'workspace.dailyNote',
+      name: 'Open Daily Note',
+      icon: 'Calendar',
+      category: 'workspace',
+      hotkeys: [{ key: 'D', modifiers: { meta: true, shift: true } }],
+      callback: (...args: unknown[]) => handleOpenDailyNote(...(args as [])),
+    });
+
+    CommandRegistry.register({
+      id: 'workspace.template',
+      name: 'Insert Template',
+      icon: 'FileText',
+      category: 'workspace',
+      hotkeys: [{ key: 't', modifiers: { meta: true } }],
+      callback: (...args: unknown[]) => handleOpenTemplateModal(...(args as [])),
+    });
+
+    // Tab commands
+    CommandRegistry.register({
+      id: 'tab.close',
+      name: 'Close Tab',
+      icon: 'X',
+      category: 'tab',
+      callback: (...args: unknown[]) => closeTab(...(args as [string])),
+    });
+
+    CommandRegistry.register({
+      id: 'tab.switch',
+      name: 'Switch Tab',
+      icon: 'ArrowRight',
+      category: 'tab',
+      callback: (...args: unknown[]) => setActiveTabPath(...(args as [string])),
+    });
+
+    // Theme commands
+    CommandRegistry.register({
+      id: 'theme.toggle',
+      name: 'Toggle Theme',
+      icon: 'Sun',
+      category: 'theme',
+      callback: (...args: unknown[]) => handleToggleTheme(...(args as [])),
+    });
+
+    // Vault commands
+    CommandRegistry.register({
+      id: 'vault.open',
+      name: 'Open Vault',
+      icon: 'FolderOpen',
+      category: 'vault',
+      callback: (...args: unknown[]) => handleOpenVault(...(args as [])),
+    });
+
+    CommandRegistry.register({
+      id: 'vault.create',
+      name: 'Create Vault',
+      icon: 'FolderPlus',
+      category: 'vault',
+      callback: (vaultPath: unknown) => {
+        console.log('[App] Vault created:', vaultPath);
+        // This is called after vault creation completes
+        // The actual creation happens in CreateVaultDialog
+      },
+    });
+
+    // Editor commands
+    CommandRegistry.register({
+      id: 'editor.togglePreview',
+      name: 'Toggle Preview Mode',
+      icon: 'Eye',
+      category: 'editor',
+      callback: () => {
+        // Toggle preview mode (placeholder for future implementation)
+        console.log('[App] Toggle preview mode');
+      },
+    });
+
+    // Format commands
+    CommandRegistry.register({
+      id: 'format.bold',
+      name: 'Bold Selection',
+      icon: 'Bold',
+      category: 'format',
+      callback: () => {
+        // Format selection as bold (placeholder for future implementation)
+        console.log('[App] Format selection as bold');
+      },
+    });
+
+    console.log('[App] Registered commands:', CommandRegistry.getStats());
+  }, [
+    handleNewFile,
+    handleSave,
+    handleFileSelect,
+    handleOpenDailyNote,
+    handleOpenTemplateModal,
+    // handleToggleTheme, // Defined later, captured via closure
+    handleOpenVault,
+    closeTab,
+  ]);
 
   // Use keyboard shortcuts hook
   useKeyboardShortcuts({
