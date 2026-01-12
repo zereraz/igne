@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Puzzle, Power, Settings as SettingsIcon, Check, AlertCircle } from 'lucide-react';
+import { Puzzle, Power, Settings as SettingsIcon, Check, AlertCircle, AlertTriangle } from 'lucide-react';
+import { isPluginCompatible, OBSIDIAN_COMPAT_VERSION, compareVersions } from '../utils/semver';
 
 interface PluginManifest {
   id: string;
@@ -19,6 +20,7 @@ interface DiscoveredPlugin {
   isEnabled: boolean;
   hasSettings: boolean;
   error?: string;
+  compatibilityError?: string;
 }
 
 interface PluginsTabProps {
@@ -69,6 +71,12 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
             const manifestContent = await invoke<string>('read_file', { path: manifestPath });
             const manifest: PluginManifest = JSON.parse(manifestContent);
 
+            // Check compatibility with pinned baseline
+            let compatibilityError: string | undefined;
+            if (!isPluginCompatible(manifest.minAppVersion)) {
+              compatibilityError = `Plugin requires Obsidian ${manifest.minAppVersion} or later. Igne currently supports Obsidian API ${OBSIDIAN_COMPAT_VERSION} (pinned baseline).`;
+            }
+
             // Check if plugin has settings (main.js exists)
             const mainJsPath = `${pluginsDir}/${pluginId}/main.js`;
             const meta = await invoke<{ exists: boolean }>('stat_path', { path: mainJsPath });
@@ -79,6 +87,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
               manifest,
               isEnabled: enabledList.includes(pluginId),
               hasSettings: hasMainJs,
+              compatibilityError,
             });
           } catch (error) {
             console.warn(`[PluginsTab] Failed to load plugin ${pluginId}:`, error);
