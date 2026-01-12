@@ -1,12 +1,18 @@
 import { vaultConfigStore } from './VaultConfigStore';
-import type { WorkspaceState, OpenFile } from '../types';
+import type { WorkspaceState, OpenFile, WorkspaceSplitState, WorkspaceTabsState, WorkspaceLeafState } from '../types';
 import { toOsPath, toVaultPath, isVaultAbsolutePath } from '../utils/vaultPaths';
+
+interface PaneState {
+  id: string;
+  tabs: OpenFile[];
+  activeTab: string | null;
+}
 
 class WorkspaceStateManager {
   private state: WorkspaceState | null = null;
   private saveDebounceTimer: number | null = null;
-  private currentOpenFiles: OpenFile[] = [];
-  private currentActiveTab: string | null = null;
+  private currentPanes: PaneState[] = [];
+  private currentSplitDirection: 'horizontal' | 'vertical' | null = null;
   private currentLastOpenFiles: string[] = [];
   private vaultPath: string | null = null;
 
@@ -18,13 +24,27 @@ class WorkspaceStateManager {
   }
 
   /**
+   * Get current panes state
+   */
+  getPanes(): PaneState[] {
+    return this.currentPanes;
+  }
+
+  /**
+   * Get current split direction
+   */
+  getSplitDirection(): 'horizontal' | 'vertical' | null {
+    return this.splitDirection;
+  }
+
+  /**
    * Restore workspace from saved state
    * Converts stored vault paths to OS paths if needed
    */
   async restore(vaultPath?: string): Promise<{
-    openFiles: OpenFile[];
-    activeTab: string | null;
+    panes: PaneState[];
     lastOpenFiles: string[];
+    splitDirection: 'horizontal' | 'vertical' | null;
   }> {
     if (vaultPath) {
       this.vaultPath = vaultPath;
@@ -35,52 +55,63 @@ class WorkspaceStateManager {
     if (!this.state) {
       console.log('[WorkspaceStateManager] No saved workspace found, starting fresh');
       return {
-        openFiles: [],
-        activeTab: null,
+        panes: [{ id: 'main-pane', tabs: [], activeTab: null }],
         lastOpenFiles: [],
+        splitDirection: null,
       };
     }
 
     try {
       console.log('[WorkspaceStateManager] Restoring workspace state');
 
-      // Extract open files from workspace state and convert vault paths to OS paths
-      const openFiles = this.extractOpenFiles(this.state);
-      const activeTab = this.state.active || null;
+      // Extract panes from workspace state
+      const panes = this.extractPanes(this.state.main);
       const lastOpenFiles = (this.state.lastOpenFiles || []).map(p =>
         this.vaultPath && isVaultAbsolutePath(p)
           ? toOsPath(p, this.vaultPath)
           : p
       );
 
-      this.currentOpenFiles = openFiles;
-      this.currentActiveTab = activeTab && this.vaultPath && isVaultAbsolutePath(activeTab)
-        ? toOsPath(activeTab, this.vaultPath)
-        : activeTab;
+      // Determine split direction
+      let splitDirection: 'horizontal' | 'vertical' | null = null;
+      if (this.state.main && this.state.main.type === 'split') {
+        splitDirection = this.state.main.direction;
+      }
+
+      this.currentPanes = panes;
+      this.splitDirection = splitDirection;
 
       return {
-        openFiles,
-        activeTab: this.currentActiveTab,
+        panes,
         lastOpenFiles,
+        splitDirection,
       };
     } catch (e) {
       console.error('[WorkspaceStateManager] Failed to restore workspace:', e);
       return {
-        openFiles: [],
-        activeTab: null,
+        panes: [{ id: 'main-pane', tabs: [], activeTab: null }],
         lastOpenFiles: [],
+        splitDirection: null,
       };
     }
   }
 
-  private extractOpenFiles(state: WorkspaceState): OpenFile[] {
-    const files: OpenFile[] = [];
+  /**
+   * Extract panes from workspace state (supports split and tabs)
+   */
+  private extractPanes(mainArea: any): PaneState[] {
+    const panes: PaneState[] = [];
     const vaultPath = this.vaultPath;
 
-    // Helper function to traverse the workspace tree
-    function traverse(node: any): void {
+    if (!mainArea) {
+      return [{ id: 'main-pane', tabs: [], activeTab: null }];
+    }
+
+    function traverse(node: any, paneIndex = 0): void {
       if (node.type === 'tabs') {
-        // Extract files from tabs
+        const tabs: OpenFile[] = [];
+        let activeTab: string | null = null;
+
         if (node.children) {
           for (const child of node.children) {
             if (child.type === 'leaf' && child.state?.file) {
@@ -89,33 +120,55 @@ class WorkspaceStateManager {
               if (vaultPath && isVaultAbsolutePath(filePath)) {
                 filePath = toOsPath(filePath, vaultPath);
               }
-              files.push({
+
+              const tab: OpenFile = {
                 path: filePath,
                 name: filePath.split(/[/\\]/).pop() || '',
                 content: '', // Will be loaded separately
                 isDirty: false,
-              });
+              };
+              tabs.push(tab);
+
+              // Check if this is the active tab
+              if (node.currentTab !== undefined && node.children[node.currentTab] === child) {
+                activeTab = filePath;
+              }
             }
           }
         }
+
+        panes.push({
+          id: node.id || `pane-${paneIndex}`,
+          tabs,
+          activeTab,
+        });
       } else if (node.type === 'split' && node.children) {
         // Recursively traverse splits
-        for (const child of node.children) {
-          traverse(child);
+        for (let i = 0; i < node.children.length; i++) {
+          traverse(node.children[i], i);
         }
       }
     }
 
-    // Traverse main workspace
-    traverse(state.main);
+    traverse(mainArea);
 
-    console.log(`[WorkspaceStateManager] Extracted ${files.length} files from workspace`);
-    return files;
+    // If no panes found, return default single pane
+    if (panes.length === 0) {
+      return [{ id: 'main-pane', tabs: [], activeTab: null }];
+    }
+
+    console.log(`[WorkspaceStateManager] Extracted ${panes.length} pane(s) from workspace`);
+    return panes;
   }
 
-  // Capture current workspace state
-  // Converts OS paths to vault paths for storage
-  capture(openFiles: OpenFile[], activeTab: string | null, lastOpenFiles: string[]): WorkspaceState {
+  /**
+   * Capture current workspace state
+   * Converts OS paths to vault paths for storage
+   * @param panes Current panes state
+   * @param splitDirection Current split direction
+   * @param lastOpenFiles Last opened files for quick access
+   */
+  capture(panes: PaneState[], splitDirection: 'horizontal' | 'vertical' | null, lastOpenFiles: string[]): WorkspaceState {
     // Convert OS paths to vault paths for storage
     const getVaultPath = (osPath: string): string => {
       if (this.vaultPath) {
@@ -124,26 +177,66 @@ class WorkspaceStateManager {
       return osPath;
     };
 
-    // Create a simplified workspace state from current app state
-    const tabsChildren = openFiles.map((file, index) => ({
-      id: `leaf-${index}`,
-      type: 'leaf' as const,
-      state: {
-        type: 'markdown',
-        file: getVaultPath(file.path),
-        mode: 'source' as const,
-      },
-      pinned: false,
-    }));
+    let mainArea: WorkspaceSplitState | WorkspaceTabsState;
 
-    const mainArea: any = {
-      id: 'main-tabs',
-      type: 'tabs' as const,
-      children: tabsChildren,
-      currentTab: activeTab
-        ? openFiles.findIndex((f) => f.path === activeTab)
-        : 0,
-    };
+    if (panes.length === 1) {
+      // Single pane - use tabs structure
+      const pane = panes[0];
+      const tabsChildren = pane.tabs.map((file, index) => ({
+        id: `leaf-${index}`,
+        type: 'leaf' as const,
+        state: {
+          type: 'markdown',
+          file: getVaultPath(file.path),
+          mode: 'source' as const,
+        },
+        pinned: false,
+      }));
+
+      mainArea = {
+        id: pane.id,
+        type: 'tabs',
+        children: tabsChildren,
+        currentTab: pane.activeTab
+          ? pane.tabs.findIndex((f) => f.path === pane.activeTab)
+          : pane.tabs.length > 0 ? 0 : undefined,
+      };
+    } else {
+      // Multiple panes - use split structure (Obsidian-compatible format)
+      const children: (WorkspaceSplitState | WorkspaceTabsState)[] = panes.map((pane) => {
+        const tabsChildren = pane.tabs.map((file, index) => ({
+          id: `${pane.id}-leaf-${index}`,
+          type: 'leaf' as const,
+          state: {
+            type: 'markdown',
+            file: getVaultPath(file.path),
+            mode: 'source' as const,
+          },
+          pinned: false,
+        }));
+
+        return {
+          id: pane.id,
+          type: 'tabs',
+          children: tabsChildren,
+          currentTab: pane.activeTab
+            ? pane.tabs.findIndex((f) => f.path === pane.activeTab)
+            : pane.tabs.length > 0 ? 0 : undefined,
+        };
+      });
+
+      mainArea = {
+        id: 'main-split',
+        type: 'split',
+        direction: splitDirection || 'horizontal',
+        children,
+      };
+    }
+
+    // Get global active tab (first pane's active tab for now)
+    const globalActiveTab = panes.length > 0 && panes[0].activeTab
+      ? getVaultPath(panes[0].activeTab)
+      : null;
 
     return {
       main: mainArea,
@@ -172,7 +265,7 @@ class WorkspaceStateManager {
         activeTabs: {},
         tabs: [],
       },
-      active: activeTab ? getVaultPath(activeTab) : null,
+      active: globalActiveTab,
       lastOpenFiles: lastOpenFiles.slice(0, 10).map(getVaultPath),
       leftRibbon: {
         hiddenItems: [],

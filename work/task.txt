@@ -1,260 +1,154 @@
-# Phase D: Command Registry + Tool Layer
+# Phase G: Obsidian UX Parity (Workspace + Panels + Performance)
 
-Build unified command/tool surface that UI, plugins, and AI all use.
+Match Obsidian's user experience for workspace layout and file watching.
 
 ## Context
 
-Currently, UI actions are scattered throughout components with no unified interface. Plugins and future AI agents need a consistent way to invoke capabilities.
+Users expect Obsidian's workspace behavior:
+- True split panes with persistence
+- File watching that updates without manual reload
+- Proper tab management
 
-**Reference:** `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase D
+**Reference:** `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase G
 
 ## Goal
 
-Create a tool/command layer where:
-- Every capability is a "tool" (pure function)
-- Every user action is a "command" (uses tools)
-- UI, plugins, and AI all use the same commands
-- All actions are logged for audit trail
+- Implement true workspace splits
+- Add incremental file watching
+- Persist workspace state correctly
 
 ---
 
-## Task D1: Define Tool Interface
+## Task G1: Workspace Parity
 
-### D1.1 Create tool types
+### G1.1 Implement true splits
 
-**File to create:** `src/tools/types.ts`
+**Problem:** Current tab system doesn't support multiple panes.
 
-Define Tool<TInput, TResult> interface and ToolContext
+**Files to modify:**
+- `src/App.tsx`
+- `src/stores/WorkspaceStateManager.ts`
+
+**Actions:**
+1. Add pane management (left/right splits)
+2. Each pane has its own tab list
+3. Active tab per pane
+4. Split state persisted to workspace.json
 
 **Success criteria:**
-- [ ] src/tools/types.ts created
-- [ ] Tool interface defined with execute(context, input) -> Promise<Result>
-- [ ] ToolContext interface defined (includes vaultPath, source for audit)
+- [ ] Can create horizontal/vertical splits
+- [ ] Each pane manages its own tabs
+- [ ] Splits persist to workspace.json
+- [ ] Can close individual panes
 
----
+### G1.2 Tab persistence and behavior
 
-## Task D2: Create Vault Tools
+**File to modify:** `src/stores/WorkspaceStateManager.ts`
 
-### D2.1 Implement file operation tools
-
-**File to create:** `src/tools/vault.ts`
-
-Implement tools: createFile, readFile, writeFile, deleteFile, renameFile, statPath, listDir
-
-**Backend commands to use:**
-- `read_file`, `write_file`, `delete_file`, `rename_file`
-- `stat_path`, `read_directory`
+**Implement:**
+- Pin tabs (don't close on vault close)
+- Tab history (last opened file per tab)
+- New tab behavior (reuse vs create new)
 
 **Success criteria:**
-- [ ] All 7 vault tools implemented
-- [ ] Each tool wraps Tauri commands
-- [ ] Proper error handling with Result type
-- [ ] Exported as named exports
+- [ ] Pinned tabs persist across sessions
+- [ ] Tab history tracked correctly
+- [ ] Opening file respects tab behavior settings
 
 ---
 
-## Task D3: Create Workspace Tools
+## Task G2: Performance + File Watching
 
-### D3.1 Implement workspace tools
+### G2.1 Replace polling with filesystem watch
 
-**File to create:** `src/tools/workspace.ts`
+**Problem:** Current implementation may use polling or no watching.
 
-Implement: openFile, closeFile, setActiveFile
+**File to modify:** `src/hooks/useFileWatcher.ts` or `src/App.tsx`
 
-For now these can be stubs that interact with App state/stores.
+**Actions:**
+1. Use Tauri's file watch API if available
+2. Fall back to intelligent polling if not
+3. Debounce rapid changes
+4. Trigger search index updates
+5. Trigger file tree refresh
 
 **Success criteria:**
-- [ ] src/tools/workspace.ts created
-- [ ] 3 workspace tools defined with proper signatures
-- [ ] Tools interact with App state
+- [ ] File changes trigger immediate UI updates
+- [ ] No manual reload needed
+- [ ] Rapid changes are debounced (don't reindex on every keystroke)
+- [ ] Works for nested folders
 
----
+### G2.2 Incremental search indexing
 
-## Task D4: Create Command Registry
+**File to modify:** `src/stores/searchStore.ts`
 
-### D4.1 Implement command registry
-
-**File to create:** `src/commands/registry.ts`
-
-Create CommandRegistry class with:
-- register(command: Command): void
-- unregister(id: string): void
-- execute(id: string, ...args): Promise<any>
-- get(id: string): Command | undefined
-- getAll(): Command[]
-- onCommandExecuted(callback): EventRef
+**Actions:**
+1. Only re-index changed files
+2. Remove deleted files from index
+3. Add new files to index
+4. Don't rebuild entire index on every change
 
 **Success criteria:**
-- [ ] CommandRegistry class created
-- [ ] Singleton exported as default
-- [ ] All methods work
-- [ ] Commands stored in Map
+- [ ] File change updates index incrementally
+- [ ] Deleted files removed from index
+- [ ] New files added to index
+- [ ] Index update is fast (< 100ms for single file)
 
 ---
 
-## Task D5: Define Command Type
+## Task G3: Workspace JSON Format
 
-### D5.1 Create command types
+### G3.1 Match Obsidian workspace.json format
 
-**File to create:** `src/commands/types.ts`
+**File to create or modify:** `src/stores/WorkspaceStateManager.ts`
 
-Define Command interface:
-- id: string
-- name: string
-- label?: string
-- icon?: string
-- callback: (...args) => any
-- hotkeys?: Hotkey[]
+**Implement Obsidian's structure:**
+```json
+{
+  "main": {
+    "x": 0, "y": 0, "width": 1000, "height": 800,
+    "type": "split",
+    "direction": "horizontal",
+    "children": [
+      {
+        "type": "leaf",
+        "id": "left-pane",
+        "state": { "file": "Note.md" }
+      },
+      {
+        "type": "leaf",
+        "id": "right-pane",
+        "state": { "file": "Other.md" }
+      }
+    ]
+  }
+}
+```
 
 **Success criteria:**
-- [ ] Command interface defined
-- [ ] Hotkey type imported or defined
-- [ ] Exported
+- [ ] Workspace uses Obsidian-compatible format
+- [ ] Splits serialize correctly
+- [ ] Can restore workspace from .obsidian/workspace.json
+- [ ] Workspace is portable between Obsidian and Igne
 
 ---
 
-## Task D6: Register Core Commands
+## Task G4: Add Tests
 
-### D6.1 Register commands in App.tsx
+### G4.1 Create workspace tests
 
-**File to modify:** `src/App.tsx`
-
-Register at least 10 core commands:
-1. file.new - Create new note
-2. file.save - Save current file
-3. file.open - Open file
-4. view.toggleGraph - Toggle graph view
-5. view.toggleSettings - Toggle settings modal
-6. editor.togglePreview - Toggle preview mode
-7. workspace.quickSwitcher - Quick file switcher
-8. edit.undo - Undo
-9. edit.redo - Redo
-10. format.bold - Bold selection
-
-**Success criteria:**
-- [ ] CommandRegistry imported and initialized in App
-- [ ] 10+ commands registered in useEffect
-- [ ] Each has id, name, callback
-- [ ] Callbacks use existing handlers or tools
-
----
-
-## Task D7: Add Audit Log
-
-### D7.1 Create audit log
-
-**File to create:** `src/commands/audit.ts`
-
-AuditLog class with:
-- log(event: AuditEvent): void
-- getEvents(limit?: number): AuditEvent[]
-- clear(): void
-- exportToJson(): string
-
-AuditEvent should include:
-- timestamp
-- commandId
-- source ('ui' | 'plugin' | 'agent')
-- success: boolean
-- metadata?
-
-**Success criteria:**
-- [ ] AuditLog class created
-- [ ] Events stored in memory array
-- [ ] Singleton exported
-- [ ] Can export to JSON
-
----
-
-## Task D8: Wire Audit Log to Registry
-
-### D8.1 Update CommandRegistry to log executions
-
-**File to modify:** `src/commands/registry.ts`
-
-Import AuditLog and log each command execution.
-
-**Success criteria:**
-- [ ] execute() method logs to AuditLog
-- [ ] Logs success/failure
-- [ ] Includes commandId and source
-
----
-
-## Task D9: Update Keyboard Shortcuts
-
-### D9.1 Update useKeyboardShortcuts
-
-**File to modify:** `src/hooks/useKeyboardShortcuts.ts`
-
-Refactor to use CommandRegistry.execute() instead of direct handlers.
-
-**Success criteria:**
-- [ ] Imports CommandRegistry
-- [ ] All shortcuts call registry.execute()
-- [ ] No direct App handler calls
-
----
-
-## Task D10: Update TitleBar
-
-### D10.1 Update TitleBar component
-
-**File to modify:** `src/components/TitleBar.tsx`
-
-Refactor buttons to use CommandRegistry.execute().
-
-**Success criteria:**
-- [ ] Buttons work via command registry
-- [ ] No direct callbacks in TitleBar
-- [ ] Commands logged to audit
-
----
-
-## Task D11: Update CreateVaultDialog
-
-### D11.1 Update create vault flow
-
-**File to modify:** `src/components/CreateVaultDialog.tsx`
-
-Use CommandRegistry for vault creation.
-
-**Success criteria:**
-- [ ] Vault create goes through command registry
-- [ ] Command registered in App
-
----
-
-## Task D12: Add Tests for Core Functionality
-
-### D12.1 Create tests for registry and tools
-
-**Files to create:**
-- `src/tools/__tests__/vault.test.ts`
-- `src/commands/__tests__/registry.test.ts`
-- `src/commands/__tests__/audit.test.ts`
+**File to create:** `src/stores/__tests__/WorkspaceStateManager.test.ts`
 
 **Test coverage:**
-
-Registry tests:
-- [ ] register() adds command
-- [ ] unregister() removes command
-- [ ] execute() calls command callback
-- [ ] execute() logs to audit log
-
-Vault tools tests:
-- [ ] readFile() reads from backend
-- [ ] writeFile() writes to backend
-- [ ] statPath() returns metadata
-
-Audit tests:
-- [ ] log() stores event
-- [ ] getEvents() returns events
-- [ ] clear() empties log
+- [ ] Workspace serialization
+- [ ] Workspace deserialization
+- [ ] Split creation and removal
+- [ ] Tab management within panes
+- [ ] Pin tabs persistence
 
 **Success criteria:**
 - [ ] All tests pass
-- [ ] Basic coverage for core flows
+- [ ] Workspace state persists correctly
 
 ---
 
