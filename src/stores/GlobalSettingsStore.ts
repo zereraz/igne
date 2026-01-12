@@ -1,15 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { GlobalSettings } from '../types';
-
-// Helper function to check if a file exists
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    const meta = await invoke<{ exists: boolean }>('stat_path', { path });
-    return meta.exists;
-  } catch {
-    return false;
-  }
-}
+import { readJsonSafe, writeJsonSafe, fileExists } from '../utils/safeJson';
 
 // Helper function to get app data directory
 async function getAppDataDir(): Promise<string> {
@@ -48,10 +39,9 @@ class GlobalSettingsStore {
 
       // Load existing settings
       if (this.settingsPath && await fileExists(this.settingsPath)) {
-        try {
-          const content = await invoke<string>('read_file', { path: this.settingsPath });
-          const loaded = JSON.parse(content) as Partial<GlobalSettings>;
+        const loaded = await readJsonSafe<Partial<GlobalSettings>>(this.settingsPath);
 
+        if (loaded) {
           // Merge with defaults to handle version upgrades and missing fields
           this.settings = {
             ...DEFAULT_GLOBAL_SETTINGS,
@@ -63,9 +53,8 @@ class GlobalSettingsStore {
             openLastVault: this.settings.openLastVault,
             language: this.settings.language,
           });
-        } catch (e) {
-          console.error('[GlobalSettingsStore] Failed to load settings:', e);
-          // Will use defaults
+        } else {
+          console.log('[GlobalSettingsStore] No existing settings found, using defaults');
         }
       } else {
         console.log('[GlobalSettingsStore] No existing settings found, using defaults');
@@ -82,9 +71,9 @@ class GlobalSettingsStore {
         this.settingsPath = `${appData}/settings.json`;
       }
 
-      await invoke('write_file', {
-        path: this.settingsPath,
-        content: JSON.stringify(this.settings, null, 2),
+      await writeJsonSafe(this.settingsPath, this.settings, {
+        preserveUnknown: true,
+        merge: true,
       });
       console.log('[GlobalSettingsStore] Saved settings');
     } catch (e) {

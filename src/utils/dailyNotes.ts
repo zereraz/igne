@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { invoke } from '@tauri-apps/api/core';
+import { readJsonSafe, writeJsonSafe } from './safeJson';
 
 export interface DailyNotesConfig {
   folder: string;
@@ -26,21 +27,18 @@ const DEFAULT_CONFIG: DailyNotesConfig = {
 };
 
 export async function loadDailyNotesConfig(): Promise<DailyNotesConfig> {
-  try {
-    const config = await invoke<string>('read_file', {
-      path: '.obsidian/daily-notes.json',
-    });
-    return { ...DEFAULT_CONFIG, ...JSON.parse(config) };
-  } catch (e) {
-    return DEFAULT_CONFIG;
+  const config = await readJsonSafe<DailyNotesConfig>('.obsidian/daily-notes.json');
+  if (config) {
+    return { ...DEFAULT_CONFIG, ...config };
   }
+  return DEFAULT_CONFIG;
 }
 
 export async function saveDailyNotesConfig(config: DailyNotesConfig): Promise<void> {
   try {
-    await invoke('write_file', {
-      path: '.obsidian/daily-notes.json',
-      content: JSON.stringify(config, null, 2),
+    await writeJsonSafe('.obsidian/daily-notes.json', config, {
+      preserveUnknown: true,
+      merge: true,
     });
   } catch (e) {
     console.error('Failed to save daily notes config:', e);

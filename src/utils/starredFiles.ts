@@ -5,6 +5,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { join } from '@tauri-apps/api/path';
+import { readJsonSafe, writeJsonSafe } from './safeJson';
 
 interface StarredFilesData {
   stars: StarredFile[];
@@ -23,10 +24,13 @@ const STARRED_FILE = '.obsidian/starred.json';
 export async function loadStarredFiles(vaultPath: string): Promise<Set<string>> {
   try {
     const starredPath = await join(vaultPath, STARRED_FILE);
-    const content = await invoke<string>('read_file', { path: starredPath });
-    const data: StarredFilesData = JSON.parse(content);
+    const data = await readJsonSafe<StarredFilesData>(starredPath);
 
-    return new Set(data.stars.map(s => s.path));
+    if (data?.stars) {
+      return new Set(data.stars.map(s => s.path));
+    }
+
+    return new Set();
   } catch (error) {
     // File doesn't exist or is invalid - return empty set
     return new Set();
@@ -54,9 +58,10 @@ async function saveStarredFiles(vaultPath: string, starredPaths: Set<string>): P
     // Directory already exists
   }
 
-  await invoke('write_file', {
-    path: starredPath,
-    content: JSON.stringify(data, null, 2),
+  // Use safeJson to preserve unknown keys
+  await writeJsonSafe(starredPath, data, {
+    preserveUnknown: true,
+    merge: true,
   });
 }
 
