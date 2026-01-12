@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { invoke } from '@tauri-apps/api/core';
+import type { FileMetadata, FileEntry } from '../types';
 
 export class DataAdapter {
   constructor(private vaultPath: string) {}
@@ -21,16 +22,16 @@ export class DataAdapter {
 
   async exists(path: string): Promise<boolean> {
     try {
-      await invoke('get_file_meta', { path });
-      return true;
+      const metadata = await invoke<FileMetadata>('stat_path', { path });
+      return metadata.exists;
     } catch {
       return false;
     }
   }
 
   async list(path: string): Promise<string[]> {
-    const entries = await invoke<string[]>('read_directory', { path });
-    return entries;
+    const entries = await invoke<FileEntry[]>('read_directory', { path });
+    return entries.map(entry => entry.name);
   }
 
   async mkdir(path: string): Promise<void> {
@@ -38,6 +39,6 @@ export class DataAdapter {
   }
 
   async rmdir(path: string, recursive?: boolean): Promise<void> {
-    await invoke('delete_directory', { path, recursive });
+    await invoke('delete_file', { path });  // delete_file handles both files and directories
   }
 }

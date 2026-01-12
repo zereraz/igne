@@ -58,19 +58,51 @@ export interface Events {
 
 export abstract class TAbstractFile {
   vault: any; // Will be Vault instance, using any to avoid circular dependency
-  path!: string;
-  name!: string;
+  path: string;
+  name: string;
   parent: TFolder | null = null;
+
+  constructor(vault: any, path: string, name: string, parent: TFolder | null = null) {
+    this.vault = vault;
+    this.path = path;
+    this.name = name;
+    this.parent = parent;
+  }
 }
 
 export class TFile extends TAbstractFile {
-  stat!: FileStats;
-  basename!: string;
-  extension!: string;
+  stat: FileStats;
+  basename: string;
+  extension: string;
+
+  constructor(
+    vault: any,
+    path: string,
+    name: string,
+    parent: TFolder | null = null,
+    stat?: FileStats
+  ) {
+    super(vault, path, name, parent);
+    this.basename = name.replace(/\.[^/.]+$/, '');
+    this.extension = name.split('.').pop() || '';
+    this.stat = stat || { ctime: 0, mtime: 0, size: 0 };
+  }
 }
 
 export class TFolder extends TAbstractFile {
-  children!: TAbstractFile[];
+  children: TAbstractFile[];
+
+  constructor(
+    vault: any,
+    path: string,
+    name: string,
+    parent: TFolder | null = null,
+    children: TAbstractFile[] = []
+  ) {
+    super(vault, path, name, parent);
+    this.children = children;
+  }
+
   isRoot(): boolean {
     return this.path === '' || this.path === '/';
   }
@@ -154,15 +186,19 @@ export interface FrontMatterCache {
 // Plugin Types
 // =============================================================================
 
+/**
+ * Plugin manifest interface matching Obsidian 1.11.4
+ * @see https://github.com/obsidianmd/obsidian-api/blob/master/manifest.ts
+ */
 export interface PluginManifest {
   id: string;
   name: string;
   version: string;
   minAppVersion: string;
-  description: string;
-  author: string;
-  authorUrl: string;
-  isDesktopOnly: boolean;
+  description?: string;
+  author?: string;
+  authorUrl?: string;
+  isDesktopOnly?: boolean;
 }
 
 export interface PluginSettingTab {

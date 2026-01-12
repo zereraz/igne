@@ -1,260 +1,245 @@
-# Phase D: Command Registry + Tool Layer
+# Phase E: Obsidian API Layer (Pinned 1.11.4)
 
-Build unified command/tool surface that UI, plugins, and AI all use.
+Build the Obsidian compatibility layer **on top of** the command/tool layer from Phase D.
 
 ## Context
 
-Currently, UI actions are scattered throughout components with no unified interface. Plugins and future AI agents need a consistent way to invoke capabilities.
+Currently, `src/obsidian/*` has issues:
+- **PluginManifest**: All fields are required, but upstream has optional fields
+- **Vault**: Creates plain objects instead of real class instances (`instanceof` checks fail)
+- **DataAdapter**: Calls non-existent backend commands (`get_file_meta`), wrong types
 
-**Reference:** `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase D
+**Goal:** Make the Obsidian API work correctly by using the tool layer from Phase D.
 
-## Goal
-
-Create a tool/command layer where:
-- Every capability is a "tool" (pure function)
-- Every user action is a "command" (uses tools)
-- UI, plugins, and AI all use the same commands
-- All actions are logged for audit trail
+**Reference:** `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase E
 
 ---
 
-## Task D1: Define Tool Interface
+## Task E1: Fix PluginManifest Types
 
-### D1.1 Create tool types
+### E1.1 Make PluginManifest match upstream Obsidian 1.11.4
 
-**File to create:** `src/tools/types.ts`
+**Problem:** Current `PluginManifest` has all fields required, breaking plugins that omit optional fields.
 
-Define Tool<TInput, TResult> interface and ToolContext
+**Upstream reference:**
+```typescript
+interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  minAppVersion: string;
+  description?: string;        // OPTIONAL
+  author?: string;             // OPTIONAL
+  authorUrl?: string;          // OPTIONAL
+  isDesktopOnly?: boolean;     // OPTIONAL
+}
+```
+
+**File to modify:** `src/obsidian/types.ts` (lines 157-166)
+
+**Action:**
+- Mark `description`, `author`, `authorUrl`, `isDesktopOnly` as optional
+- Add JSDoc comment referencing Obsidian 1.11.4
 
 **Success criteria:**
-- [ ] src/tools/types.ts created
-- [ ] Tool interface defined with execute(context, input) -> Promise<Result>
-- [ ] ToolContext interface defined (includes vaultPath, source for audit)
+- [ ] PluginManifest has 4 required fields (id, name, version, minAppVersion)
+- [ ] PluginManifest has 4 optional fields (description, author, authorUrl, isDesktopOnly)
+- [ ] Code compiles without errors
 
 ---
 
-## Task D2: Create Vault Tools
+## Task E2: Fix Vault Class Instances
 
-### D2.1 Implement file operation tools
+### E2.1 Make TFile and TFolder real class instances
 
-**File to create:** `src/tools/vault.ts`
+**Problem:** `Vault.ts` creates plain objects and casts them as `TFile`/`TFolder`. This breaks `instanceof` checks that plugins rely on.
 
-Implement tools: createFile, readFile, writeFile, deleteFile, renameFile, statPath, listDir
+**Files to modify:** `src/obsidian/types.ts`, `src/obsidian/Vault.ts`
 
-**Backend commands to use:**
-- `read_file`, `write_file`, `delete_file`, `rename_file`
-- `stat_path`, `read_directory`
+**Actions:**
+
+1. **In `types.ts`**: Ensure `TFile` and `TFolder` are proper classes with constructors
+2. **In `Vault.ts`**: Use `new TFile(...)` and `new TFolder(...)` instead of object literals
+
+**Before (Vault.ts lines 62-74):**
+```typescript
+return {
+  vault: this,
+  path,
+  name: entry.name,
+  parent: parentPath ? (this.getAbstractFileByPath(parentPath) as TFolder) : null,
+  stat: { ctime: 0, mtime: 0, size: 0 },
+  basename: entry.name.replace(/\.[^/.]+$/, ''),
+  extension: entry.name.split('.').pop() || '',
+} as TFile;
+```
+
+**After:**
+```typescript
+return new TFile(this, path, entry.name, parentPath ? this.getAbstractFileByPath(parentPath) as TFolder : null);
+```
 
 **Success criteria:**
-- [ ] All 7 vault tools implemented
-- [ ] Each tool wraps Tauri commands
-- [ ] Proper error handling with Result type
-- [ ] Exported as named exports
+- [ ] `TFile` and `TFolder` have proper constructors
+- [ ] `Vault.ts` uses `new TFile()` and `new TFolder()`
+- [ ] `file instanceof TFile` returns `true`
+- [ ] `folder instanceof TFolder` returns `true`
 
 ---
 
-## Task D3: Create Workspace Tools
+## Task E3: Fix DataAdapter
 
-### D3.1 Implement workspace tools
+### E3.1 Fix DataAdapter backend commands
 
-**File to create:** `src/tools/workspace.ts`
+**Problem:** `DataAdapter` calls non-existent commands:
+- `get_file_meta` doesn't exist (should be `stat_path`)
+- `read_directory` returns `FileEntry[]`, not `string[]`
 
-Implement: openFile, closeFile, setActiveFile
+**File to modify:** `src/obsidian/DataAdapter.ts`
 
-For now these can be stubs that interact with App state/stores.
+**Actions:**
+
+1. **Fix `exists()` (lines 22-29):**
+   - Change `get_file_meta` → `stat_path`
+   - Import `FileMetadata` type from backend
+   - Check `exists` property
+
+2. **Fix `list()` (lines 31-34):**
+   - Change return type to `FileEntry[]`
+   - Extract names from entries
 
 **Success criteria:**
-- [ ] src/tools/workspace.ts created
-- [ ] 3 workspace tools defined with proper signatures
-- [ ] Tools interact with App state
+- [ ] `exists()` uses `stat_path` command
+- [ ] `list()` returns array of file entry names (string[])
+- [ ] Both methods handle errors correctly
 
 ---
 
-## Task D4: Create Command Registry
+## Task E4: Add getResourcePath to Vault
 
-### D4.1 Implement command registry
+### E4.1 Implement Vault.getResourcePath()
 
-**File to create:** `src/commands/registry.ts`
+**Problem:** Plugins call `vault.getResourcePath(file)` to get URLs for images/attachments. This method is missing.
 
-Create CommandRegistry class with:
-- register(command: Command): void
-- unregister(id: string): void
-- execute(id: string, ...args): Promise<any>
-- get(id: string): Command | undefined
-- getAll(): Command[]
-- onCommandExecuted(callback): EventRef
+**Reference:** Obsidian returns `app://local/<vault-path>` or similar resource URLs.
+
+**File to modify:** `src/obsidian/Vault.ts`
+
+**Action:** Add method that converts file path to resource URL:
+```typescript
+getResourcePath(file: TFile): string {
+  return `app://local/${file.path}`;
+}
+```
 
 **Success criteria:**
-- [ ] CommandRegistry class created
-- [ ] Singleton exported as default
-- [ ] All methods work
-- [ ] Commands stored in Map
+- [ ] `getResourcePath()` method added to Vault class
+- [ ] Returns string in format `app://local/<path>`
+- [ ] Method is typed correctly
 
 ---
 
-## Task D5: Define Command Type
+## Task E5: Use Tool Layer Instead of Direct invoke
 
-### D5.1 Create command types
+### E5.1 Refactor Vault to use tool layer
 
-**File to create:** `src/commands/types.ts`
+**Problem:** `Vault.ts` calls Tauri `invoke()` directly. It should use the tool layer from Phase D.
 
-Define Command interface:
-- id: string
-- name: string
-- label?: string
-- icon?: string
-- callback: (...args) => any
-- hotkeys?: Hotkey[]
+**Prerequisite:** Phase D must create `src/tools/vault.ts` first
+
+**File to modify:** `src/obsidian/Vault.ts`
+
+**Actions:**
+1. Import tools from `src/tools/vault.ts`
+2. Replace `invoke('read_file', ...)` with `tools.readFile(...)`
+3. Replace `invoke('write_file', ...)` with `tools.writeFile(...)`
+4. Replace `invoke('delete_file', ...)` with `tools.deleteFile(...)`
+5. Replace `invoke('rename_file', ...)` with `tools.renameFile(...)`
 
 **Success criteria:**
-- [ ] Command interface defined
-- [ ] Hotkey type imported or defined
-- [ ] Exported
+- [ ] All direct `invoke()` calls replaced with tool calls
+- [ ] Vault uses tool layer for all file operations
+- [ ] Tests still pass
 
 ---
 
-## Task D6: Register Core Commands
+## Task E6: Add Unit Tests for Core API
 
-### D6.1 Register commands in App.tsx
-
-**File to modify:** `src/App.tsx`
-
-Register at least 10 core commands:
-1. file.new - Create new note
-2. file.save - Save current file
-3. file.open - Open file
-4. view.toggleGraph - Toggle graph view
-5. view.toggleSettings - Toggle settings modal
-6. editor.togglePreview - Toggle preview mode
-7. workspace.quickSwitcher - Quick file switcher
-8. edit.undo - Undo
-9. edit.redo - Redo
-10. format.bold - Bold selection
-
-**Success criteria:**
-- [ ] CommandRegistry imported and initialized in App
-- [ ] 10+ commands registered in useEffect
-- [ ] Each has id, name, callback
-- [ ] Callbacks use existing handlers or tools
-
----
-
-## Task D7: Add Audit Log
-
-### D7.1 Create audit log
-
-**File to create:** `src/commands/audit.ts`
-
-AuditLog class with:
-- log(event: AuditEvent): void
-- getEvents(limit?: number): AuditEvent[]
-- clear(): void
-- exportToJson(): string
-
-AuditEvent should include:
-- timestamp
-- commandId
-- source ('ui' | 'plugin' | 'agent')
-- success: boolean
-- metadata?
-
-**Success criteria:**
-- [ ] AuditLog class created
-- [ ] Events stored in memory array
-- [ ] Singleton exported
-- [ ] Can export to JSON
-
----
-
-## Task D8: Wire Audit Log to Registry
-
-### D8.1 Update CommandRegistry to log executions
-
-**File to modify:** `src/commands/registry.ts`
-
-Import AuditLog and log each command execution.
-
-**Success criteria:**
-- [ ] execute() method logs to AuditLog
-- [ ] Logs success/failure
-- [ ] Includes commandId and source
-
----
-
-## Task D9: Update Keyboard Shortcuts
-
-### D9.1 Update useKeyboardShortcuts
-
-**File to modify:** `src/hooks/useKeyboardShortcuts.ts`
-
-Refactor to use CommandRegistry.execute() instead of direct handlers.
-
-**Success criteria:**
-- [ ] Imports CommandRegistry
-- [ ] All shortcuts call registry.execute()
-- [ ] No direct App handler calls
-
----
-
-## Task D10: Update TitleBar
-
-### D10.1 Update TitleBar component
-
-**File to modify:** `src/components/TitleBar.tsx`
-
-Refactor buttons to use CommandRegistry.execute().
-
-**Success criteria:**
-- [ ] Buttons work via command registry
-- [ ] No direct callbacks in TitleBar
-- [ ] Commands logged to audit
-
----
-
-## Task D11: Update CreateVaultDialog
-
-### D11.1 Update create vault flow
-
-**File to modify:** `src/components/CreateVaultDialog.tsx`
-
-Use CommandRegistry for vault creation.
-
-**Success criteria:**
-- [ ] Vault create goes through command registry
-- [ ] Command registered in App
-
----
-
-## Task D12: Add Tests for Core Functionality
-
-### D12.1 Create tests for registry and tools
+### E6.1 Create tests for Vault, MetadataCache, Workspace
 
 **Files to create:**
-- `src/tools/__tests__/vault.test.ts`
-- `src/commands/__tests__/registry.test.ts`
-- `src/commands/__tests__/audit.test.ts`
+- `src/obsidian/__tests__/Vault.api.test.ts`
+- `src/obsidian/__tests__/MetadataCache.api.test.ts` (extend existing)
 
 **Test coverage:**
 
-Registry tests:
-- [ ] register() adds command
-- [ ] unregister() removes command
-- [ ] execute() calls command callback
-- [ ] execute() logs to audit log
+**Vault tests:**
+- [ ] `create()` creates file and triggers event
+- [ ] `read()` reads file content
+- [ ] `modify()` updates file and triggers event
+- [ ] `delete()` removes file and triggers event
+- [ ] `rename()` moves file and triggers event
+- [ ] `getAbstractFileByPath()` finds files/folders
+- [ ] `getResourcePath()` returns correct URL
+- [ ] `instanceof` works for TFile and TFolder
 
-Vault tools tests:
-- [ ] readFile() reads from backend
-- [ ] writeFile() writes to backend
-- [ ] statPath() returns metadata
+**MetadataCache tests:**
+- [ ] `getCache()` returns metadata for file
+- [ ] `getFileCache()` returns CachedMetadata
+- [ ] `getLinks()` returns links for file
 
-Audit tests:
-- [ ] log() stores event
-- [ ] getEvents() returns events
-- [ ] clear() empties log
+**Workspace tests:**
+- [ ] `getLeaf()` returns a leaf
+- [ ] `activeLeaf` is accessible
 
 **Success criteria:**
 - [ ] All tests pass
-- [ ] Basic coverage for core flows
+- [ ] Coverage for basic Vault operations
+- [ ] Coverage for basic MetadataCache operations
+
+---
+
+## Task E7: Implement Basic Workspace Leaf Management
+
+### E7.1 Add Workspace leaf creation and splitting
+
+**Problem:** Plugins need to create new panes and split views. Current `Workspace` is incomplete.
+
+**Files to modify:** `src/obsidian/Workspace.ts`, `src/obsidian/WorkspaceLeaf.ts`
+
+**Actions:**
+1. Implement `getLeaf(newLeaf?: boolean)` - returns existing or new leaf
+2. Implement `splitActiveLeaf(direction?: 'horizontal' | 'vertical')` - splits and returns new leaf
+3. Ensure `activeLeaf` property is updated when leaf changes
+
+**Success criteria:**
+- [ ] `getLeaf()` returns current leaf when called without args
+- [ ] `getLeaf(true)` creates and returns new leaf
+- [ ] `splitActiveLeaf('vertical')` creates split
+- [ ] `activeLeaf` reflects currently active leaf
+
+---
+
+## Task E8: Implement FileManager Behaviors
+
+### E8.1 Wire up FileManager to use tool layer
+
+**Problem:** `FileManager` should coordinate rename operations with link updates, using the tool layer.
+
+**File to modify:** `src/obsidian/FileManager.ts`
+
+**Actions:**
+1. Check if FileManager exists and what it currently does
+2. If it has `renameFile()`, ensure it:
+   - Calls tool layer's `renameFile()`
+   - Triggers MetadataCache update
+   - Uses searchStore to find backlinks
+3. Add trash method if not present
+
+**Success criteria:**
+- [ ] FileManager uses tool layer for operations
+- [ ] Rename triggers cache updates
+- [ ] Method signatures match Obsidian API
 
 ---
 
