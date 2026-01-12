@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Dot, X, Sun, Moon, Settings } from 'lucide-react';
+import { Dot, X, Settings } from 'lucide-react';
 import { OpenFile } from '../types';
+import { ThemeToggle } from './ThemeToggle';
 
 interface TitleBarProps {
   openTabs: OpenFile[];
@@ -9,9 +10,9 @@ interface TitleBarProps {
   onTabClick: (path: string) => void;
   onTabClose: (path: string) => void;
   onFileNameChange: (name: string) => void;
-  onToggleTheme?: () => void;
+  onThemeChange?: (theme: 'dark' | 'light') => void;
   onOpenSettings?: () => void;
-  isDarkMode?: boolean;
+  baseTheme?: 'dark' | 'light';
 }
 
 export function TitleBar({
@@ -20,9 +21,9 @@ export function TitleBar({
   onTabClick,
   onTabClose,
   onFileNameChange,
-  onToggleTheme,
+  onThemeChange,
   onOpenSettings,
-  isDarkMode = true
+  baseTheme = 'dark'
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const appWindow = getCurrentWindow();
@@ -176,34 +177,11 @@ export function TitleBar({
         paddingRight: '8px',
       }}>
         {/* Theme Toggle Button */}
-        {onToggleTheme && (
-          <button
-            onClick={onToggleTheme}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '28px',
-              height: '28px',
-              border: 'none',
-              background: 'transparent',
-              color: '#71717a',
-              cursor: 'pointer',
-              borderRadius: '2px',
-              padding: '0',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#3f3f46';
-              e.currentTarget.style.color = '#e4e4e7';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#71717a';
-            }}
-            title={`Toggle to ${isDarkMode ? 'light' : 'dark'} theme`}
-          >
-            {isDarkMode ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
+        {onThemeChange && (
+          <ThemeToggle
+            baseTheme={baseTheme}
+            onThemeChange={onThemeChange}
+          />
         )}
 
         {/* Settings Button */}

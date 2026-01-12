@@ -1160,9 +1160,14 @@ function App() {
         onTabClick={setActiveTabPath}
         onTabClose={closeTab}
         onFileNameChange={handleFileNameChange}
-        onToggleTheme={handleToggleTheme}
+        onThemeChange={async (theme) => {
+          if (!appearanceSettings) return;
+          const updated = { ...appearanceSettings, baseTheme: theme };
+          setAppearanceSettings(updated);
+          await vaultConfigStore.updateAppearance({ baseTheme: theme });
+        }}
         onOpenSettings={() => setShowSettings(true)}
-        isDarkMode={appearanceSettings?.baseTheme === 'dark'}
+        baseTheme={appearanceSettings?.baseTheme || 'dark'}
       />
 
       {/* Main Content */}
