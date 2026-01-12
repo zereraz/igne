@@ -1,226 +1,265 @@
-# Igne: Phase B - Filesystem + Path Semantics (Critical for Obsidian Compatibility)
+# Phase D: Command Registry + Tool Layer
 
-You are working on the Igne Markdown editor. Complete Phase B tasks from the Obsidian Compatibility Roadmap.
+Build unified command/tool surface that UI, plugins, and AI all use.
 
 ## Context
 
-The current implementation has critical filesystem limitations:
-- Backend directory scanning filters non-`.md` files, breaking attachments, themes, and plugin folders
-- Binary I/O is not implemented (image paste/drop doesn't work properly)
-- Path model is not vault-absolute (uses OS paths in some places)
+Currently, UI actions are scattered throughout components with no unified interface. Plugins and future AI agents need a consistent way to invoke capabilities.
 
-Reference: `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase B
+**Reference:** `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` Phase D
 
-## Task B1: Fix Directory Listing and Metadata
+## Goal
 
-### B1.1 Replace markdown-only listing
+Create a tool/command layer where:
+- Every capability is a "tool" (pure function)
+- Every user action is a "command" (uses tools)
+- UI, plugins, and AI all use the same commands
+- All actions are logged for audit trail
 
-**File to modify:** `src-tauri/src/lib.rs`
+---
 
-The current `read_directory` implementation filters out non-`.md` files. Modify it to:
-- Include ALL files (not just .md)
-- Include the `.obsidian` directory
-- Return file metadata (size, mtime, is_dir)
+## Task D1: Define Tool Interface
 
-**Current implementation** filters like:
-```rust
-if !is_dir && !file_name.ends_with(".md") {
-    continue;
-}
-```
+### D1.1 Create tool types
 
-**Required changes:**
-1. Remove the .md filter - include all files
-2. Add metadata return structure with: size, modified_time, is_file, is_dir
-3. Create a new `FileMetadata` struct:
-```rust
-#[derive(Serialize, Clone)]
-pub struct FileMetadata {
-    pub name: String,
-    pub path: String,
-    pub is_dir: bool,
-    pub size: u64,
-    pub modified: u64,  // timestamp
-    pub children: Option<Vec<FileMetadata>>,
-}
-```
+**File to create:** `src/tools/types.ts`
+
+Define Tool<TInput, TResult> interface and ToolContext
 
 **Success criteria:**
-- [ ] `read_directory` returns ALL files including .png, .jpg, .css, .obsidian folder
-- [ ] File metadata includes size and modified time
-- [ ] Frontend can enumerate theme and snippet folders
+- [ ] src/tools/types.ts created
+- [ ] Tool interface defined with execute(context, input) -> Promise<Result>
+- [ ] ToolContext interface defined (includes vaultPath, source for audit)
 
-### B1.2 Add file metadata command
+---
 
-**File to modify:** `src-tauri/src/lib.rs`
+## Task D2: Create Vault Tools
 
-Add a new Tauri command `stat_path` that returns file metadata without reading content:
+### D2.1 Implement file operation tools
 
-```rust
-#[tauri::command]
-fn stat_path(path: String) -> Result<FileMetadata, String> {
-    // Use std::fs::metadata() to get file info
-    // Return FileMetadata struct
-}
-```
+**File to create:** `src/tools/vault.ts`
 
-Add to `invoke_handler!` macro.
+Implement tools: createFile, readFile, writeFile, deleteFile, renameFile, statPath, listDir
+
+**Backend commands to use:**
+- `read_file`, `write_file`, `delete_file`, `rename_file`
+- `stat_path`, `read_directory`
 
 **Success criteria:**
-- [ ] `stat_path` command exists and can be called from frontend
-- [ ] Returns exists=true/false for files that don't exist
-- [ ] Returns correct size, is_dir, modified time
+- [ ] All 7 vault tools implemented
+- [ ] Each tool wraps Tauri commands
+- [ ] Proper error handling with Result type
+- [ ] Exported as named exports
 
-### B1.3 Replace "exists" checks with metadata
+---
 
-**Files to modify:** `src/stores/*.ts` (GlobalSettingsStore, VaultConfigStore, etc.)
+## Task D3: Create Workspace Tools
 
-Many files use `invoke('read_file')` to check if a file exists. This is wrong.
+### D3.1 Implement workspace tools
 
-**Find and replace pattern:**
-```typescript
-// OLD (wrong):
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await invoke('read_file', { path });
-    return true;
-  } catch {
-    return false;
-  }
-}
+**File to create:** `src/tools/workspace.ts`
 
-// NEW (correct):
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    const meta = await invoke('stat_path', { path });
-    return meta.exists;
-  } catch {
-    return false;
-  }
-}
-```
+Implement: openFile, closeFile, setActiveFile
+
+For now these can be stubs that interact with App state/stores.
 
 **Success criteria:**
-- [ ] All stores use `stat_path` instead of `read_file` for existence checks
-- [ ] No unnecessary file reads just to check existence
+- [ ] src/tools/workspace.ts created
+- [ ] 3 workspace tools defined with proper signatures
+- [ ] Tools interact with App state
 
-## Task B2: Implement Binary Read/Write
+---
 
-### B2.1 Add binary file commands to backend
+## Task D4: Create Command Registry
 
-**File to modify:** `src-tauri/src/lib.rs`
+### D4.1 Implement command registry
 
-Add commands for binary file I/O:
+**File to create:** `src/commands/registry.ts`
 
-```rust
-#[tauri::command]
-fn read_file_binary(path: String) -> Result<Vec<u8>, String> {
-    fs::read(&path).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn write_file_binary(path: String, data: Vec<u8>) -> Result<(), String> {
-    fs::write(&path, data).map_err(|e| e.to_string())
-}
-```
-
-Add to `invoke_handler!` and to `src-tauri/capabilities/default.json` permissions.
+Create CommandRegistry class with:
+- register(command: Command): void
+- unregister(id: string): void
+- execute(id: string, ...args): Promise<any>
+- get(id: string): Command | undefined
+- getAll(): Command[]
+- onCommandExecuted(callback): EventRef
 
 **Success criteria:**
-- [ ] `read_file_binary` and `write_file_binary` commands exist
-- [ ] Can read image files without corruption
-- [ ] Can write image files and they open correctly
+- [ ] CommandRegistry class created
+- [ ] Singleton exported as default
+- [ ] All methods work
+- [ ] Commands stored in Map
 
-### B2.2 Update image paste/drop to use binary writes
+---
 
-**File to modify:** `src/utils/imageHandler.ts` (or wherever image handling is)
+## Task D5: Define Command Type
 
-Current implementation likely uses `write_file` with text encoding.
+### D5.1 Create command types
 
-**Required changes:**
-1. Use `write_file_binary` for image data
-2. Ensure base64/Uint8Array is properly converted to Vec<u8>
-3. Test that pasted images render correctly
+**File to create:** `src/commands/types.ts`
 
-**Success criteria:**
-- [ ] Pasting an image creates a valid image file
-- [ ] File size matches original image
-- [ ] Image renders in markdown preview
-
-### B2.3 Update markdown rendering for images
-
-**File to modify:** Check if images render with proper vault-relative paths
+Define Command interface:
+- id: string
+- name: string
+- label?: string
+- icon?: string
+- callback: (...args) => any
+- hotkeys?: Hotkey[]
 
 **Success criteria:**
-- [ ] Images embedded in markdown display correctly
-- [ ] Image paths work across different vault locations
+- [ ] Command interface defined
+- [ ] Hotkey type imported or defined
+- [ ] Exported
 
-## Task B3: Canonicalize Paths to Vault-Absolute
+---
 
-### B3.1 Define canonical path helpers
+## Task D6: Register Core Commands
 
-**File to create:** `src/utils/vaultPaths.ts`
+### D6.1 Register commands in App.tsx
 
-```typescript
-/**
- * Convert OS absolute path to vault-absolute path
- * Example: /Users/name/Vault/Folder/Note.md -> /Folder/Note.md
- */
-export function toVaultPath(osPath: string, vaultRoot: string): string {
-  // Remove vaultRoot prefix
-  // Normalize slashes to /
-  // Ensure starts with /
-}
+**File to modify:** `src/App.tsx`
 
-/**
- * Convert vault-absolute path to OS path
- * Example: /Folder/Note.md -> /Users/name/Vault/Folder/Note.md
- */
-export function toOsPath(vaultPath: string, vaultRoot: string): string {
-  // Join vaultRoot with vaultPath
-  // Handle leading /
-  // Normalize for OS (backslashes on Windows)
-}
-```
+Register at least 10 core commands:
+1. file.new - Create new note
+2. file.save - Save current file
+3. file.open - Open file
+4. view.toggleGraph - Toggle graph view
+5. view.toggleSettings - Toggle settings modal
+6. editor.togglePreview - Toggle preview mode
+7. workspace.quickSwitcher - Quick file switcher
+8. edit.undo - Undo
+9. edit.redo - Redo
+10. format.bold - Bold selection
 
 **Success criteria:**
-- [ ] `toVaultPath` correctly strips vault root
-- [ ] `toOsPath` correctly joins with vault root
-- [ ] Paths are normalized (consistent slashes)
+- [ ] CommandRegistry imported and initialized in App
+- [ ] 10+ commands registered in useEffect
+- [ ] Each has id, name, callback
+- [ ] Callbacks use existing handlers or tools
 
-### B3.2 Migrate persisted state to vault paths
+---
 
-**Files to check:**
-- `src/stores/WorkspaceStateManager.ts`
-- `src/stores/VaultsStore.ts`
-- `.obsidian/workspace.json` (after reading)
+## Task D7: Add Audit Log
 
-**Required changes:**
-1. Ensure saved open tabs use vault paths
-2. Ensure last opened file uses vault paths
-3. Convert legacy OS paths to vault paths on load
+### D7.1 Create audit log
 
-**Success criteria:**
-- [ ] `.obsidian/workspace.json` contains only vault-relative paths
-- [ ] Opening vault on different machine restores tabs correctly
+**File to create:** `src/commands/audit.ts`
 
-### B3.3 Update file watcher and search index
+AuditLog class with:
+- log(event: AuditEvent): void
+- getEvents(limit?: number): AuditEvent[]
+- clear(): void
+- exportToJson(): string
 
-**Files to modify:**
-- `src/hooks/useFileWatcher.ts`
-- `src/stores/searchStore.ts`
-
-**Required changes:**
-1. Store vault paths in search index
-2. Emit vault paths in file change events
-3. Convert to OS paths only at backend boundary
+AuditEvent should include:
+- timestamp
+- commandId
+- source ('ui' | 'plugin' | 'agent')
+- success: boolean
+- metadata?
 
 **Success criteria:**
-- [ ] Search index uses vault paths internally
-- [ ] File watcher events use vault paths
+- [ ] AuditLog class created
+- [ ] Events stored in memory array
+- [ ] Singleton exported
+- [ ] Can export to JSON
+
+---
+
+## Task D8: Wire Audit Log to Registry
+
+### D8.1 Update CommandRegistry to log executions
+
+**File to modify:** `src/commands/registry.ts`
+
+Import AuditLog and log each command execution.
+
+**Success criteria:**
+- [ ] execute() method logs to AuditLog
+- [ ] Logs success/failure
+- [ ] Includes commandId and source
+
+---
+
+## Task D9: Update Keyboard Shortcuts
+
+### D9.1 Update useKeyboardShortcuts
+
+**File to modify:** `src/hooks/useKeyboardShortcuts.ts`
+
+Refactor to use CommandRegistry.execute() instead of direct handlers.
+
+**Success criteria:**
+- [ ] Imports CommandRegistry
+- [ ] All shortcuts call registry.execute()
+- [ ] No direct App handler calls
+
+---
+
+## Task D10: Update TitleBar
+
+### D10.1 Update TitleBar component
+
+**File to modify:** `src/components/TitleBar.tsx`
+
+Refactor buttons to use CommandRegistry.execute().
+
+**Success criteria:**
+- [ ] Buttons work via command registry
+- [ ] No direct callbacks in TitleBar
+- [ ] Commands logged to audit
+
+---
+
+## Task D11: Update CreateVaultDialog
+
+### D11.1 Update create vault flow
+
+**File to modify:** `src/components/CreateVaultDialog.tsx`
+
+Use CommandRegistry for vault creation.
+
+**Success criteria:**
+- [ ] Vault create goes through command registry
+- [ ] Command registered in App
+
+---
+
+## Task D12: Add Tests for Core Functionality
+
+### D12.1 Create tests for registry and tools
+
+**Files to create:**
+- `src/tools/__tests__/vault.test.ts`
+- `src/commands/__tests__/registry.test.ts`
+- `src/commands/__tests__/audit.test.ts`
+
+**Test coverage:**
+
+Registry tests:
+- [ ] register() adds command
+- [ ] unregister() removes command
+- [ ] execute() calls command callback
+- [ ] execute() logs to audit log
+
+Vault tools tests:
+- [ ] readFile() reads from backend
+- [ ] writeFile() writes to backend
+- [ ] statPath() returns metadata
+
+Audit tests:
+- [ ] log() stores event
+- [ ] getEvents() returns events
+- [ ] clear() empties log
+
+**Success criteria:**
+- [ ] All tests pass
+- [ ] Basic coverage for core flows
+
+---
 
 ## Completion
 
-Phase B is complete. All filesystem, binary I/O, and vault path tasks are implemented.
+When ALL tasks complete and tests pass, add this exact marker on its own line:
 
-<promise>COMPLETE</promise>
+PROMISE_COMPLETE_TAG

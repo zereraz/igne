@@ -2,10 +2,12 @@
  * useKeyboardShortcuts Hook
  *
  * Manages global keyboard shortcuts for the application.
- * Provides a centralized way to register and handle keyboard events.
+ * Now uses CommandRegistry to execute commands (Phase D).
  */
 
 import { useEffect, useCallback } from 'react';
+import { CommandRegistry } from '../commands/registry';
+import type { CommandSource } from '../tools/types';
 
 interface KeyboardShortcut {
   key: string;
@@ -28,7 +30,24 @@ interface UseKeyboardShortcutsOptions {
 }
 
 /**
+ * Check if a keyboard event matches a hotkey pattern
+ */
+function matchesHotkey(e: KeyboardEvent, key: string, modifiers?: { meta?: boolean; ctrl?: boolean; alt?: boolean; shift?: boolean }): boolean {
+  if (e.key !== key) return false;
+
+  const hasMeta = e.metaKey || e.ctrlKey; // Treat Cmd and Ctrl as equivalent
+
+  if (modifiers?.meta && !hasMeta) return false;
+  if (modifiers?.ctrl && !e.ctrlKey) return false;
+  if (modifiers?.alt && !e.altKey) return false;
+  if (modifiers?.shift && !e.shiftKey) return false;
+
+  return true;
+}
+
+/**
  * Hook for registering global keyboard shortcuts
+ * Phase D: Now uses CommandRegistry for command execution
  */
 export function useKeyboardShortcuts({
   onSave,
@@ -39,35 +58,33 @@ export function useKeyboardShortcuts({
   onCloseSettings,
   isSettingsOpen = false,
 }: UseKeyboardShortcutsOptions) {
+  // Source for command executions from keyboard
+  const source: CommandSource = 'ui';
+
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + S - Save
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        onSave?.();
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      // Find all commands with matching hotkeys
+      const commands = CommandRegistry.getAll();
+
+      for (const command of commands) {
+        if (!command.hotkeys) continue;
+
+        for (const hotkey of command.hotkeys) {
+          if (matchesHotkey(e, hotkey.key, hotkey.modifiers)) {
+            e.preventDefault();
+            // Execute command via registry
+            try {
+              await CommandRegistry.execute(command.id, source);
+            } catch (err) {
+              console.error(`[useKeyboardShortcuts] Failed to execute command ${command.id}:`, err);
+            }
+            return; // Only execute first matching command
+          }
+        }
       }
-      // Cmd/Ctrl + P - Quick switcher
-      else if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
-        e.preventDefault();
-        onQuickSwitcher?.();
-      }
-      // Cmd/Ctrl + Shift + D - Daily note
-      else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'D') {
-        e.preventDefault();
-        onOpenDailyNote?.();
-      }
-      // Cmd/Ctrl + T - Template modal
-      else if ((e.metaKey || e.ctrlKey) && e.key === 't') {
-        e.preventDefault();
-        onOpenTemplateModal?.();
-      }
-      // Cmd/Ctrl + , - Settings
-      else if ((e.metaKey || e.ctrlKey) && e.key === ',') {
-        e.preventDefault();
-        onOpenSettings?.();
-      }
-      // Escape - Close settings
-      else if (e.key === 'Escape' && isSettingsOpen) {
+
+      // Handle Escape key for closing settings (not registered as a command)
+      if (e.key === 'Escape' && isSettingsOpen) {
         e.preventDefault();
         onCloseSettings?.();
       }
@@ -75,7 +92,7 @@ export function useKeyboardShortcuts({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onSave, onQuickSwitcher, onOpenDailyNote, onOpenTemplateModal, onOpenSettings, onCloseSettings, isSettingsOpen]);
+  }, [onCloseSettings, isSettingsOpen, source]);
 }
 
 /**

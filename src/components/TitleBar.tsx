@@ -3,6 +3,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Dot, X, Settings } from 'lucide-react';
 import { OpenFile } from '../types';
 import { ThemeToggle } from './ThemeToggle';
+import { CommandRegistry } from '../commands/registry';
+import type { CommandSource } from '../tools/types';
 
 interface TitleBarProps {
   openTabs: OpenFile[];
@@ -14,6 +16,8 @@ interface TitleBarProps {
   onOpenSettings?: () => void;
   baseTheme?: 'dark' | 'light';
 }
+
+const source: CommandSource = 'ui';
 
 export function TitleBar({
   openTabs,
@@ -51,6 +55,24 @@ export function TitleBar({
     handleMaximize();
   };
 
+  // Handle tab click via command registry (Phase D)
+  const handleTabClick = (path: string) => {
+    CommandRegistry.execute('tab.switch', source, path).catch(console.error);
+    onTabClick(path); // Also call direct handler for immediate UI update
+  };
+
+  // Handle tab close via command registry (Phase D)
+  const handleTabClose = (path: string) => {
+    CommandRegistry.execute('tab.close', source, path).catch(console.error);
+    onTabClose(path); // Also call direct handler for immediate UI update
+  };
+
+  // Handle settings click via command registry (Phase D)
+  const handleSettingsClick = () => {
+    CommandRegistry.execute('view.toggleSettings', source).catch(console.error);
+    if (onOpenSettings) onOpenSettings(); // Also call direct handler for immediate UI update
+  };
+
   return (
     <div
       data-tauri-drag-region
@@ -81,7 +103,7 @@ export function TitleBar({
         {openTabs.map((tab) => (
           <div
             key={tab.path}
-            onClick={() => onTabClick(tab.path)}
+            onClick={() => handleTabClick(tab.path)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -137,7 +159,7 @@ export function TitleBar({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onTabClose(tab.path);
+                handleTabClose(tab.path);
               }}
               style={{
                 display: 'flex',
@@ -187,7 +209,7 @@ export function TitleBar({
         {/* Settings Button */}
         {onOpenSettings && (
           <button
-            onClick={onOpenSettings}
+            onClick={handleSettingsClick}
             style={{
               display: 'flex',
               alignItems: 'center',

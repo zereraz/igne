@@ -47,7 +47,7 @@ while true; do
     # Path to Claude session log
     SESSION_LOG="$HOME/.claude/projects/-Users-zereraz-Code-Zereraz-igne/$SESSION_ID.jsonl"
 
-    # Start log viewer in background (now waits for file creation)
+    # Start log viewer in background
     log "Starting log viewer..."
     claude-log-viewer "$SESSION_LOG" 2>/dev/null &
     TAIL_PID=$!
@@ -73,7 +73,7 @@ while true; do
         --session-id "$SESSION_ID" \
         2>&1 | tee "$OUTPUT_FILE"
 
-    # Kill the tail process
+    # Kill the log viewer process
     kill $TAIL_PID 2>/dev/null || true
 
     # Check for completion signals (multiple formats for flexibility)
