@@ -132,7 +132,7 @@ export function BlockPicker({
               style={{
                 color: '#71717a',
                 fontSize: '11px',
-                fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace',
+                fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
                 marginTop: '2px',
               }}
             >
@@ -209,7 +209,7 @@ export function BlockPicker({
                           style={{
                             color: '#71717a',
                             fontSize: '11px',
-                            fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace',
+                            fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
                           }}
                         >
                           Line {block.line}
@@ -219,7 +219,7 @@ export function BlockPicker({
                         style={{
                           color: isSelected || isHovered ? '#e4e4e7' : '#a1a1aa',
                           fontSize: '13px',
-                          fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace',
+                          fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',

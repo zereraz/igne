@@ -235,7 +235,7 @@ function StepItem({
               backgroundColor: 'transparent',
               border: 'none',
               cursor: 'pointer',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace',
+              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.color = '#e4e4e7';
