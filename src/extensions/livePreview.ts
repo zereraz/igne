@@ -11,6 +11,7 @@ import {
   CodeBlockWidget,
   CalloutWidget,
   MermaidWidget,
+  HeadingEmbedWidget,
 } from './widgets';
 
 export interface LivePreviewConfig {
@@ -21,6 +22,7 @@ export interface LivePreviewConfig {
   onCalloutToggle?: (pos: number) => void;
   resolveWikilink?: (target: string) => { exists: boolean; content?: string } | null;
   resolveImage?: (src: string) => string;
+  resolveHeading?: (target: string, heading: string) => { exists: boolean; content?: string; headingLevel?: number } | null;
   /** External trigger to force decoration rebuild when files change */
   refreshTrigger?: { current: number };
 }
@@ -33,6 +35,7 @@ const DEFAULT_CONFIG: Required<LivePreviewConfig> = {
   onCalloutToggle: () => {},
   resolveWikilink: () => null,
   resolveImage: (src) => src,
+  resolveHeading: () => null,
   refreshTrigger: { current: 0 },
 };
 
@@ -395,14 +398,50 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         const match = text.match(/!\[\[([^\]]+)\]\]/);
         if (match) {
           const target = match[1];
-          const resolved = fullConfig.resolveWikilink(target);
 
-          decorations.push(
-            Decoration.replace({
-              widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
-              block: true,
-            }).range(node.from, node.to)
-          );
+          // Check for heading transclusion syntax: ![[Note#Heading]]
+          const headingMatch = target.match(/^([^#]+)#(.+)$/);
+          if (headingMatch) {
+            const note = headingMatch[1].trim();
+            const heading = headingMatch[2].trim();
+
+            // Empty heading means show picker
+            if (heading === '') {
+              // Show heading picker trigger
+              decorations.push(
+                Decoration.replace({
+                  widget: new EmbedWidget(note + '#', null, fullConfig.onWikilinkClick),
+                  block: true,
+                }).range(node.from, node.to)
+              );
+            } else {
+              // Resolve heading content
+              const resolved = fullConfig.resolveHeading?.(note, heading);
+
+              decorations.push(
+                Decoration.replace({
+                  widget: new HeadingEmbedWidget(
+                    note,
+                    heading,
+                    resolved?.content ?? null,
+                    resolved?.headingLevel ?? 1,
+                    fullConfig.onWikilinkClick
+                  ),
+                  block: true,
+                }).range(node.from, node.to)
+              );
+            }
+          } else {
+            // Regular note embed
+            const resolved = fullConfig.resolveWikilink(target);
+
+            decorations.push(
+              Decoration.replace({
+                widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          }
         }
         return;
       }
@@ -413,14 +452,47 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         const embedMatch = text.match(/^!\[\[([^\]]+)\]\]$/);
         if (embedMatch) {
           const target = embedMatch[1];
-          const resolved = fullConfig.resolveWikilink(target);
 
-          decorations.push(
-            Decoration.replace({
-              widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
-              block: true,
-            }).range(node.from, node.to)
-          );
+          // Check for heading transclusion syntax: ![[Note#Heading]]
+          const headingMatch = target.match(/^([^#]+)#(.+)$/);
+          if (headingMatch) {
+            const note = headingMatch[1].trim();
+            const heading = headingMatch[2].trim();
+
+            // Empty heading means show picker
+            if (heading === '') {
+              decorations.push(
+                Decoration.replace({
+                  widget: new EmbedWidget(note + '#', null, fullConfig.onWikilinkClick),
+                  block: true,
+                }).range(node.from, node.to)
+              );
+            } else {
+              const resolved = fullConfig.resolveHeading?.(note, heading);
+
+              decorations.push(
+                Decoration.replace({
+                  widget: new HeadingEmbedWidget(
+                    note,
+                    heading,
+                    resolved?.content ?? null,
+                    resolved?.headingLevel ?? 1,
+                    fullConfig.onWikilinkClick
+                  ),
+                  block: true,
+                }).range(node.from, node.to)
+              );
+            }
+          } else {
+            const resolved = fullConfig.resolveWikilink(target);
+
+            decorations.push(
+              Decoration.replace({
+                widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          }
           return;
         }
       }

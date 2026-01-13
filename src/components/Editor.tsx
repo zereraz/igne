@@ -3,11 +3,13 @@ import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, placeholder } from '@codemirror/view';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { invoke } from '@tauri-apps/api/core';
 import { searchWikilinks } from '../utils/wikilinkCompletion';
 import { createLivePreview } from '../extensions/livePreview';
 import { createMarkdownLanguage } from '../extensions/markdownLanguage';
 import { searchStore } from '../stores/searchStore';
 import { handleImagePaste, handleImageDrop } from '../utils/imageHandler';
+import { extractHeadingContent, headingCache } from '../utils/headingFinder';
 import { SearchReplacePanel, FindOptions } from './SearchReplacePanel';
 import type { WikilinkSearchResult, EditorChangeHandler, WikilinkClickHandler } from '../types';
 
@@ -355,6 +357,25 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           const exists = searchStore.noteExists(target);
           return exists ? { exists: true } : { exists: false };
         },
+        resolveHeading: (note: string, heading: string) => {
+          const filePath = searchStore.getFilePathByName(note);
+          if (!filePath) {
+            return { exists: false };
+          }
+
+          // Check cache first
+          const cached = headingCache.getHeadingContent(filePath, heading);
+          if (cached) {
+            return {
+              exists: true,
+              content: cached.content,
+              headingLevel: cached.headingLevel,
+            };
+          }
+
+          // Return not found (will be updated by background refresh)
+          return { exists: false };
+        },
         refreshTrigger,
       }),
       placeholder('Start writing...'),
@@ -557,6 +578,27 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           color: '#71717a',
           fontStyle: 'italic',
         },
+        // Heading embeds
+        '.cm-heading-embed': {
+          margin: '12px 0',
+          border: '1px solid #3f3f46',
+          borderRadius: '6px',
+          backgroundColor: '#18181b',
+          overflow: 'hidden',
+        },
+        '.cm-heading-embed-body': {
+          padding: '12px',
+          color: '#d4d4d8',
+          fontSize: '0.9em',
+        },
+        '.cm-heading-embed-content': {
+          marginTop: '8px',
+          lineHeight: '1.6',
+        },
+        '.cm-heading-embed-content .cm-heading': {
+          marginTop: '0.5em',
+          marginBottom: '0.25em',
+        },
         // Images
         '.cm-image-container': {
           margin: '12px 0',
@@ -747,6 +789,52 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       });
     }
   }, [scrollPosition]);
+
+  // Pre-fetch heading content for all ![[Note#Heading]] references
+  useEffect(() => {
+    if (!content) return;
+
+    const fetchHeadingContent = async () => {
+      // Find all heading transclusions: ![[Note#Heading]]
+      const headingRefRegex = /!\[\[([^#\]]+)#([^\]]+)\]\]/g;
+      const matches = [...content.matchAll(headingRefRegex)];
+
+      for (const match of matches) {
+        const note = match[1].trim();
+        const heading = match[2].trim();
+
+        const filePath = searchStore.getFilePathByName(note);
+        if (!filePath) continue;
+
+        // Check if already cached
+        const cached = headingCache.getHeadingContent(filePath, heading);
+        if (cached) continue;
+
+        try {
+          const noteContent = await invoke<string>('read_file', { path: filePath });
+          const result = extractHeadingContent(noteContent, heading);
+
+          if (result) {
+            headingCache.setHeadingContent(filePath, heading, {
+              content: result.content,
+              headingLevel: result.heading.level,
+            });
+          } else {
+            headingCache.setHeadingContent(filePath, heading, null);
+          }
+
+          // Trigger re-render to show updated content
+          if (refreshTrigger) {
+            refreshTrigger.current++;
+          }
+        } catch {
+          headingCache.setHeadingContent(filePath, heading, null);
+        }
+      }
+    };
+
+    fetchHeadingContent();
+  }, [content, refreshTrigger]);
 
   // Handle image paste and drop
   useEffect(() => {

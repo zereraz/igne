@@ -320,3 +320,70 @@ export class MermaidWidget extends WidgetType {
 
   ignoreEvent() { return true; }
 }
+
+export class HeadingEmbedWidget extends WidgetType {
+  constructor(
+    readonly target: string,
+    readonly heading: string,
+    readonly content: string | null,
+    readonly headingLevel: number,
+    readonly onOpen: (target: string) => void
+  ) { super(); }
+
+  toDOM() {
+    const container = document.createElement('div');
+    container.className = 'cm-embed cm-heading-embed';
+
+    const header = document.createElement('div');
+    header.className = 'cm-embed-header';
+
+    // Use appropriate heading icon based on level
+    const levelIcon = this.getHeadingIcon(this.headingLevel);
+    header.innerHTML = `<span class="cm-embed-icon">${levelIcon}</span><span class="cm-embed-title">${this.target} → ${this.heading}</span>`;
+    header.addEventListener('click', () => this.onOpen(this.target));
+
+    const body = document.createElement('div');
+    body.className = 'cm-embed-body cm-heading-embed-body';
+
+    if (this.content !== null) {
+      // Create a wrapper for the heading
+      const headingEl = document.createElement(`h${Math.min(this.headingLevel, 6)}`);
+      headingEl.className = `cm-heading cm-heading-${this.headingLevel}`;
+      headingEl.textContent = this.heading;
+      body.appendChild(headingEl);
+
+      // Add content
+      const contentEl = document.createElement('div');
+      contentEl.className = 'cm-heading-embed-content';
+      contentEl.textContent = this.content;
+      body.appendChild(contentEl);
+    } else {
+      body.innerHTML = `<span class="cm-embed-missing">Heading "${this.heading}" not found in ${this.target}</span>`;
+    }
+
+    container.appendChild(header);
+    container.appendChild(body);
+    return container;
+  }
+
+  getHeadingIcon(level: number): string {
+    const icons: Record<number, string> = {
+      1: '📄',
+      2: '📋',
+      3: '📝',
+      4: '📌',
+      5: '📎',
+      6: '🔖',
+    };
+    return icons[level] || '📄';
+  }
+
+  eq(other: HeadingEmbedWidget) {
+    return this.target === other.target &&
+           this.heading === other.heading &&
+           this.content === other.content &&
+           this.headingLevel === other.headingLevel;
+  }
+
+  ignoreEvent() { return false; }
+}
