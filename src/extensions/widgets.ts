@@ -83,68 +83,6 @@ export class EmbedWidget extends WidgetType {
   ignoreEvent() { return false; }
 }
 
-export class BlockEmbedWidget extends WidgetType {
-  constructor(
-    readonly noteName: string,
-    readonly blockId: string,
-    readonly content: string | null,
-    readonly blockType: string,
-    readonly onOpen: (noteName: string) => void,
-    readonly onGoToBlock?: () => void
-  ) { super(); }
-
-  toDOM() {
-    const container = document.createElement('div');
-    container.className = 'cm-block-embed';
-    container.dataset.note = this.noteName;
-    container.dataset.block = this.blockId;
-
-    const header = document.createElement('div');
-    header.className = 'cm-block-embed-header';
-    header.innerHTML = `<span class="cm-block-embed-icon">${this.getBlockIcon()}</span><span class="cm-block-embed-title">${this.noteName}#${this.blockId}</span>`;
-    header.addEventListener('click', () => this.onOpen(this.noteName));
-
-    const body = document.createElement('div');
-    body.className = 'cm-block-embed-body';
-
-    if (this.content) {
-      body.textContent = this.content;
-    } else {
-      body.innerHTML = '<span class="cm-block-embed-missing">Block not found</span>';
-    }
-
-    container.appendChild(header);
-    container.appendChild(body);
-    return container;
-  }
-
-  getBlockIcon(): string {
-    switch (this.blockType) {
-      case 'list':
-      case 'task':
-        return '📝';
-      case 'callout':
-        return '💡';
-      case 'quote':
-        return '💬';
-      case 'code':
-        return '💻';
-      case 'heading':
-        return '📌';
-      default:
-        return '📄';
-    }
-  }
-
-  eq(other: BlockEmbedWidget) {
-    return this.noteName === other.noteName &&
-           this.blockId === other.blockId &&
-           this.content === other.content;
-  }
-
-  ignoreEvent() { return false; }
-}
-
 export class TagWidget extends WidgetType {
   constructor(
     readonly tag: string,
@@ -383,90 +321,69 @@ export class MermaidWidget extends WidgetType {
   ignoreEvent() { return true; }
 }
 
-// Media type detection
-const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.wma'];
-const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogv', '.mov', '.avi', '.mkv', '.m4v', '.wmv'];
-
-export function getMediaType(filename: string): 'audio' | 'video' | null {
-  const lowerFilename = filename.toLowerCase();
-  // Check video first since .webm and .ogv can be both audio and video
-  if (VIDEO_EXTENSIONS.some(ext => lowerFilename.endsWith(ext))) {
-    return 'video';
-  }
-  if (AUDIO_EXTENSIONS.some(ext => lowerFilename.endsWith(ext))) {
-    return 'audio';
-  }
-  return null;
-}
-
-export class AudioWidget extends WidgetType {
+export class HeadingEmbedWidget extends WidgetType {
   constructor(
-    readonly src: string,
-    readonly filename: string
+    readonly target: string,
+    readonly heading: string,
+    readonly content: string | null,
+    readonly headingLevel: number,
+    readonly onOpen: (target: string) => void
   ) { super(); }
 
   toDOM() {
     const container = document.createElement('div');
-    container.className = 'cm-audio-container';
+    container.className = 'cm-embed cm-heading-embed';
 
-    const audio = document.createElement('audio');
-    audio.src = this.src;
-    audio.className = 'cm-audio';
-    audio.controls = true;
-    audio.setAttribute('data-filename', this.filename);
+    const header = document.createElement('div');
+    header.className = 'cm-embed-header';
 
-    const label = document.createElement('div');
-    label.className = 'cm-audio-label';
-    label.textContent = this.filename;
+    // Use appropriate heading icon based on level
+    const levelIcon = this.getHeadingIcon(this.headingLevel);
+    header.innerHTML = `<span class="cm-embed-icon">${levelIcon}</span><span class="cm-embed-title">${this.target} → ${this.heading}</span>`;
+    header.addEventListener('click', () => this.onOpen(this.target));
 
-    audio.onerror = () => {
-      container.innerHTML = `<span class="cm-audio-error">Audio not found: ${this.filename}</span>`;
-    };
+    const body = document.createElement('div');
+    body.className = 'cm-embed-body cm-heading-embed-body';
 
-    container.appendChild(label);
-    container.appendChild(audio);
+    if (this.content !== null) {
+      // Create a wrapper for the heading
+      const headingEl = document.createElement(`h${Math.min(this.headingLevel, 6)}`);
+      headingEl.className = `cm-heading cm-heading-${this.headingLevel}`;
+      headingEl.textContent = this.heading;
+      body.appendChild(headingEl);
+
+      // Add content
+      const contentEl = document.createElement('div');
+      contentEl.className = 'cm-heading-embed-content';
+      contentEl.textContent = this.content;
+      body.appendChild(contentEl);
+    } else {
+      body.innerHTML = `<span class="cm-embed-missing">Heading "${this.heading}" not found in ${this.target}</span>`;
+    }
+
+    container.appendChild(header);
+    container.appendChild(body);
     return container;
   }
 
-  eq(other: AudioWidget) {
-    return this.src === other.src;
-  }
-
-  ignoreEvent() { return true; }
-}
-
-export class VideoWidget extends WidgetType {
-  constructor(
-    readonly src: string,
-    readonly filename: string
-  ) { super(); }
-
-  toDOM() {
-    const container = document.createElement('div');
-    container.className = 'cm-video-container';
-
-    const video = document.createElement('video');
-    video.src = this.src;
-    video.className = 'cm-video';
-    video.controls = true;
-    video.setAttribute('data-filename', this.filename);
-
-    const label = document.createElement('div');
-    label.className = 'cm-video-label';
-    label.textContent = this.filename;
-
-    video.onerror = () => {
-      container.innerHTML = `<span class="cm-video-error">Video not found: ${this.filename}</span>`;
+  getHeadingIcon(level: number): string {
+    const icons: Record<number, string> = {
+      1: '📄',
+      2: '📋',
+      3: '📝',
+      4: '📌',
+      5: '📎',
+      6: '🔖',
     };
-
-    container.appendChild(label);
-    container.appendChild(video);
-    return container;
+    return icons[level] || '📄';
   }
 
-  eq(other: VideoWidget) {
-    return this.src === other.src;
+  eq(other: HeadingEmbedWidget) {
+    return this.target === other.target &&
+           this.heading === other.heading &&
+           this.content === other.content &&
+           this.headingLevel === other.headingLevel;
   }
 
-  ignoreEvent() { return true; }
+  ignoreEvent() { return false; }
 }

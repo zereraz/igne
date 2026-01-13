@@ -4,7 +4,6 @@ import { Range, EditorState } from '@codemirror/state';
 import {
   WikilinkWidget,
   EmbedWidget,
-  BlockEmbedWidget,
   TagWidget,
   CheckboxWidget,
   ImageWidget,
@@ -12,10 +11,8 @@ import {
   CodeBlockWidget,
   CalloutWidget,
   MermaidWidget,
+  HeadingEmbedWidget,
 } from './widgets';
-
-import { parseBlockReference } from '../utils/blockParser';
-import { findBlockById, extractBlockContent } from '../utils/blockFinder';
 
 export interface LivePreviewConfig {
   onWikilinkClick?: (target: string) => void;
@@ -24,8 +21,8 @@ export interface LivePreviewConfig {
   onCheckboxToggle?: (pos: number, checked: boolean) => void;
   onCalloutToggle?: (pos: number) => void;
   resolveWikilink?: (target: string) => { exists: boolean; content?: string } | null;
-  resolveBlockEmbed?: (noteName: string, blockId: string) => { exists: boolean; content?: string; blockType?: string } | null;
   resolveImage?: (src: string) => string;
+  resolveHeading?: (target: string, heading: string) => { exists: boolean; content?: string; headingLevel?: number } | null;
   /** External trigger to force decoration rebuild when files change */
   refreshTrigger?: { current: number };
 }
@@ -37,8 +34,8 @@ const DEFAULT_CONFIG: Required<LivePreviewConfig> = {
   onCheckboxToggle: () => {},
   onCalloutToggle: () => {},
   resolveWikilink: () => null,
-  resolveBlockEmbed: () => null,
   resolveImage: (src) => src,
+  resolveHeading: () => null,
   refreshTrigger: { current: 0 },
 };
 
@@ -402,24 +399,38 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         if (match) {
           const target = match[1];
 
-          // Check if this is a block embed: ![[Note#^blockid]]
-          const blockRef = parseBlockReference(text);
-          if (blockRef && blockRef.isBlockRef) {
-            // This is a block transclusion
-            const resolved = fullConfig.resolveBlockEmbed(blockRef.note, blockRef.blockId);
+          // Check for heading transclusion syntax: ![[Note#Heading]]
+          const headingMatch = target.match(/^([^#]+)#(.+)$/);
+          if (headingMatch) {
+            const note = headingMatch[1].trim();
+            const heading = headingMatch[2].trim();
 
-            decorations.push(
-              Decoration.replace({
-                widget: new BlockEmbedWidget(
-                  blockRef.note,
-                  blockRef.blockId,
-                  resolved?.content ?? null,
-                  resolved?.blockType ?? 'unknown',
-                  fullConfig.onWikilinkClick,
-                ),
-                block: true,
-              }).range(node.from, node.to)
-            );
+            // Empty heading means show picker
+            if (heading === '') {
+              // Show heading picker trigger
+              decorations.push(
+                Decoration.replace({
+                  widget: new EmbedWidget(note + '#', null, fullConfig.onWikilinkClick),
+                  block: true,
+                }).range(node.from, node.to)
+              );
+            } else {
+              // Resolve heading content
+              const resolved = fullConfig.resolveHeading?.(note, heading);
+
+              decorations.push(
+                Decoration.replace({
+                  widget: new HeadingEmbedWidget(
+                    note,
+                    heading,
+                    resolved?.content ?? null,
+                    resolved?.headingLevel ?? 1,
+                    fullConfig.onWikilinkClick
+                  ),
+                  block: true,
+                }).range(node.from, node.to)
+              );
+            }
           } else {
             // Regular note embed
             const resolved = fullConfig.resolveWikilink(target);
@@ -442,36 +453,46 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         if (embedMatch) {
           const target = embedMatch[1];
 
-          // Check if this is a block embed: ![[Note#^blockid]]
-          const blockRef = parseBlockReference(text);
-          if (blockRef && blockRef.isBlockRef) {
-            // This is a block transclusion
-            const resolved = fullConfig.resolveBlockEmbed(blockRef.note, blockRef.blockId);
+          // Check for heading transclusion syntax: ![[Note#Heading]]
+          const headingMatch = target.match(/^([^#]+)#(.+)$/);
+          if (headingMatch) {
+            const note = headingMatch[1].trim();
+            const heading = headingMatch[2].trim();
+
+            // Empty heading means show picker
+            if (heading === '') {
+              decorations.push(
+                Decoration.replace({
+                  widget: new EmbedWidget(note + '#', null, fullConfig.onWikilinkClick),
+                  block: true,
+                }).range(node.from, node.to)
+              );
+            } else {
+              const resolved = fullConfig.resolveHeading?.(note, heading);
+
+              decorations.push(
+                Decoration.replace({
+                  widget: new HeadingEmbedWidget(
+                    note,
+                    heading,
+                    resolved?.content ?? null,
+                    resolved?.headingLevel ?? 1,
+                    fullConfig.onWikilinkClick
+                  ),
+                  block: true,
+                }).range(node.from, node.to)
+              );
+            }
+          } else {
+            const resolved = fullConfig.resolveWikilink(target);
 
             decorations.push(
               Decoration.replace({
-                widget: new BlockEmbedWidget(
-                  blockRef.note,
-                  blockRef.blockId,
-                  resolved?.content ?? null,
-                  resolved?.blockType ?? 'unknown',
-                  fullConfig.onWikilinkClick,
-                ),
+                widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
                 block: true,
               }).range(node.from, node.to)
             );
-            return;
           }
-
-          // Regular note embed
-          const resolved = fullConfig.resolveWikilink(target);
-
-          decorations.push(
-            Decoration.replace({
-              widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
-              block: true,
-            }).range(node.from, node.to)
-          );
           return;
         }
       }
