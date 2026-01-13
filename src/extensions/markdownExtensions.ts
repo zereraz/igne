@@ -231,6 +231,7 @@ export const Tag: MarkdownConfig = {
   ],
   parseInline: [{
     name: 'Tag',
+    before: 'Link',  // Run before Link parser to avoid # being interpreted as URL fragment
     parse(cx: any, next: number, pos: number) {
       if (next !== 35 /* # */) return -1;
       // Must be preceded by whitespace or start of line

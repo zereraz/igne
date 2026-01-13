@@ -381,6 +381,16 @@ describe('livePreview - tag behavior', () => {
 
     expect(hasTagWidget(view, positions[0].from, positions[0].to)).toBe(true);
   });
+
+  it('handles single tag at start of line', () => {
+    // Bug fix: #tag at start of line should be recognized
+    const doc = '#tag\nsome text';
+    const view = createEditor(doc, 10); // cursor after the line
+    const positions = getTagPositions(view);
+    expect(positions.length).toBe(1);
+
+    expect(hasTagWidget(view, positions[0].from, positions[0].to)).toBe(true);
+  });
 });
 
 describe('getMediaType - media type detection', () => {
