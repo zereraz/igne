@@ -1,6 +1,6 @@
 # Obsidian versioning & plugin compatibility (official docs notes)
 
-This summarizes the parts of Obsidian’s official developer docs that matter for Igne’s “pinned baseline” compatibility strategy.
+This summarizes the parts of Obsidian’s official developer docs that matter for Igne’s **plugin compatibility** and **update strategy**.
 
 ## Manifest (`manifest.json`)
 
@@ -22,11 +22,13 @@ Key behavior:
 
 ## Implications for Igne (pinned baseline)
 
-If Igne pins compatibility to `obsidian` npm `1.11.4` and does not advance:
-- Igne’s plugin manager should implement the same fallback behavior:
-  - reject plugin versions requiring `minAppVersion > 1.11.4`
+Even if Igne tracks upstream, Igne will sometimes be “behind” the newest plugin release (for a brief window). In that window:
+
+- Igne’s plugin manager should implement the same fallback behavior as Obsidian:
+  - reject plugin releases requiring `minAppVersion > (Igne’s supported version)`
   - if installing from a repo, consult `versions.json` to find the newest compatible plugin release
-- “Future Obsidian updates that break us” becomes a non-goal by design, but “future plugin releases” can still be installable *if* a compatible release exists per `versions.json`.
+
+This keeps plugin installs predictable without requiring Igne to update instantly on every Obsidian release.
 
 ## Links used (for traceability)
 

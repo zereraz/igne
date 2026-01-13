@@ -1,0 +1,38 @@
+{
+  "capturedAtUtc": "2026-01-13T10:45:47.968Z",
+  "sources": {
+    "upstreamSourcesFile": "compat/obsidian-upstream/sources.json"
+  },
+  "files": {
+    "community-plugins.json": {
+      "url": "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugins.json",
+      "sha256": "cb6f944af96ce3d6886b7b7114d22c094a20757c7901d16b0a2eee3ddaee03a2",
+      "bytes": 642414,
+      "headers": {
+        "etag": "W/\"ac58749fb3ae920f0787881f4b0ee6a5ef1a9a874bfd91cfff1c5f0028ebf04a\"",
+        "lastModified": null,
+        "contentType": "text/plain; charset=utf-8"
+      }
+    },
+    "community-plugin-stats.json": {
+      "url": "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugin-stats.json",
+      "sha256": "848c5b0bdb5bcb2aaf0d38809c6e873e815403728b66af5585145ad1c7c245a3",
+      "bytes": 1032084,
+      "headers": {
+        "etag": "W/\"ecd69575cfcaad09521fe4486669c52e5fb5fa6da5419f8964f15ae801e427a7\"",
+        "lastModified": null,
+        "contentType": "text/plain; charset=utf-8"
+      }
+    },
+    "community-css-themes.json": {
+      "url": "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-css-themes.json",
+      "sha256": "894d360c6c6c65238773940701e89663d0a0c8b4f69faa31d1e1ddc53c9729e6",
+      "bytes": 79368,
+      "headers": {
+        "etag": "W/\"ca5aa2f45396c61ae06cfd63ff488cfea68719a308baa6b20d1f172360c9ba8b\"",
+        "lastModified": null,
+        "contentType": "text/plain; charset=utf-8"
+      }
+    }
+  }
+}

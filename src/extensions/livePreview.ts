@@ -11,7 +11,9 @@ import {
   CodeBlockWidget,
   CalloutWidget,
   MermaidWidget,
-  PdfEmbedWidget,
+  getMediaType,
+  AudioWidget,
+  VideoWidget,
 } from './widgets';
 
 export interface LivePreviewConfig {
@@ -396,26 +398,32 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         const match = text.match(/!\[\[([^\]]+)\]\]/);
         if (match) {
           const target = match[1];
+          const mediaType = getMediaType(target);
 
-          // Check if this is a PDF embed
-          if (/\.pdf$/i.test(target.split('#')[0])) {
-            // Parse PDF embed syntax: file.pdf#page=N
-            const pdfMatch = target.match(/^(.+?\.pdf)(?:#page=(\d+))?$/i);
-            if (pdfMatch) {
-              const pdfPath = pdfMatch[1];
-              const page = pdfMatch[2] ? parseInt(pdfMatch[2], 10) : 1;
-
-              decorations.push(
-                Decoration.replace({
-                  widget: new PdfEmbedWidget(pdfPath, page, fullConfig.onWikilinkClick),
-                  block: true,
-                }).range(node.from, node.to)
-              );
-              return;
-            }
+          // Check if this is a media file embed
+          if (mediaType === 'audio') {
+            const src = fullConfig.resolveImage(target);
+            decorations.push(
+              Decoration.replace({
+                widget: new AudioWidget(src, target),
+                block: true,
+              }).range(node.from, node.to)
+            );
+            return;
           }
 
-          // Regular note embed
+          if (mediaType === 'video') {
+            const src = fullConfig.resolveImage(target);
+            decorations.push(
+              Decoration.replace({
+                widget: new VideoWidget(src, target),
+                block: true,
+              }).range(node.from, node.to)
+            );
+            return;
+          }
+
+          // Default to note embed
           const resolved = fullConfig.resolveWikilink(target);
           decorations.push(
             Decoration.replace({
@@ -433,26 +441,32 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         const embedMatch = text.match(/^!\[\[([^\]]+)\]\]$/);
         if (embedMatch) {
           const target = embedMatch[1];
+          const mediaType = getMediaType(target);
 
-          // Check if this is a PDF embed
-          if (/\.pdf$/i.test(target.split('#')[0])) {
-            // Parse PDF embed syntax: file.pdf#page=N
-            const pdfMatch = target.match(/^(.+?\.pdf)(?:#page=(\d+))?$/i);
-            if (pdfMatch) {
-              const pdfPath = pdfMatch[1];
-              const page = pdfMatch[2] ? parseInt(pdfMatch[2], 10) : 1;
-
-              decorations.push(
-                Decoration.replace({
-                  widget: new PdfEmbedWidget(pdfPath, page, fullConfig.onWikilinkClick),
-                  block: true,
-                }).range(node.from, node.to)
-              );
-              return;
-            }
+          // Check if this is a media file embed
+          if (mediaType === 'audio') {
+            const src = fullConfig.resolveImage(target);
+            decorations.push(
+              Decoration.replace({
+                widget: new AudioWidget(src, target),
+                block: true,
+              }).range(node.from, node.to)
+            );
+            return;
           }
 
-          // Regular note embed
+          if (mediaType === 'video') {
+            const src = fullConfig.resolveImage(target);
+            decorations.push(
+              Decoration.replace({
+                widget: new VideoWidget(src, target),
+                block: true,
+              }).range(node.from, node.to)
+            );
+            return;
+          }
+
+          // Default to note embed
           const resolved = fullConfig.resolveWikilink(target);
           decorations.push(
             Decoration.replace({

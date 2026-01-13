@@ -1,6 +1,6 @@
 # Obsidian Research (for Igne drop-in parity)
 
-This folder stores research artifacts used to prioritize what Igne must implement to be a credible OSS “drop-in” replacement for Obsidian (starting from a pinned Obsidian baseline).
+This folder stores research artifacts used to prioritize what Igne must implement to be a credible OSS “drop-in” replacement for Obsidian (anchored to the currently-vendored Obsidian API contract under `compat/obsidian-api/`).
 
 ## Data sources (community ecosystem)
 

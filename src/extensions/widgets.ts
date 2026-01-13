@@ -321,83 +321,90 @@ export class MermaidWidget extends WidgetType {
   ignoreEvent() { return true; }
 }
 
-export class PdfEmbedWidget extends WidgetType {
+// Media type detection
+const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.wma'];
+const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogv', '.mov', '.avi', '.mkv', '.m4v', '.wmv'];
+
+export function getMediaType(filename: string): 'audio' | 'video' | null {
+  const lowerFilename = filename.toLowerCase();
+  // Check video first since .webm and .ogv can be both audio and video
+  if (VIDEO_EXTENSIONS.some(ext => lowerFilename.endsWith(ext))) {
+    return 'video';
+  }
+  if (AUDIO_EXTENSIONS.some(ext => lowerFilename.endsWith(ext))) {
+    return 'audio';
+  }
+  return null;
+}
+
+export class AudioWidget extends WidgetType {
   constructor(
-    readonly path: string,
-    readonly page: number,
-    readonly onOpen: (path: string) => void
+    readonly src: string,
+    readonly filename: string
   ) { super(); }
 
   toDOM() {
     const container = document.createElement('div');
-    container.className = 'cm-pdf-embed-container';
+    container.className = 'cm-audio-container';
 
-    // Header with filename and page indicator
-    const header = document.createElement('div');
-    header.className = 'cm-pdf-embed-header';
-    header.innerHTML = `
-      <span class="cm-pdf-embed-icon">📄</span>
-      <span class="cm-pdf-embed-title">${this.path}</span>
-      <span class="cm-pdf-embed-page">Page ${this.page}</span>
-    `;
-    header.addEventListener('click', () => this.onOpen(this.path));
+    const audio = document.createElement('audio');
+    audio.src = this.src;
+    audio.className = 'cm-audio';
+    audio.controls = true;
+    audio.setAttribute('data-filename', this.filename);
 
-    // iframe for PDF rendering
-    const iframe = document.createElement('iframe');
-    iframe.className = 'cm-pdf-embed-iframe';
-    iframe.setAttribute('data-pdf-path', this.path);
+    const label = document.createElement('div');
+    label.className = 'cm-audio-label';
+    label.textContent = this.filename;
 
-    // Use browser's native PDF viewer with page parameter
-    // The #page= parameter is supported by most browsers' PDF viewers
-    const pdfUrl = `${this.path}#page=${this.page}`;
-    iframe.src = pdfUrl;
-
-    // Handle loading errors
-    iframe.onerror = () => {
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'cm-pdf-embed-error';
-      errorDiv.textContent = `Failed to load PDF: ${this.path}`;
-      container.innerHTML = '';
-      container.appendChild(header);
-      container.appendChild(errorDiv);
+    audio.onerror = () => {
+      container.innerHTML = `<span class="cm-audio-error">Audio not found: ${this.filename}</span>`;
     };
 
-    // Show loading state
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'cm-pdf-embed-loading';
-    loadingDiv.textContent = 'Loading PDF...';
-
-    container.appendChild(header);
-    container.appendChild(loadingDiv);
-
-    // Replace loading with iframe when loaded
-    iframe.onload = () => {
-      const loading = container.querySelector('.cm-pdf-embed-loading');
-      if (loading) {
-        loading.remove();
-      }
-      if (!container.querySelector('iframe')) {
-        container.appendChild(iframe);
-      }
-    };
-
-    // Fallback: show iframe after a timeout even if onload doesn't fire
-    setTimeout(() => {
-      const loading = container.querySelector('.cm-pdf-embed-loading');
-      if (loading) {
-        loading.remove();
-      }
-      if (!container.querySelector('iframe')) {
-        container.appendChild(iframe);
-      }
-    }, 1000);
-
+    container.appendChild(label);
+    container.appendChild(audio);
     return container;
   }
 
-  eq(other: PdfEmbedWidget) {
-    return this.path === other.path && this.page === other.page;
+  eq(other: AudioWidget) {
+    return this.src === other.src;
   }
 
-  ignoreEvent() { return false; }
+  ignoreEvent() { return true; }
+}
+
+export class VideoWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly filename: string
+  ) { super(); }
+
+  toDOM() {
+    const container = document.createElement('div');
+    container.className = 'cm-video-container';
+
+    const video = document.createElement('video');
+    video.src = this.src;
+    video.className = 'cm-video';
+    video.controls = true;
+    video.setAttribute('data-filename', this.filename);
+
+    const label = document.createElement('div');
+    label.className = 'cm-video-label';
+    label.textContent = this.filename;
+
+    video.onerror = () => {
+      container.innerHTML = `<span class="cm-video-error">Video not found: ${this.filename}</span>`;
+    };
+
+    container.appendChild(label);
+    container.appendChild(video);
+    return container;
+  }
+
+  eq(other: VideoWidget) {
+    return this.src === other.src;
+  }
+
+  ignoreEvent() { return true; }
 }

@@ -1,0 +1,24 @@
+{
+  "obsidianApi": {
+    "npm": {
+      "package": "obsidian",
+      "registryPackage": "https://registry.npmjs.org/obsidian"
+    }
+  },
+  "obsidianReleases": {
+    "github": {
+      "repo": "obsidianmd/obsidian-releases",
+      "rawBase": "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master"
+    },
+    "community": {
+      "plugins": "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugins.json",
+      "pluginStats": "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugin-stats.json",
+      "cssThemes": "https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-css-themes.json"
+    }
+  },
+  "docs": {
+    "developerDocsBase": "https://docs.obsidian.md",
+    "helpDocsBase": "https://help.obsidian.md"
+  }
+}
+
