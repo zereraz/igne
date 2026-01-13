@@ -29,13 +29,30 @@ interface SemVer {
  * @returns Parsed SemVer object or null if invalid
  */
 export function parseSemver(version: string): SemVer | null {
-  const trimmed = version.trim();
+  let trimmed = version.trim();
+
+  // Strip optional 'v' prefix (common in manifests)
+  if (trimmed.startsWith('v')) {
+    trimmed = trimmed.slice(1);
+  }
 
   // Main version pattern: major.minor.patch
   const mainPattern = /^(\d+)\.(\d+)\.(\d+)/;
   const mainMatch = trimmed.match(mainPattern);
 
   if (!mainMatch) {
+    // Partial version pattern: major, major.minor, major.minor.patch
+    const partialPattern = /^(\d+)(?:\.(\d+))?(?:\.(\d+))?$/;
+    const partialMatch = trimmed.match(partialPattern);
+
+    if (partialMatch) {
+      const major = parseInt(partialMatch[1], 10);
+      const minor = partialMatch[2] ? parseInt(partialMatch[2], 10) : 0;
+      const patch = partialMatch[3] ? parseInt(partialMatch[3], 10) : 0;
+
+      return { major, minor, patch, prerelease: [], build: [] };
+    }
+
     return null;
   }
 

@@ -29,6 +29,8 @@ export interface LivePreviewConfig {
   onCalloutToggle?: (pos: number) => void;
   resolveWikilink?: (target: string) => { exists: boolean; content?: string } | null;
   resolveImage?: (src: string) => string;
+  /** Resolve heading transclusion */
+  resolveHeading?: (note: string, heading: string) => { exists: boolean; content?: string; headingLevel?: number };
   /** External trigger to force decoration rebuild when files change */
   refreshTrigger?: { current: number };
 }
@@ -41,6 +43,7 @@ const DEFAULT_CONFIG: Required<LivePreviewConfig> = {
   onCalloutToggle: () => {},
   resolveWikilink: () => null,
   resolveImage: (src) => src,
+  resolveHeading: () => ({ exists: false }),
   refreshTrigger: { current: 0 },
 };
 

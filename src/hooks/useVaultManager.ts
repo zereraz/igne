@@ -117,12 +117,14 @@ export function useVaultManager(options: UseVaultManagerOptions = {}) {
       }
 
       // Restore workspace from saved state
-      const { openFiles, activeTab } = await workspaceStateManager.restore();
+      const { panes } = await workspaceStateManager.restore();
+      const openFiles = panes[0]?.tabs ?? [];
+      const activeTab = panes[0]?.activeTab ?? null;
       console.log('[useVaultManager] Restored workspace:', { fileCount: openFiles.length, activeTab });
 
       // Load file contents for restored workspace
       const openTabsWithContent = await Promise.all(
-        openFiles.map(async (file) => {
+        openFiles.map(async (file: OpenFile) => {
           try {
             const content = await invoke<string>('read_file', { path: file.path });
             return { ...file, content };

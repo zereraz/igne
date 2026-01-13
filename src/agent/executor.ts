@@ -18,7 +18,16 @@ import { AuditLog } from '../commands/audit';
 /**
  * Status of a step in the plan
  */
-export type StepStatus = 'pending' | 'approved' | 'executing' | 'completed' | 'failed' | 'rejected';
+export type StepStatus = 'pending' | 'approved' | 'executing' | 'completed' | 'failed' | 'rejected' | 'running';
+
+/**
+ * Executor event types
+ */
+export type ExecutorEvent =
+  | { type: 'planCreated'; plan: AgentPlan }
+  | { type: 'stepStarted'; step: ProposedStep }
+  | { type: 'stepCompleted'; step: ProposedStep; result: AgentToolOutput }
+  | { type: 'stepFailed'; step: ProposedStep; error: string };
 
 /**
  * A single proposed step in an agent plan
@@ -78,6 +87,21 @@ export interface ProposedStep {
    * Timestamp when the step completed (if applicable)
    */
   completedAt?: number;
+
+  /**
+   * Execution duration in milliseconds (if applicable)
+   */
+  duration?: number;
+
+  /**
+   * Whether this step is read-only (no side effects)
+   */
+  readonly?: boolean;
+
+  /**
+   * Expected diff for write operations (preview)
+   */
+  expectedDiff?: string;
 }
 
 /**
@@ -128,6 +152,7 @@ class AgentExecutorClass {
   private plans = new Map<string, AgentPlan>();
   private nextPlanId = 0;
   private nextStepId = 0;
+  private eventListeners: Set<(event: ExecutorEvent) => void> = new Set();
 
   /**
    * Create a new plan from proposed steps
@@ -431,6 +456,26 @@ class AgentExecutorClass {
       failedPlans: plans.filter(p => p.status === 'failed').length,
     };
   }
+
+  /**
+   * Subscribe to executor events
+   * @returns Unsubscribe function
+   */
+  onEvent(listener: (event: ExecutorEvent) => void): () => void {
+    this.eventListeners.add(listener);
+    return () => {
+      this.eventListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Emit an event to all listeners
+   */
+  private emit(event: ExecutorEvent): void {
+    for (const listener of this.eventListeners) {
+      listener(event);
+    }
+  }
 }
 
 // =============================================================================
@@ -439,5 +484,5 @@ class AgentExecutorClass {
 
 export const AgentExecutor = new AgentExecutorClass();
 
-// Re-export types for convenience
-export type { ProposedStep, AgentPlan, StepStatus };
+// Type alias for backwards compatibility
+export type Plan = AgentPlan;
