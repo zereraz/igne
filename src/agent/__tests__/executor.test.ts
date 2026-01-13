@@ -7,10 +7,19 @@ import { AgentExecutor } from '../executor';
 import type { ProposedStep } from '../executor';
 import { CommandRegistry } from '../../commands/registry';
 
-// Mock the CommandRegistry
+// Mock the CommandRegistry with all methods
 vi.mock('../../commands/registry', () => ({
   CommandRegistry: {
     execute: vi.fn(),
+    get: vi.fn(() => undefined),
+    has: vi.fn(() => false),
+    getAll: vi.fn(() => []),
+    getByCategory: vi.fn(() => []),
+    register: vi.fn(),
+    unregister: vi.fn(() => false),
+    clear: vi.fn(),
+    onCommandExecuted: vi.fn(() => ({ id: 'test', unregister: vi.fn() })),
+    getStats: vi.fn(() => ({ totalCommands: 0, commandsByCategory: {}, commandsWithHotkeys: 0 })),
   },
 }));
 
