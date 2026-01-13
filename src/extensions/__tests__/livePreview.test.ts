@@ -5,6 +5,7 @@ import { syntaxTree } from '@codemirror/language';
 import { livePreview } from '../livePreview';
 import { createMarkdownLanguage } from '../markdownLanguage';
 import { SPECS } from './fixtures';
+import { getMediaType } from '../widgets';
 
 // Helper to create an editor with given document and cursor position
 function createEditor(doc: string, cursorPos: number): EditorView {
@@ -379,5 +380,96 @@ describe('livePreview - tag behavior', () => {
     expect(positions.length).toBe(1);
 
     expect(hasTagWidget(view, positions[0].from, positions[0].to)).toBe(true);
+  });
+});
+
+describe('getMediaType - media type detection', () => {
+  describe('audio file detection', () => {
+    it('detects MP3 files', () => {
+      expect(getMediaType('audio.mp3')).toBe('audio');
+      expect(getMediaType('AUDIO.MP3')).toBe('audio');
+      expect(getMediaType('/path/to/audio.mp3')).toBe('audio');
+    });
+
+    it('detects WAV files', () => {
+      expect(getMediaType('sound.wav')).toBe('audio');
+      expect(getMediaType('SOUND.WAV')).toBe('audio');
+    });
+
+    it('detects OGG files', () => {
+      expect(getMediaType('music.ogg')).toBe('audio');
+    });
+
+    it('detects M4A files', () => {
+      expect(getMediaType('song.m4a')).toBe('audio');
+    });
+
+    it('detects FLAC files', () => {
+      expect(getMediaType('lossless.flac')).toBe('audio');
+    });
+
+    it('detects AAC files', () => {
+      expect(getMediaType('audio.aac')).toBe('audio');
+    });
+
+    it('detects WMA files', () => {
+      expect(getMediaType('audio.wma')).toBe('audio');
+    });
+  });
+
+  describe('video file detection', () => {
+    it('detects MP4 files', () => {
+      expect(getMediaType('video.mp4')).toBe('video');
+      expect(getMediaType('VIDEO.MP4')).toBe('video');
+      expect(getMediaType('/path/to/video.mp4')).toBe('video');
+    });
+
+    it('detects WebM files', () => {
+      expect(getMediaType('animation.webm')).toBe('video');
+    });
+
+    it('detects MOV files', () => {
+      expect(getMediaType('movie.mov')).toBe('video');
+    });
+
+    it('detects OGV files', () => {
+      expect(getMediaType('video.ogv')).toBe('video');
+    });
+
+    it('detects MKV files', () => {
+      expect(getMediaType('video.mkv')).toBe('video');
+    });
+
+    it('detects AVI files', () => {
+      expect(getMediaType('video.avi')).toBe('video');
+    });
+
+    it('detects M4V files', () => {
+      expect(getMediaType('video.m4v')).toBe('video');
+    });
+  });
+
+  describe('non-media file detection', () => {
+    it('returns null for markdown files', () => {
+      expect(getMediaType('note.md')).toBe(null);
+    });
+
+    it('returns null for image files', () => {
+      expect(getMediaType('image.png')).toBe(null);
+      expect(getMediaType('image.jpg')).toBe(null);
+      expect(getMediaType('image.gif')).toBe(null);
+    });
+
+    it('returns null for text files', () => {
+      expect(getMediaType('document.txt')).toBe(null);
+    });
+
+    it('returns null for PDF files', () => {
+      expect(getMediaType('document.pdf')).toBe(null);
+    });
+
+    it('returns null for files without extensions', () => {
+      expect(getMediaType('audio')).toBe(null);
+    });
   });
 });

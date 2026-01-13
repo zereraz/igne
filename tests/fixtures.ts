@@ -172,6 +172,54 @@ export class AppPage {
         return await checkbox.isChecked();
       },
 
+      // ===== Media embed helpers =====
+
+      /**
+       * Check if an audio widget is visible
+       */
+      hasAudioWidget: async (filename: string) => {
+        const audio = this.page.locator(`.cm-audio-container audio[data-filename="${filename}"]`);
+        return await audio.isVisible();
+      },
+
+      /**
+       * Check if a video widget is visible
+       */
+      hasVideoWidget: async (filename: string) => {
+        const video = this.page.locator(`.cm-video-container video[data-filename="${filename}"]`);
+        return await video.isVisible();
+      },
+
+      /**
+       * Check if audio has error state
+       */
+      hasAudioError: async () => {
+        const error = this.page.locator('.cm-audio-error');
+        return await error.isVisible();
+      },
+
+      /**
+       * Check if video has error state
+       */
+      hasVideoError: async () => {
+        const error = this.page.locator('.cm-video-error');
+        return await error.isVisible();
+      },
+
+      /**
+       * Wait for audio widget to render
+       */
+      waitForAudioWidget: async () => {
+        await this.page.locator('.cm-audio-container').first().waitFor({ state: 'visible' });
+      },
+
+      /**
+       * Wait for video widget to render
+       */
+      waitForVideoWidget: async () => {
+        await this.page.locator('.cm-video-container').first().waitFor({ state: 'visible' });
+      },
+
       // ===== CodeMirror API access =====
 
       /**

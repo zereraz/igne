@@ -320,3 +320,91 @@ export class MermaidWidget extends WidgetType {
 
   ignoreEvent() { return true; }
 }
+
+// Media type detection
+const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.wma'];
+const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.ogv', '.mov', '.avi', '.mkv', '.m4v', '.wmv'];
+
+export function getMediaType(filename: string): 'audio' | 'video' | null {
+  const lowerFilename = filename.toLowerCase();
+  // Check video first since .webm and .ogv can be both audio and video
+  if (VIDEO_EXTENSIONS.some(ext => lowerFilename.endsWith(ext))) {
+    return 'video';
+  }
+  if (AUDIO_EXTENSIONS.some(ext => lowerFilename.endsWith(ext))) {
+    return 'audio';
+  }
+  return null;
+}
+
+export class AudioWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly filename: string
+  ) { super(); }
+
+  toDOM() {
+    const container = document.createElement('div');
+    container.className = 'cm-audio-container';
+
+    const audio = document.createElement('audio');
+    audio.src = this.src;
+    audio.className = 'cm-audio';
+    audio.controls = true;
+    audio.setAttribute('data-filename', this.filename);
+
+    const label = document.createElement('div');
+    label.className = 'cm-audio-label';
+    label.textContent = this.filename;
+
+    audio.onerror = () => {
+      container.innerHTML = `<span class="cm-audio-error">Audio not found: ${this.filename}</span>`;
+    };
+
+    container.appendChild(label);
+    container.appendChild(audio);
+    return container;
+  }
+
+  eq(other: AudioWidget) {
+    return this.src === other.src;
+  }
+
+  ignoreEvent() { return true; }
+}
+
+export class VideoWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly filename: string
+  ) { super(); }
+
+  toDOM() {
+    const container = document.createElement('div');
+    container.className = 'cm-video-container';
+
+    const video = document.createElement('video');
+    video.src = this.src;
+    video.className = 'cm-video';
+    video.controls = true;
+    video.setAttribute('data-filename', this.filename);
+
+    const label = document.createElement('div');
+    label.className = 'cm-video-label';
+    label.textContent = this.filename;
+
+    video.onerror = () => {
+      container.innerHTML = `<span class="cm-video-error">Video not found: ${this.filename}</span>`;
+    };
+
+    container.appendChild(label);
+    container.appendChild(video);
+    return container;
+  }
+
+  eq(other: VideoWidget) {
+    return this.src === other.src;
+  }
+
+  ignoreEvent() { return true; }
+}
