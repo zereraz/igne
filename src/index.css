@@ -117,10 +117,68 @@ body {
   display: inline-block;
   margin: 0.5rem 0;
 }
+.cm-image-align-left {
+  display: block;
+  margin-right: auto;
+}
+.cm-image-align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+.cm-image-align-right {
+  display: block;
+  margin-left: auto;
+}
 .cm-image {
   max-width: 100%;
   border-radius: 0.5rem;
   cursor: pointer;
+}
+
+/* Video */
+.cm-video-container {
+  display: inline-block;
+  margin: 0.5rem 0;
+}
+.cm-video-align-left {
+  display: block;
+  margin-right: auto;
+}
+.cm-video-align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+.cm-video-align-right {
+  display: block;
+  margin-left: auto;
+}
+.cm-video {
+  max-width: 100%;
+  border-radius: 0.5rem;
+}
+
+/* PDF */
+.cm-pdf-container {
+  display: inline-block;
+  margin: 0.5rem 0;
+}
+.cm-pdf-align-left {
+  display: block;
+  margin-right: auto;
+}
+.cm-pdf-align-center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+.cm-pdf-align-right {
+  display: block;
+  margin-left: auto;
+}
+.cm-pdf {
+  max-width: 100%;
 }
 
 /* Code blocks */

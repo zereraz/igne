@@ -172,6 +172,72 @@ export class AppPage {
         return await checkbox.isChecked();
       },
 
+      // ===== Embed helpers =====
+
+      /**
+       * Wait for embed widgets to render
+       */
+      waitForEmbedWidget: async () => {
+        await this.page.locator('.cm-embed').first().waitFor({ state: 'visible' });
+      },
+
+      /**
+       * Check if an image widget is visible
+       */
+      hasImageWidget: async () => {
+        const image = this.page.locator('.cm-image');
+        return await image.isVisible();
+      },
+
+      /**
+       * Get the width of an image widget
+       */
+      getImageWidth: async () => {
+        const image = this.page.locator('.cm-image');
+        const width = await image.evaluate((el: HTMLImageElement) => {
+          return el.style.width;
+        });
+        return width;
+      },
+
+      /**
+       * Get the height of an image widget
+       */
+      getImageHeight: async () => {
+        const image = this.page.locator('.cm-image');
+        const height = await image.evaluate((el: HTMLImageElement) => {
+          return el.style.height;
+        });
+        return height;
+      },
+
+      /**
+       * Check if an image has the correct alignment class
+       */
+      hasImageAlignment: async (align: 'left' | 'center' | 'right') => {
+        const container = this.page.locator('.cm-image-container');
+        const hasClass = await container.evaluate((el: HTMLElement, alignment) => {
+          return el.classList.contains(`cm-image-align-${alignment}`);
+        }, align);
+        return hasClass;
+      },
+
+      /**
+       * Check if a video widget is visible
+       */
+      hasVideoWidget: async () => {
+        const video = this.page.locator('.cm-video');
+        return await video.isVisible();
+      },
+
+      /**
+       * Check if a PDF widget is visible
+       */
+      hasPdfWidget: async () => {
+        const pdf = this.page.locator('.cm-pdf');
+        return await pdf.isVisible();
+      },
+
       // ===== CodeMirror API access =====
 
       /**

@@ -7,11 +7,19 @@ import {
   TagWidget,
   CheckboxWidget,
   ImageWidget,
+  VideoWidget,
+  PdfWidget,
   MathWidget,
   CodeBlockWidget,
   CalloutWidget,
   MermaidWidget,
 } from './widgets';
+import {
+  parseEmbedTarget,
+  isImageFile,
+  isVideoFile,
+  isPdfFile,
+} from '../utils/embedParams';
 
 export interface LivePreviewConfig {
   onWikilinkClick?: (target: string) => void;
@@ -395,14 +403,73 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         const match = text.match(/!\[\[([^\]]+)\]\]/);
         if (match) {
           const target = match[1];
-          const resolved = fullConfig.resolveWikilink(target);
+          const { path, params } = parseEmbedTarget(target);
+          const resolved = fullConfig.resolveWikilink(path);
 
-          decorations.push(
-            Decoration.replace({
-              widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
-              block: true,
-            }).range(node.from, node.to)
-          );
+          // Determine embed type based on file extension
+          if (isImageFile(path)) {
+            // Image embed with parameters
+            const imageSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
+            decorations.push(
+              Decoration.replace({
+                widget: new ImageWidget(
+                  imageSrc,
+                  params.alt || path,
+                  params.width,
+                  params.height,
+                  params.title,
+                  params.align
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          } else if (isVideoFile(path)) {
+            // Video embed with parameters
+            const videoSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
+            decorations.push(
+              Decoration.replace({
+                widget: new VideoWidget(
+                  videoSrc,
+                  params.width,
+                  params.height,
+                  params.autoplay,
+                  params.loop,
+                  params.muted,
+                  params.controls,
+                  params.align
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          } else if (isPdfFile(path)) {
+            // PDF embed with parameters
+            const pdfSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
+            decorations.push(
+              Decoration.replace({
+                widget: new PdfWidget(
+                  pdfSrc,
+                  params.page,
+                  params.width,
+                  params.height,
+                  params.toolbar,
+                  params.align
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          } else {
+            // Default note embed
+            decorations.push(
+              Decoration.replace({
+                widget: new EmbedWidget(
+                  target,
+                  resolved?.content ?? null,
+                  fullConfig.onWikilinkClick
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          }
         }
         return;
       }
@@ -413,14 +480,58 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         const embedMatch = text.match(/^!\[\[([^\]]+)\]\]$/);
         if (embedMatch) {
           const target = embedMatch[1];
-          const resolved = fullConfig.resolveWikilink(target);
+          const { path, params } = parseEmbedTarget(target);
+          const resolved = fullConfig.resolveWikilink(path);
 
-          decorations.push(
-            Decoration.replace({
-              widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
-              block: true,
-            }).range(node.from, node.to)
-          );
+          // Determine embed type based on file extension
+          if (isImageFile(path)) {
+            // Image embed with parameters
+            const imageSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
+            decorations.push(
+              Decoration.replace({
+                widget: new ImageWidget(
+                  imageSrc,
+                  params.alt || path,
+                  params.width,
+                  params.height,
+                  params.title,
+                  params.align
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          } else if (isVideoFile(path)) {
+            // Video embed with parameters
+            const videoSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
+            decorations.push(
+              Decoration.replace({
+                widget: new VideoWidget(
+                  videoSrc,
+                  params.width,
+                  params.height,
+                  params.autoplay,
+                  params.loop,
+                  params.muted,
+                  params.controls,
+                  params.align
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+            return;
+          } else {
+            // Default note embed
+            decorations.push(
+              Decoration.replace({
+                widget: new EmbedWidget(
+                  target,
+                  resolved?.content ?? null,
+                  fullConfig.onWikilinkClick
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          }
           return;
         }
       }

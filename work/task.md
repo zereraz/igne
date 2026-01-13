@@ -142,27 +142,3 @@ Embed parameters allow fine control over how embeds are displayed - sizing, posi
 When ALL tasks complete and tests pass, add this exact marker on its own line:
 
 PROMISE_COMPLETE_TAG
-
----
-
-## Implementation Status
-
-**COMPLETED:** Tasks 1-4, 6-7 (Core embed parameters feature)
-
-✅ Task 1: Parse embed parameters - `src/utils/embedParams.ts` (74 unit tests passing)
-✅ Task 2: Apply parameters to image embeds - ImageWidget in `src/extensions/widgets.ts`
-✅ Task 3: Apply parameters to video embeds - VideoWidget in `src/extensions/widgets.ts`
-✅ Task 4: Apply parameters to PDF embeds - PdfWidget in `src/extensions/widgets.ts`
-✅ Task 6: Test embed parameters - `tests/e2e/embed-params.spec.ts` (comprehensive E2E tests)
-✅ Task 7: Documentation - `docs/EMBED_PARAMETERS.md` (full documentation with examples)
-
-**FUTURE ENHANCEMENT:** Task 5 (Heading/Block embeds)
-
-❌ Task 5: Apply parameters to heading/block embeds - Not yet implemented
-   - Documented in `docs/EMBED_PARAMETERS.md` under "Not Yet Implemented"
-   - Requires creating HeadingEmbed.tsx and BlockEmbed.tsx components
-   - Planned for future release
-
-The core embed parameters feature is complete and provides full Obsidian parity for image, video, and PDF embeds.
-
-PROMISE_COMPLETE_TAG
