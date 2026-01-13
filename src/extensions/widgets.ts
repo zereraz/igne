@@ -132,27 +132,55 @@ export class CheckboxWidget extends WidgetType {
   ignoreEvent() { return false; }
 }
 
+export interface ImageEmbedParams {
+  width?: string | number;
+  height?: string | number;
+  alt?: string;
+  title?: string;
+  align?: 'left' | 'center' | 'right';
+}
+
 export class ImageWidget extends WidgetType {
   constructor(
     readonly src: string,
     readonly alt: string,
-    readonly width?: number,
-    readonly height?: number
+    readonly width?: string | number,
+    readonly height?: string | number,
+    readonly title?: string,
+    readonly align?: 'left' | 'center' | 'right'
   ) { super(); }
 
   toDOM() {
     const container = document.createElement('div');
     container.className = 'cm-image-container';
 
+    // Apply alignment classes
+    if (this.align) {
+      container.classList.add(`cm-image-align-${this.align}`);
+    }
+
     const img = document.createElement('img');
     img.src = this.src;
-    img.alt = this.alt;
+    img.alt = this.alt || this.title || '';
     img.className = 'cm-image';
-    if (this.width) img.style.width = `${this.width}px`;
-    if (this.height) img.style.height = `${this.height}px`;
+
+    // Apply width (supports both pixel numbers and percentage strings)
+    if (this.width) {
+      img.style.width = typeof this.width === 'number' ? `${this.width}px` : this.width;
+    }
+
+    // Apply height (supports both pixel numbers and percentage strings)
+    if (this.height) {
+      img.style.height = typeof this.height === 'number' ? `${this.height}px` : this.height;
+    }
+
+    // Apply title attribute
+    if (this.title) {
+      img.title = this.title;
+    }
 
     img.onerror = () => {
-      container.innerHTML = `<span class="cm-image-error">Image not found: ${this.alt || this.src}</span>`;
+      container.innerHTML = `<span class="cm-image-error">Image not found: ${this.alt || this.title || this.src}</span>`;
     };
 
     container.appendChild(img);
@@ -160,7 +188,12 @@ export class ImageWidget extends WidgetType {
   }
 
   eq(other: ImageWidget) {
-    return this.src === other.src;
+    return this.src === other.src &&
+           this.width === other.width &&
+           this.height === other.height &&
+           this.alt === other.alt &&
+           this.title === other.title &&
+           this.align === other.align;
   }
 
   ignoreEvent() { return true; }
@@ -321,69 +354,144 @@ export class MermaidWidget extends WidgetType {
   ignoreEvent() { return true; }
 }
 
-export class HeadingEmbedWidget extends WidgetType {
+export class VideoWidget extends WidgetType {
   constructor(
-    readonly target: string,
-    readonly heading: string,
-    readonly content: string | null,
-    readonly headingLevel: number,
-    readonly onOpen: (target: string) => void
+    readonly src: string,
+    readonly width?: string | number,
+    readonly height?: string | number,
+    readonly autoplay?: boolean,
+    readonly loop?: boolean,
+    readonly muted?: boolean,
+    readonly controls?: boolean,
+    readonly align?: 'left' | 'center' | 'right'
   ) { super(); }
 
   toDOM() {
     const container = document.createElement('div');
-    container.className = 'cm-embed cm-heading-embed';
+    container.className = 'cm-video-container';
 
-    const header = document.createElement('div');
-    header.className = 'cm-embed-header';
-
-    // Use appropriate heading icon based on level
-    const levelIcon = this.getHeadingIcon(this.headingLevel);
-    header.innerHTML = `<span class="cm-embed-icon">${levelIcon}</span><span class="cm-embed-title">${this.target} → ${this.heading}</span>`;
-    header.addEventListener('click', () => this.onOpen(this.target));
-
-    const body = document.createElement('div');
-    body.className = 'cm-embed-body cm-heading-embed-body';
-
-    if (this.content !== null) {
-      // Create a wrapper for the heading
-      const headingEl = document.createElement(`h${Math.min(this.headingLevel, 6)}`);
-      headingEl.className = `cm-heading cm-heading-${this.headingLevel}`;
-      headingEl.textContent = this.heading;
-      body.appendChild(headingEl);
-
-      // Add content
-      const contentEl = document.createElement('div');
-      contentEl.className = 'cm-heading-embed-content';
-      contentEl.textContent = this.content;
-      body.appendChild(contentEl);
-    } else {
-      body.innerHTML = `<span class="cm-embed-missing">Heading "${this.heading}" not found in ${this.target}</span>`;
+    // Apply alignment classes
+    if (this.align) {
+      container.classList.add(`cm-video-align-${this.align}`);
     }
 
-    container.appendChild(header);
-    container.appendChild(body);
+    const video = document.createElement('video');
+    video.src = this.src;
+    video.className = 'cm-video';
+
+    // Apply width (supports both pixel numbers and percentage strings)
+    if (this.width) {
+      video.style.width = typeof this.width === 'number' ? `${this.width}px` : this.width;
+    }
+
+    // Apply height (supports both pixel numbers and percentage strings)
+    if (this.height) {
+      video.style.height = typeof this.height === 'number' ? `${this.height}px` : this.height;
+    }
+
+    // Apply video parameters
+    if (this.autoplay) video.autoplay = true;
+    if (this.loop) video.loop = true;
+    if (this.muted) video.muted = true;
+    if (this.controls !== false) video.controls = true; // Default to showing controls
+
+    video.onerror = () => {
+      container.innerHTML = `<span class="cm-video-error">Video not found: ${this.src}</span>`;
+    };
+
+    container.appendChild(video);
     return container;
   }
 
-  getHeadingIcon(level: number): string {
-    const icons: Record<number, string> = {
-      1: '📄',
-      2: '📋',
-      3: '📝',
-      4: '📌',
-      5: '📎',
-      6: '🔖',
+  eq(other: VideoWidget) {
+    return this.src === other.src &&
+           this.width === other.width &&
+           this.height === other.height &&
+           this.autoplay === other.autoplay &&
+           this.loop === other.loop &&
+           this.muted === other.muted &&
+           this.controls === other.controls &&
+           this.align === other.align;
+  }
+
+  ignoreEvent() { return true; }
+}
+
+export class PdfWidget extends WidgetType {
+  constructor(
+    readonly src: string,
+    readonly page?: number,
+    readonly width?: string | number,
+    readonly height?: string | number,
+    readonly toolbar?: boolean,
+    readonly align?: 'left' | 'center' | 'right'
+  ) { super(); }
+
+  toDOM() {
+    const container = document.createElement('div');
+    container.className = 'cm-pdf-container';
+
+    // Apply alignment classes
+    if (this.align) {
+      container.classList.add(`cm-pdf-align-${this.align}`);
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.className = 'cm-pdf';
+
+    // Build PDF URL with parameters
+    let pdfUrl = this.src;
+    const params: string[] = [];
+
+    // Add page parameter if specified
+    if (this.page) {
+      params.push(`page=${this.page}`);
+    }
+
+    // Add toolbar parameter (pagemode=none hides toolbar)
+    if (this.toolbar === false) {
+      params.push('pagemode=none');
+    }
+
+    if (params.length > 0) {
+      pdfUrl += '#' + params.join('&');
+    }
+
+    iframe.src = pdfUrl;
+
+    // Apply width (supports both pixel numbers and percentage strings)
+    if (this.width) {
+      iframe.style.width = typeof this.width === 'number' ? `${this.width}px` : this.width;
+    } else {
+      iframe.style.width = '100%';
+    }
+
+    // Apply height (supports both pixel numbers and percentage strings)
+    if (this.height) {
+      iframe.style.height = typeof this.height === 'number' ? `${this.height}px` : this.height;
+    } else {
+      iframe.style.height = '600px';
+    }
+
+    iframe.style.border = 'none';
+    iframe.style.borderRadius = '0.5rem';
+
+    iframe.onerror = () => {
+      container.innerHTML = `<span class="cm-pdf-error">PDF not found: ${this.src}</span>`;
     };
-    return icons[level] || '📄';
+
+    container.appendChild(iframe);
+    return container;
   }
 
-  eq(other: HeadingEmbedWidget) {
-    return this.target === other.target &&
-           this.heading === other.heading &&
-           this.content === other.content &&
-           this.headingLevel === other.headingLevel;
+  eq(other: PdfWidget) {
+    return this.src === other.src &&
+           this.page === other.page &&
+           this.width === other.width &&
+           this.height === other.height &&
+           this.toolbar === other.toolbar &&
+           this.align === other.align;
   }
 
-  ignoreEvent() { return false; }
+  ignoreEvent() { return true; }
 }

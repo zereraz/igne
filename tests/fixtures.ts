@@ -172,37 +172,70 @@ export class AppPage {
         return await checkbox.isChecked();
       },
 
-      // ===== Block embed helpers =====
+      // ===== Embed helpers =====
 
       /**
-       * Check if a block embed widget is visible
+       * Wait for embed widgets to render
        */
-      hasBlockEmbed: async (noteName: string, blockId: string) => {
-        const blockEmbed = this.page.locator(`.cm-block-embed[data-note="${noteName}"][data-block="${blockId}"]`);
-        return await blockEmbed.isVisible();
+      waitForEmbedWidget: async () => {
+        await this.page.locator('.cm-embed').first().waitFor({ state: 'visible' });
       },
 
       /**
-       * Wait for block embed widgets to render
+       * Check if an image widget is visible
        */
-      waitForBlockEmbedWidget: async () => {
-        await this.page.locator('.cm-block-embed').first().waitFor({ state: 'visible' });
+      hasImageWidget: async () => {
+        const image = this.page.locator('.cm-image');
+        return await image.isVisible();
       },
 
       /**
-       * Click on a block embed's open button
+       * Get the width of an image widget
        */
-      clickBlockEmbedOpen: async (noteName: string, blockId: string) => {
-        const blockEmbed = this.page.locator(`.cm-block-embed[data-note="${noteName}"][data-block="${blockId}"]`);
-        await blockEmbed.locator('.cm-block-embed-header').click();
+      getImageWidth: async () => {
+        const image = this.page.locator('.cm-image');
+        const width = await image.evaluate((el: HTMLImageElement) => {
+          return el.style.width;
+        });
+        return width;
       },
 
       /**
-       * Get the content text from a block embed
+       * Get the height of an image widget
        */
-      getBlockEmbedContent: async (noteName: string, blockId: string) => {
-        const blockEmbed = this.page.locator(`.cm-block-embed[data-note="${noteName}"][data-block="${blockId}"] .cm-block-embed-body`);
-        return await blockEmbed.innerText();
+      getImageHeight: async () => {
+        const image = this.page.locator('.cm-image');
+        const height = await image.evaluate((el: HTMLImageElement) => {
+          return el.style.height;
+        });
+        return height;
+      },
+
+      /**
+       * Check if an image has the correct alignment class
+       */
+      hasImageAlignment: async (align: 'left' | 'center' | 'right') => {
+        const container = this.page.locator('.cm-image-container');
+        const hasClass = await container.evaluate((el: HTMLElement, alignment) => {
+          return el.classList.contains(`cm-image-align-${alignment}`);
+        }, align);
+        return hasClass;
+      },
+
+      /**
+       * Check if a video widget is visible
+       */
+      hasVideoWidget: async () => {
+        const video = this.page.locator('.cm-video');
+        return await video.isVisible();
+      },
+
+      /**
+       * Check if a PDF widget is visible
+       */
+      hasPdfWidget: async () => {
+        const pdf = this.page.locator('.cm-pdf');
+        return await pdf.isVisible();
       },
 
       // ===== CodeMirror API access =====

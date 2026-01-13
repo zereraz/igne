@@ -7,12 +7,19 @@ import {
   TagWidget,
   CheckboxWidget,
   ImageWidget,
+  VideoWidget,
+  PdfWidget,
   MathWidget,
   CodeBlockWidget,
   CalloutWidget,
   MermaidWidget,
-  HeadingEmbedWidget,
 } from './widgets';
+import {
+  parseEmbedTarget,
+  isImageFile,
+  isVideoFile,
+  isPdfFile,
+} from '../utils/embedParams';
 
 export interface LivePreviewConfig {
   onWikilinkClick?: (target: string) => void;
@@ -22,7 +29,6 @@ export interface LivePreviewConfig {
   onCalloutToggle?: (pos: number) => void;
   resolveWikilink?: (target: string) => { exists: boolean; content?: string } | null;
   resolveImage?: (src: string) => string;
-  resolveHeading?: (target: string, heading: string) => { exists: boolean; content?: string; headingLevel?: number } | null;
   /** External trigger to force decoration rebuild when files change */
   refreshTrigger?: { current: number };
 }
@@ -35,7 +41,6 @@ const DEFAULT_CONFIG: Required<LivePreviewConfig> = {
   onCalloutToggle: () => {},
   resolveWikilink: () => null,
   resolveImage: (src) => src,
-  resolveHeading: () => null,
   refreshTrigger: { current: 0 },
 };
 
@@ -398,46 +403,69 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         const match = text.match(/!\[\[([^\]]+)\]\]/);
         if (match) {
           const target = match[1];
+          const { path, params } = parseEmbedTarget(target);
+          const resolved = fullConfig.resolveWikilink(path);
 
-          // Check for heading transclusion syntax: ![[Note#Heading]]
-          const headingMatch = target.match(/^([^#]+)#(.+)$/);
-          if (headingMatch) {
-            const note = headingMatch[1].trim();
-            const heading = headingMatch[2].trim();
-
-            // Empty heading means show picker
-            if (heading === '') {
-              // Show heading picker trigger
-              decorations.push(
-                Decoration.replace({
-                  widget: new EmbedWidget(note + '#', null, fullConfig.onWikilinkClick),
-                  block: true,
-                }).range(node.from, node.to)
-              );
-            } else {
-              // Resolve heading content
-              const resolved = fullConfig.resolveHeading?.(note, heading);
-
-              decorations.push(
-                Decoration.replace({
-                  widget: new HeadingEmbedWidget(
-                    note,
-                    heading,
-                    resolved?.content ?? null,
-                    resolved?.headingLevel ?? 1,
-                    fullConfig.onWikilinkClick
-                  ),
-                  block: true,
-                }).range(node.from, node.to)
-              );
-            }
-          } else {
-            // Regular note embed
-            const resolved = fullConfig.resolveWikilink(target);
-
+          // Determine embed type based on file extension
+          if (isImageFile(path)) {
+            // Image embed with parameters
+            const imageSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
             decorations.push(
               Decoration.replace({
-                widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
+                widget: new ImageWidget(
+                  imageSrc,
+                  params.alt || path,
+                  params.width,
+                  params.height,
+                  params.title,
+                  params.align
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          } else if (isVideoFile(path)) {
+            // Video embed with parameters
+            const videoSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
+            decorations.push(
+              Decoration.replace({
+                widget: new VideoWidget(
+                  videoSrc,
+                  params.width,
+                  params.height,
+                  params.autoplay,
+                  params.loop,
+                  params.muted,
+                  params.controls,
+                  params.align
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          } else if (isPdfFile(path)) {
+            // PDF embed with parameters
+            const pdfSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
+            decorations.push(
+              Decoration.replace({
+                widget: new PdfWidget(
+                  pdfSrc,
+                  params.page,
+                  params.width,
+                  params.height,
+                  params.toolbar,
+                  params.align
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          } else {
+            // Default note embed
+            decorations.push(
+              Decoration.replace({
+                widget: new EmbedWidget(
+                  target,
+                  resolved?.content ?? null,
+                  fullConfig.onWikilinkClick
+                ),
                 block: true,
               }).range(node.from, node.to)
             );
@@ -452,43 +480,54 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         const embedMatch = text.match(/^!\[\[([^\]]+)\]\]$/);
         if (embedMatch) {
           const target = embedMatch[1];
+          const { path, params } = parseEmbedTarget(target);
+          const resolved = fullConfig.resolveWikilink(path);
 
-          // Check for heading transclusion syntax: ![[Note#Heading]]
-          const headingMatch = target.match(/^([^#]+)#(.+)$/);
-          if (headingMatch) {
-            const note = headingMatch[1].trim();
-            const heading = headingMatch[2].trim();
-
-            // Empty heading means show picker
-            if (heading === '') {
-              decorations.push(
-                Decoration.replace({
-                  widget: new EmbedWidget(note + '#', null, fullConfig.onWikilinkClick),
-                  block: true,
-                }).range(node.from, node.to)
-              );
-            } else {
-              const resolved = fullConfig.resolveHeading?.(note, heading);
-
-              decorations.push(
-                Decoration.replace({
-                  widget: new HeadingEmbedWidget(
-                    note,
-                    heading,
-                    resolved?.content ?? null,
-                    resolved?.headingLevel ?? 1,
-                    fullConfig.onWikilinkClick
-                  ),
-                  block: true,
-                }).range(node.from, node.to)
-              );
-            }
-          } else {
-            const resolved = fullConfig.resolveWikilink(target);
-
+          // Determine embed type based on file extension
+          if (isImageFile(path)) {
+            // Image embed with parameters
+            const imageSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
             decorations.push(
               Decoration.replace({
-                widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
+                widget: new ImageWidget(
+                  imageSrc,
+                  params.alt || path,
+                  params.width,
+                  params.height,
+                  params.title,
+                  params.align
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+          } else if (isVideoFile(path)) {
+            // Video embed with parameters
+            const videoSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
+            decorations.push(
+              Decoration.replace({
+                widget: new VideoWidget(
+                  videoSrc,
+                  params.width,
+                  params.height,
+                  params.autoplay,
+                  params.loop,
+                  params.muted,
+                  params.controls,
+                  params.align
+                ),
+                block: true,
+              }).range(node.from, node.to)
+            );
+            return;
+          } else {
+            // Default note embed
+            decorations.push(
+              Decoration.replace({
+                widget: new EmbedWidget(
+                  target,
+                  resolved?.content ?? null,
+                  fullConfig.onWikilinkClick
+                ),
                 block: true,
               }).range(node.from, node.to)
             );

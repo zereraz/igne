@@ -24,7 +24,7 @@ Obsidian Help is an Obsidian Publish site (raw markdown is accessible via `publi
 
 ## Official (Obsidian Developer Docs)
 
-These are used for compatibility policy and plugin update behavior under a pinned baseline.
+These are used for compatibility policy and plugin update behavior under Igne’s declared supported version (which tracks upstream over time).
 
 - Manifest reference: https://docs.obsidian.md/Reference/Manifest
 - Versions fallback (`versions.json`) reference: https://docs.obsidian.md/Reference/Versions
