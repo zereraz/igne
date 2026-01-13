@@ -20,7 +20,7 @@ Key behavior:
 - Obsidian chooses the newest plugin version whose `minAppVersion` is compatible with the user’s app.
 - Plugin authors only need to update `versions.json` when they **change** `minAppVersion` (not for every release).
 
-## Implications for Igne (pinned baseline)
+## Implications for Igne (track upstream)
 
 Even if Igne tracks upstream, Igne will sometimes be “behind” the newest plugin release (for a brief window). In that window:
 

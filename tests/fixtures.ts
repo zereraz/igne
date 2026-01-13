@@ -172,52 +172,37 @@ export class AppPage {
         return await checkbox.isChecked();
       },
 
-      // ===== Media embed helpers =====
+      // ===== Block embed helpers =====
 
       /**
-       * Check if an audio widget is visible
+       * Check if a block embed widget is visible
        */
-      hasAudioWidget: async (filename: string) => {
-        const audio = this.page.locator(`.cm-audio-container audio[data-filename="${filename}"]`);
-        return await audio.isVisible();
+      hasBlockEmbed: async (noteName: string, blockId: string) => {
+        const blockEmbed = this.page.locator(`.cm-block-embed[data-note="${noteName}"][data-block="${blockId}"]`);
+        return await blockEmbed.isVisible();
       },
 
       /**
-       * Check if a video widget is visible
+       * Wait for block embed widgets to render
        */
-      hasVideoWidget: async (filename: string) => {
-        const video = this.page.locator(`.cm-video-container video[data-filename="${filename}"]`);
-        return await video.isVisible();
+      waitForBlockEmbedWidget: async () => {
+        await this.page.locator('.cm-block-embed').first().waitFor({ state: 'visible' });
       },
 
       /**
-       * Check if audio has error state
+       * Click on a block embed's open button
        */
-      hasAudioError: async () => {
-        const error = this.page.locator('.cm-audio-error');
-        return await error.isVisible();
+      clickBlockEmbedOpen: async (noteName: string, blockId: string) => {
+        const blockEmbed = this.page.locator(`.cm-block-embed[data-note="${noteName}"][data-block="${blockId}"]`);
+        await blockEmbed.locator('.cm-block-embed-header').click();
       },
 
       /**
-       * Check if video has error state
+       * Get the content text from a block embed
        */
-      hasVideoError: async () => {
-        const error = this.page.locator('.cm-video-error');
-        return await error.isVisible();
-      },
-
-      /**
-       * Wait for audio widget to render
-       */
-      waitForAudioWidget: async () => {
-        await this.page.locator('.cm-audio-container').first().waitFor({ state: 'visible' });
-      },
-
-      /**
-       * Wait for video widget to render
-       */
-      waitForVideoWidget: async () => {
-        await this.page.locator('.cm-video-container').first().waitFor({ state: 'visible' });
+      getBlockEmbedContent: async (noteName: string, blockId: string) => {
+        const blockEmbed = this.page.locator(`.cm-block-embed[data-note="${noteName}"][data-block="${blockId}"] .cm-block-embed-body`);
+        return await blockEmbed.innerText();
       },
 
       // ===== CodeMirror API access =====

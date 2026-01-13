@@ -120,12 +120,13 @@ export const Wikilink: MarkdownConfig = {
   }],
 };
 
-// Embed ![[note]]
+// Embed ![[note]] and ![[note#^blockid]]
 export const Embed: MarkdownConfig = {
   defineNodes: [
     { name: 'Embed', style: createStyle('embed') },
     { name: 'EmbedMark' },
     { name: 'EmbedTarget' },
+    { name: 'EmbedBlockId' }, // For #^blockid part
   ],
   parseInline: [{
     name: 'Embed',
@@ -135,18 +136,50 @@ export const Embed: MarkdownConfig = {
       const start = pos;
       pos += 3;
 
-      let end = pos;
-      while (end < cx.end) {
-        if (cx.char(end) === 93 /* ] */ && cx.char(end + 1) === 93) break;
-        end++;
+      // Parse the target and optional block reference
+      let targetEnd = pos;
+      let blockIdStart = -1;
+      let end = -1;
+
+      while (targetEnd < cx.end) {
+        const c = cx.char(targetEnd);
+        // Check for block reference #^
+        if (c === 35 /* # */ && cx.char(targetEnd + 1) === 94 /* ^ */) {
+          blockIdStart = targetEnd;
+          break;
+        }
+        if (c === 93 /* ] */ && cx.char(targetEnd + 1) === 93) { end = targetEnd; break; }
+        targetEnd++;
       }
+
+      if (end < 0) {
+        // Need to find closing ]]
+        let searchPos = blockIdStart > 0 ? blockIdStart : targetEnd;
+        while (searchPos < cx.end) {
+          if (cx.char(searchPos) === 93 && cx.char(searchPos + 1) === 93) {
+            end = searchPos;
+            break;
+          }
+          searchPos++;
+        }
+      }
+
       if (end >= cx.end || end === pos) return -1;
 
-      return cx.addElement(cx.elt('Embed', start, end + 2, [
+      // Build the element tree
+      const children = [
         cx.elt('EmbedMark', start, start + 3),
-        cx.elt('EmbedTarget', start + 3, end),
-        cx.elt('EmbedMark', end, end + 2),
-      ]));
+        cx.elt('EmbedTarget', start + 3, blockIdStart > 0 ? blockIdStart : end),
+      ];
+
+      // Add block ID if present
+      if (blockIdStart > 0) {
+        children.push(cx.elt('EmbedBlockId', blockIdStart, end));
+      }
+
+      children.push(cx.elt('EmbedMark', end, end + 2));
+
+      return cx.addElement(cx.elt('Embed', start, end + 2, children));
     },
   }],
 };

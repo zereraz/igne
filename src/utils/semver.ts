@@ -6,8 +6,8 @@
  */
 
 /**
- * Obsidian API compatibility baseline
- * Igne is pinned to this specific version for plugin compatibility
+ * The pinned Obsidian API compatibility version
+ * Igne supports plugins compatible with this version or earlier
  */
 export const OBSIDIAN_COMPAT_VERSION = '1.11.4';
 
@@ -194,7 +194,6 @@ export function lte(a: string, b: string): boolean {
 
 /**
  * Check if a version satisfies a minimum version requirement
- *
  * @param version - The version to check
  * @param minVersion - The minimum required version
  * @returns true if version >= minVersion
@@ -204,12 +203,11 @@ export function satisfiesMinVersion(version: string, minVersion: string): boolea
 }
 
 /**
- * Check if a plugin's minimum app version is compatible with Igne's baseline
- *
- * @param minAppVersion - The plugin's minimum required Obsidian version
- * @returns true if the plugin is compatible with Igne's pinned baseline
+ * Check if a plugin's minimum app version is compatible with Igne
+ * @param minAppVersion - The plugin's minimum Obsidian version requirement
+ * @returns true if the plugin is compatible
  */
 export function isPluginCompatible(minAppVersion: string): boolean {
-  // Plugin is compatible if it requires <= baseline
+  // Plugin is compatible if it requires Igne's baseline version or earlier
   return lte(minAppVersion, OBSIDIAN_COMPAT_VERSION);
 }

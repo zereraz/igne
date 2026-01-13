@@ -4,6 +4,7 @@ import { Range, EditorState } from '@codemirror/state';
 import {
   WikilinkWidget,
   EmbedWidget,
+  BlockEmbedWidget,
   TagWidget,
   CheckboxWidget,
   ImageWidget,
@@ -11,10 +12,10 @@ import {
   CodeBlockWidget,
   CalloutWidget,
   MermaidWidget,
-  getMediaType,
-  AudioWidget,
-  VideoWidget,
 } from './widgets';
+
+import { parseBlockReference } from '../utils/blockParser';
+import { findBlockById, extractBlockContent } from '../utils/blockFinder';
 
 export interface LivePreviewConfig {
   onWikilinkClick?: (target: string) => void;
@@ -23,6 +24,7 @@ export interface LivePreviewConfig {
   onCheckboxToggle?: (pos: number, checked: boolean) => void;
   onCalloutToggle?: (pos: number) => void;
   resolveWikilink?: (target: string) => { exists: boolean; content?: string } | null;
+  resolveBlockEmbed?: (noteName: string, blockId: string) => { exists: boolean; content?: string; blockType?: string } | null;
   resolveImage?: (src: string) => string;
   /** External trigger to force decoration rebuild when files change */
   refreshTrigger?: { current: number };
@@ -35,6 +37,7 @@ const DEFAULT_CONFIG: Required<LivePreviewConfig> = {
   onCheckboxToggle: () => {},
   onCalloutToggle: () => {},
   resolveWikilink: () => null,
+  resolveBlockEmbed: () => null,
   resolveImage: (src) => src,
   refreshTrigger: { current: 0 },
 };
@@ -398,39 +401,36 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         const match = text.match(/!\[\[([^\]]+)\]\]/);
         if (match) {
           const target = match[1];
-          const mediaType = getMediaType(target);
 
-          // Check if this is a media file embed
-          if (mediaType === 'audio') {
-            const src = fullConfig.resolveImage(target);
+          // Check if this is a block embed: ![[Note#^blockid]]
+          const blockRef = parseBlockReference(text);
+          if (blockRef && blockRef.isBlockRef) {
+            // This is a block transclusion
+            const resolved = fullConfig.resolveBlockEmbed(blockRef.note, blockRef.blockId);
+
             decorations.push(
               Decoration.replace({
-                widget: new AudioWidget(src, target),
+                widget: new BlockEmbedWidget(
+                  blockRef.note,
+                  blockRef.blockId,
+                  resolved?.content ?? null,
+                  resolved?.blockType ?? 'unknown',
+                  fullConfig.onWikilinkClick,
+                ),
                 block: true,
               }).range(node.from, node.to)
             );
-            return;
-          }
+          } else {
+            // Regular note embed
+            const resolved = fullConfig.resolveWikilink(target);
 
-          if (mediaType === 'video') {
-            const src = fullConfig.resolveImage(target);
             decorations.push(
               Decoration.replace({
-                widget: new VideoWidget(src, target),
+                widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
                 block: true,
               }).range(node.from, node.to)
             );
-            return;
           }
-
-          // Default to note embed
-          const resolved = fullConfig.resolveWikilink(target);
-          decorations.push(
-            Decoration.replace({
-              widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
-              block: true,
-            }).range(node.from, node.to)
-          );
         }
         return;
       }
@@ -441,33 +441,31 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         const embedMatch = text.match(/^!\[\[([^\]]+)\]\]$/);
         if (embedMatch) {
           const target = embedMatch[1];
-          const mediaType = getMediaType(target);
 
-          // Check if this is a media file embed
-          if (mediaType === 'audio') {
-            const src = fullConfig.resolveImage(target);
+          // Check if this is a block embed: ![[Note#^blockid]]
+          const blockRef = parseBlockReference(text);
+          if (blockRef && blockRef.isBlockRef) {
+            // This is a block transclusion
+            const resolved = fullConfig.resolveBlockEmbed(blockRef.note, blockRef.blockId);
+
             decorations.push(
               Decoration.replace({
-                widget: new AudioWidget(src, target),
+                widget: new BlockEmbedWidget(
+                  blockRef.note,
+                  blockRef.blockId,
+                  resolved?.content ?? null,
+                  resolved?.blockType ?? 'unknown',
+                  fullConfig.onWikilinkClick,
+                ),
                 block: true,
               }).range(node.from, node.to)
             );
             return;
           }
 
-          if (mediaType === 'video') {
-            const src = fullConfig.resolveImage(target);
-            decorations.push(
-              Decoration.replace({
-                widget: new VideoWidget(src, target),
-                block: true,
-              }).range(node.from, node.to)
-            );
-            return;
-          }
-
-          // Default to note embed
+          // Regular note embed
           const resolved = fullConfig.resolveWikilink(target);
+
           decorations.push(
             Decoration.replace({
               widget: new EmbedWidget(target, resolved?.content ?? null, fullConfig.onWikilinkClick),
