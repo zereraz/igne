@@ -15,6 +15,8 @@ class WorkspaceStateManager {
   private currentSplitDirection: 'horizontal' | 'vertical' | null = null;
   private currentLastOpenFiles: string[] = [];
   private vaultPath: string | null = null;
+  private currentOpenFiles: OpenFile[] = [];
+  private currentActiveTab: string | null = null;
 
   /**
    * Set the current vault path for path conversions
@@ -34,7 +36,7 @@ class WorkspaceStateManager {
    * Get current split direction
    */
   getSplitDirection(): 'horizontal' | 'vertical' | null {
-    return this.splitDirection;
+    return this.currentSplitDirection;
   }
 
   /**
@@ -79,7 +81,7 @@ class WorkspaceStateManager {
       }
 
       this.currentPanes = panes;
-      this.splitDirection = splitDirection;
+      this.currentSplitDirection = splitDirection;
 
       return {
         panes,
@@ -199,7 +201,7 @@ class WorkspaceStateManager {
         children: tabsChildren,
         currentTab: pane.activeTab
           ? pane.tabs.findIndex((f) => f.path === pane.activeTab)
-          : pane.tabs.length > 0 ? 0 : undefined,
+          : pane.tabs.length > 0 ? 0 : 0,
       };
     } else {
       // Multiple panes - use split structure (Obsidian-compatible format)
@@ -221,7 +223,7 @@ class WorkspaceStateManager {
           children: tabsChildren,
           currentTab: pane.activeTab
             ? pane.tabs.findIndex((f) => f.path === pane.activeTab)
-            : pane.tabs.length > 0 ? 0 : undefined,
+            : pane.tabs.length > 0 ? 0 : 0,
         };
       });
 
@@ -296,7 +298,13 @@ class WorkspaceStateManager {
   // Save immediately
   async save(openFiles: OpenFile[], activeTab: string | null, lastOpenFiles: string[]): Promise<void> {
     try {
-      const state = this.capture(openFiles, activeTab, lastOpenFiles);
+      // Convert OpenFile[] to PaneState[] for capture
+      const panes: PaneState[] = [{
+        id: 'main-pane',
+        tabs: openFiles,
+        activeTab: activeTab,
+      }];
+      const state = this.capture(panes, null, lastOpenFiles);
       await vaultConfigStore.saveWorkspace(state);
       console.log('[WorkspaceStateManager] Saved workspace state');
     } catch (e) {

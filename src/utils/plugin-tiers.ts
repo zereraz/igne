@@ -75,7 +75,7 @@ export async function detectPluginTier(mainJsContent: string): Promise<PluginTie
     tier,
     permissions,
     blockedReasons,
-    isCompatible: tier !== 2,
+    isCompatible: true, // tier 2 plugins return early, so reaching here means compatible
   };
 }
 
