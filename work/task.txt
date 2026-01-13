@@ -1,0 +1,24 @@
+# Main loop task file (repo root)
+
+This file is used by `./scripts/loop.sh` as the prompt input.
+
+## What to work on next
+
+Start from the execution plan and gap tracker:
+- `docs/OBSIDIAN_COMPATIBILITY_AI_FIRST_ROADMAP.md` (execution phases + acceptance checks)
+- `docs/OBSIDIAN_DROP_IN_GAP_REPORT.md` (taskable drop-in parity gaps)
+- `docs/OBSIDIAN_SUPPORT_MATRIX.md` (quick scan of current status)
+- `research-oss/obsidian-research/` (sources + ecosystem snapshots)
+
+If you need a narrowly scoped task, pick one of the embed parity task specs:
+- `work/embed-params.md`
+- `work/embed-pdf.md`
+- `work/embed-media.md`
+- `work/embed-heading.md`
+- `work/embed-block.md`
+
+## Completion marker
+
+When all tasks in this file are complete, add:
+
+<promise>COMPLETE</promise>
