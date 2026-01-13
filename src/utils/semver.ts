@@ -6,6 +6,12 @@
  */
 
 /**
+ * The pinned Obsidian API compatibility version
+ * Igne supports plugins compatible with this version or earlier
+ */
+export const OBSIDIAN_COMPAT_VERSION = '1.11.4';
+
+/**
  * Parsed semantic version components
  */
 interface SemVer {
@@ -184,4 +190,24 @@ export function gte(a: string, b: string): boolean {
  */
 export function lte(a: string, b: string): boolean {
   return compareVersions(a, b) <= 0;
+}
+
+/**
+ * Check if a version satisfies a minimum version requirement
+ * @param version - The version to check
+ * @param minVersion - The minimum required version
+ * @returns true if version >= minVersion
+ */
+export function satisfiesMinVersion(version: string, minVersion: string): boolean {
+  return gte(version, minVersion);
+}
+
+/**
+ * Check if a plugin's minimum app version is compatible with Igne
+ * @param minAppVersion - The plugin's minimum Obsidian version requirement
+ * @returns true if the plugin is compatible
+ */
+export function isPluginCompatible(minAppVersion: string): boolean {
+  // Plugin is compatible if it requires Igne's baseline version or earlier
+  return lte(minAppVersion, OBSIDIAN_COMPAT_VERSION);
 }

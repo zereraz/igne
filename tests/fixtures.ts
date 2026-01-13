@@ -172,6 +172,39 @@ export class AppPage {
         return await checkbox.isChecked();
       },
 
+      // ===== Block embed helpers =====
+
+      /**
+       * Check if a block embed widget is visible
+       */
+      hasBlockEmbed: async (noteName: string, blockId: string) => {
+        const blockEmbed = this.page.locator(`.cm-block-embed[data-note="${noteName}"][data-block="${blockId}"]`);
+        return await blockEmbed.isVisible();
+      },
+
+      /**
+       * Wait for block embed widgets to render
+       */
+      waitForBlockEmbedWidget: async () => {
+        await this.page.locator('.cm-block-embed').first().waitFor({ state: 'visible' });
+      },
+
+      /**
+       * Click on a block embed's open button
+       */
+      clickBlockEmbedOpen: async (noteName: string, blockId: string) => {
+        const blockEmbed = this.page.locator(`.cm-block-embed[data-note="${noteName}"][data-block="${blockId}"]`);
+        await blockEmbed.locator('.cm-block-embed-header').click();
+      },
+
+      /**
+       * Get the content text from a block embed
+       */
+      getBlockEmbedContent: async (noteName: string, blockId: string) => {
+        const blockEmbed = this.page.locator(`.cm-block-embed[data-note="${noteName}"][data-block="${blockId}"] .cm-block-embed-body`);
+        return await blockEmbed.innerText();
+      },
+
       // ===== CodeMirror API access =====
 
       /**

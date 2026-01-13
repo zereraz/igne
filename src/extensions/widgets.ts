@@ -83,6 +83,68 @@ export class EmbedWidget extends WidgetType {
   ignoreEvent() { return false; }
 }
 
+export class BlockEmbedWidget extends WidgetType {
+  constructor(
+    readonly noteName: string,
+    readonly blockId: string,
+    readonly content: string | null,
+    readonly blockType: string,
+    readonly onOpen: (noteName: string) => void,
+    readonly onGoToBlock?: () => void
+  ) { super(); }
+
+  toDOM() {
+    const container = document.createElement('div');
+    container.className = 'cm-block-embed';
+    container.dataset.note = this.noteName;
+    container.dataset.block = this.blockId;
+
+    const header = document.createElement('div');
+    header.className = 'cm-block-embed-header';
+    header.innerHTML = `<span class="cm-block-embed-icon">${this.getBlockIcon()}</span><span class="cm-block-embed-title">${this.noteName}#${this.blockId}</span>`;
+    header.addEventListener('click', () => this.onOpen(this.noteName));
+
+    const body = document.createElement('div');
+    body.className = 'cm-block-embed-body';
+
+    if (this.content) {
+      body.textContent = this.content;
+    } else {
+      body.innerHTML = '<span class="cm-block-embed-missing">Block not found</span>';
+    }
+
+    container.appendChild(header);
+    container.appendChild(body);
+    return container;
+  }
+
+  getBlockIcon(): string {
+    switch (this.blockType) {
+      case 'list':
+      case 'task':
+        return '📝';
+      case 'callout':
+        return '💡';
+      case 'quote':
+        return '💬';
+      case 'code':
+        return '💻';
+      case 'heading':
+        return '📌';
+      default:
+        return '📄';
+    }
+  }
+
+  eq(other: BlockEmbedWidget) {
+    return this.noteName === other.noteName &&
+           this.blockId === other.blockId &&
+           this.content === other.content;
+  }
+
+  ignoreEvent() { return false; }
+}
+
 export class TagWidget extends WidgetType {
   constructor(
     readonly tag: string,
