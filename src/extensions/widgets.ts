@@ -320,3 +320,84 @@ export class MermaidWidget extends WidgetType {
 
   ignoreEvent() { return true; }
 }
+
+export class PdfEmbedWidget extends WidgetType {
+  constructor(
+    readonly path: string,
+    readonly page: number,
+    readonly onOpen: (path: string) => void
+  ) { super(); }
+
+  toDOM() {
+    const container = document.createElement('div');
+    container.className = 'cm-pdf-embed-container';
+
+    // Header with filename and page indicator
+    const header = document.createElement('div');
+    header.className = 'cm-pdf-embed-header';
+    header.innerHTML = `
+      <span class="cm-pdf-embed-icon">📄</span>
+      <span class="cm-pdf-embed-title">${this.path}</span>
+      <span class="cm-pdf-embed-page">Page ${this.page}</span>
+    `;
+    header.addEventListener('click', () => this.onOpen(this.path));
+
+    // iframe for PDF rendering
+    const iframe = document.createElement('iframe');
+    iframe.className = 'cm-pdf-embed-iframe';
+    iframe.setAttribute('data-pdf-path', this.path);
+
+    // Use browser's native PDF viewer with page parameter
+    // The #page= parameter is supported by most browsers' PDF viewers
+    const pdfUrl = `${this.path}#page=${this.page}`;
+    iframe.src = pdfUrl;
+
+    // Handle loading errors
+    iframe.onerror = () => {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'cm-pdf-embed-error';
+      errorDiv.textContent = `Failed to load PDF: ${this.path}`;
+      container.innerHTML = '';
+      container.appendChild(header);
+      container.appendChild(errorDiv);
+    };
+
+    // Show loading state
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'cm-pdf-embed-loading';
+    loadingDiv.textContent = 'Loading PDF...';
+
+    container.appendChild(header);
+    container.appendChild(loadingDiv);
+
+    // Replace loading with iframe when loaded
+    iframe.onload = () => {
+      const loading = container.querySelector('.cm-pdf-embed-loading');
+      if (loading) {
+        loading.remove();
+      }
+      if (!container.querySelector('iframe')) {
+        container.appendChild(iframe);
+      }
+    };
+
+    // Fallback: show iframe after a timeout even if onload doesn't fire
+    setTimeout(() => {
+      const loading = container.querySelector('.cm-pdf-embed-loading');
+      if (loading) {
+        loading.remove();
+      }
+      if (!container.querySelector('iframe')) {
+        container.appendChild(iframe);
+      }
+    }, 1000);
+
+    return container;
+  }
+
+  eq(other: PdfEmbedWidget) {
+    return this.path === other.path && this.page === other.page;
+  }
+
+  ignoreEvent() { return false; }
+}
