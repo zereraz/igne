@@ -57,7 +57,7 @@ jobs:
         run: cargo install tauri-driver --locked
 
       - name: Build Tauri app
-        run: cargo tauri build
+        run: npm run tauri build
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
