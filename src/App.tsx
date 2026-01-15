@@ -50,6 +50,7 @@ import {
 } from './utils/dailyNotes';
 import { renameFileWithLinkUpdates, getLinkUpdateCount } from './utils/fileManager';
 import { loadTemplates, insertTemplateIntoFile, createFileFromTemplate } from './utils/templateLoader';
+import { ensureDefaultVault } from './utils/defaultVault';
 import { CommandRegistry } from './commands/registry';
 import { setWorkspaceManager } from './tools/workspace';
 
@@ -406,18 +407,30 @@ function App() {
           } else {
             console.log('[App] Last vault no longer exists, removing from registry');
             await vaultsStore.removeVault(lastVault);
-            setShowVaultPicker(true);
+            // Fall through to default vault
+            const defaultVaultPath = await ensureDefaultVault();
+            console.log('[App] Opening default vault:', defaultVaultPath);
+            await handleOpenVaultPath(defaultVaultPath);
           }
         } else {
-          console.log('[App] Showing vault picker');
-          setShowVaultPicker(true);
+          // No last vault - create/open default vault
+          console.log('[App] No last vault, ensuring default vault exists');
+          const defaultVaultPath = await ensureDefaultVault();
+          console.log('[App] Opening default vault:', defaultVaultPath);
+          await handleOpenVaultPath(defaultVaultPath);
         }
 
         setIsInitialized(true);
       } catch (e) {
         console.error('[App] Failed to initialize:', e);
-        // Still show app even if initialization fails
-        setShowVaultPicker(true);
+        // Try to open default vault as fallback, or show vault picker
+        try {
+          const defaultVaultPath = await ensureDefaultVault();
+          await handleOpenVaultPath(defaultVaultPath);
+        } catch (fallbackError) {
+          console.error('[App] Fallback to default vault also failed:', fallbackError);
+          setShowVaultPicker(true);
+        }
         setIsInitialized(true);
       }
     }
@@ -1198,6 +1211,7 @@ function App() {
       name: 'New File',
       icon: 'FilePlus',
       category: 'file',
+      hotkeys: [{ key: 'n', modifiers: { meta: true } }],
       callback: (...args: unknown[]) => handleNewFile(...(args as [])),
     });
 
