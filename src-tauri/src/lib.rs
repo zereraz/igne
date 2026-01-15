@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, EventKind};
 
 /// State for managing file watchers - allows proper cleanup
@@ -349,6 +350,83 @@ fn get_app_data_dir(app: AppHandle) -> String {
         .unwrap_or_else(|_| ".".to_string())
 }
 
+/// Get the default vault path (~/Documents/Igne)
+#[tauri::command]
+fn get_default_vault_path() -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("Could not find home directory")?;
+    let vault_path = home.join("Documents").join("Igne");
+    Ok(vault_path.to_string_lossy().to_string())
+}
+
+/// Ensure the default vault exists, creating it if necessary
+/// Returns the vault path
+#[tauri::command]
+fn ensure_default_vault() -> Result<String, String> {
+    let home = dirs::home_dir().ok_or("Could not find home directory")?;
+    let vault_path = home.join("Documents").join("Igne");
+
+    // Create vault directory if it doesn't exist
+    if !vault_path.exists() {
+        fs::create_dir_all(&vault_path).map_err(|e| e.to_string())?;
+
+        // Create .obsidian directory
+        let obsidian_path = vault_path.join(".obsidian");
+        fs::create_dir_all(&obsidian_path).map_err(|e| e.to_string())?;
+
+        // Create app.json
+        let app_config = r#"{
+  "alwaysUpdateLinks": true,
+  "newFileLocation": "root",
+  "attachmentFolderPath": "attachments",
+  "showLineNumber": true,
+  "strictLineBreaks": false,
+  "vimMode": false
+}"#;
+        fs::write(obsidian_path.join("app.json"), app_config).map_err(|e| e.to_string())?;
+
+        // Create appearance.json
+        let appearance_config = r##"{
+  "baseFontSize": 16,
+  "baseTheme": "dark",
+  "accentColor": "#a78bfa",
+  "translucency": false
+}"##;
+        fs::write(obsidian_path.join("appearance.json"), appearance_config).map_err(|e| e.to_string())?;
+
+        // Create Welcome.md
+        let welcome_content = r#"# Welcome to Igne
+
+Igne is a fast, native markdown editor with Obsidian vault compatibility.
+
+## Quick Start
+
+- **Cmd+N** - Create a new note
+- **Cmd+P** - Quick switcher to find notes
+- **Cmd+S** - Save current note
+- **Cmd+,** - Open settings
+
+## Features
+
+- [[Wikilinks]] to connect your notes
+- Live preview as you type
+- Backlinks panel to see connections
+- Graph view of your knowledge
+- Obsidian theme and plugin compatibility
+
+## Get Started
+
+Start writing! Create your first note with **Cmd+N** or edit this one.
+
+---
+
+*This is your default vault. You can open other vaults anytime from the vault switcher.*
+"#;
+        fs::write(vault_path.join("Welcome.md"), welcome_content).map_err(|e| e.to_string())?;
+    }
+
+    Ok(vault_path.to_string_lossy().to_string())
+}
+
 /// Check if a path is a markdown file
 fn is_markdown_file(path: &str) -> bool {
     let lower = path.to_lowercase();
@@ -362,6 +440,120 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(WatcherState::new())
+        .menu(|app| {
+            // macOS App menu (with About, Hide, Quit)
+            #[cfg(target_os = "macos")]
+            let app_menu = Submenu::with_items(
+                app,
+                "Igne",
+                true,
+                &[
+                    &PredefinedMenuItem::about(app, Some("About Igne"), None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::services(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::hide(app, None)?,
+                    &PredefinedMenuItem::hide_others(app, None)?,
+                    &PredefinedMenuItem::show_all(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::quit(app, None)?,
+                ],
+            )?;
+
+            // File menu
+            let new_file = MenuItem::with_id(app, "new_file", "New File", true, Some("CmdOrCtrl+N"))?;
+            let open_file = MenuItem::with_id(app, "open_file", "Open File...", true, Some("CmdOrCtrl+O"))?;
+            let save_file = MenuItem::with_id(app, "save_file", "Save", true, Some("CmdOrCtrl+S"))?;
+            let close_tab = MenuItem::with_id(app, "close_tab", "Close Tab", true, Some("CmdOrCtrl+W"))?;
+
+            let file_menu = Submenu::with_items(
+                app,
+                "File",
+                true,
+                &[
+                    &new_file,
+                    &open_file,
+                    &PredefinedMenuItem::separator(app)?,
+                    &save_file,
+                    &PredefinedMenuItem::separator(app)?,
+                    &close_tab,
+                ],
+            )?;
+
+            // Edit menu with standard items
+            let edit_menu = Submenu::with_items(
+                app,
+                "Edit",
+                true,
+                &[
+                    &PredefinedMenuItem::undo(app, None)?,
+                    &PredefinedMenuItem::redo(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::cut(app, None)?,
+                    &PredefinedMenuItem::copy(app, None)?,
+                    &PredefinedMenuItem::paste(app, None)?,
+                    &PredefinedMenuItem::select_all(app, None)?,
+                ],
+            )?;
+
+            // View menu
+            let quick_switcher = MenuItem::with_id(app, "quick_switcher", "Quick Switcher", true, Some("CmdOrCtrl+P"))?;
+            let settings = MenuItem::with_id(app, "settings", "Settings...", true, Some("CmdOrCtrl+,"))?;
+
+            let view_menu = Submenu::with_items(
+                app,
+                "View",
+                true,
+                &[
+                    &quick_switcher,
+                    &PredefinedMenuItem::separator(app)?,
+                    &settings,
+                ],
+            )?;
+
+            // Window menu
+            let window_menu = Submenu::with_items(
+                app,
+                "Window",
+                true,
+                &[
+                    &PredefinedMenuItem::minimize(app, None)?,
+                    &PredefinedMenuItem::maximize(app, None)?,
+                    &PredefinedMenuItem::separator(app)?,
+                    &PredefinedMenuItem::close_window(app, None)?,
+                ],
+            )?;
+
+            #[cfg(target_os = "macos")]
+            return Menu::with_items(app, &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu]);
+
+            #[cfg(not(target_os = "macos"))]
+            Menu::with_items(app, &[&file_menu, &edit_menu, &view_menu, &window_menu])
+        })
+        .on_menu_event(|app, event| {
+            let event_id = event.id().as_ref();
+            match event_id {
+                "new_file" => {
+                    let _ = app.emit("menu-new-file", ());
+                }
+                "open_file" => {
+                    let _ = app.emit("menu-open-file", ());
+                }
+                "save_file" => {
+                    let _ = app.emit("menu-save-file", ());
+                }
+                "close_tab" => {
+                    let _ = app.emit("menu-close-tab", ());
+                }
+                "quick_switcher" => {
+                    let _ = app.emit("menu-quick-switcher", ());
+                }
+                "settings" => {
+                    let _ = app.emit("menu-settings", ());
+                }
+                _ => {}
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             read_directory,
             read_file,
@@ -377,7 +569,9 @@ pub fn run() {
             watch_directory,
             unwatch_directory,
             unwatch_all,
-            get_app_data_dir
+            get_app_data_dir,
+            get_default_vault_path,
+            ensure_default_vault
         ])
         .setup(|app| {
             // Check CLI arguments for a file path
@@ -413,15 +607,19 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
-            // Handle files opened while app is already running (e.g., double-click on macOS)
-            if let tauri::RunEvent::Opened { urls } = event {
-                for url in urls {
-                    // Convert URL to file path
-                    if let Ok(path) = url.to_file_path() {
-                        let path_str = path.to_string_lossy().to_string();
-                        if is_markdown_file(&path_str) {
-                            let _ = app.emit("open-standalone-file", path_str);
+        .run(|_app, _event| {
+            // Handle files opened while app is already running
+            // Note: On macOS, file association events come through RunEvent::Opened
+            // On Linux, file associations are handled via CLI args at startup
+            #[cfg(target_os = "macos")]
+            {
+                if let tauri::RunEvent::Opened { urls } = _event {
+                    for url in urls {
+                        if let Ok(path) = url.to_file_path() {
+                            let path_str = path.to_string_lossy().to_string();
+                            if is_markdown_file(&path_str) {
+                                let _ = _app.emit("open-standalone-file", path_str);
+                            }
                         }
                     }
                 }

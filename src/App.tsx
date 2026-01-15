@@ -178,6 +178,51 @@ const styles = {
 
 const UNTITLED_BASE = 'Untitled';
 
+// Counter for untitled files (persists across the session)
+let untitledCounter = 0;
+
+/**
+ * Create a virtual untitled file (exists only in memory until content is typed)
+ * Returns the new tab object to be added to openTabs
+ * Note: This creates a virtual file - actual disk check happens when materializing
+ */
+function createVirtualUntitledFile(vaultPath: string, subFolder?: string): OpenFile {
+  untitledCounter++;
+  const fileName = `${UNTITLED_BASE}-${untitledCounter}.md`;
+  const basePath = subFolder || vaultPath;
+  const filePath = `${basePath}/${fileName}`;
+  return {
+    path: filePath,
+    name: fileName,
+    content: '',
+    isDirty: false,
+    isVirtual: true,
+  };
+}
+
+/**
+ * Find a unique file path that doesn't exist on disk
+ * Used when materializing virtual files to avoid overwrites
+ */
+async function findUniqueFilePath(basePath: string, baseName: string): Promise<string> {
+  let counter = 1;
+  let filePath = `${basePath}/${baseName}-${counter}.md`;
+
+  while (true) {
+    try {
+      const meta = await invoke<{ exists: boolean }>('stat_path', { path: filePath });
+      if (!meta.exists) {
+        return filePath;
+      }
+      counter++;
+      filePath = `${basePath}/${baseName}-${counter}.md`;
+    } catch {
+      // If stat fails, assume path is available
+      return filePath;
+    }
+  }
+}
+
 interface ContextMenuState {
   path: string;
   isFolder: boolean;
@@ -223,6 +268,10 @@ function App() {
   // Ref to trigger editor decoration rebuilds when files change
   // Used by livePreview extension to refresh wikilink colors
   const editorRefreshTrigger = useRef(0);
+
+  // Refs for menu event handlers (to avoid stale closures)
+  const vaultPathRef = useRef<string | null>(null);
+  vaultPathRef.current = vaultPath;
 
   // Theme Manager
   const themeManagerRef = useRef<ThemeManager | null>(null);
@@ -382,57 +431,76 @@ function App() {
   // Initialize stores and auto-open vault on app mount
   useEffect(() => {
     async function initializeApp() {
+      console.log('[App] Initializing...');
+
+      // Always ensure default vault exists first
+      let defaultVaultPath: string;
       try {
-        console.log('[App] Initializing stores...');
-        // Initialize all stores in parallel
+        defaultVaultPath = await ensureDefaultVault();
+        console.log('[App] Default vault ready:', defaultVaultPath);
+      } catch (e) {
+        console.error('[App] Failed to create default vault:', e);
+        setShowVaultPicker(true);
+        setIsInitialized(true);
+        return;
+      }
+
+      // Initialize stores
+      try {
         await Promise.all([
           vaultsStore.init(),
           windowStateStore.init(),
           globalSettingsStore.init(),
         ]);
-
         console.log('[App] Stores initialized');
-
-        // Check if we should auto-open last vault
-        const settings = globalSettingsStore.getSettings();
-        const lastVault = vaultsStore.getLastOpenedVault();
-
-        console.log('[App] Global settings:', { openLastVault: settings.openLastVault, lastVault });
-
-        if (settings.openLastVault && lastVault) {
-          // Verify vault still exists
-          if (await fileExists(lastVault)) {
-            console.log('[App] Auto-opening last vault:', lastVault);
-            await handleOpenVaultPath(lastVault);
-          } else {
-            console.log('[App] Last vault no longer exists, removing from registry');
-            await vaultsStore.removeVault(lastVault);
-            // Fall through to default vault
-            const defaultVaultPath = await ensureDefaultVault();
-            console.log('[App] Opening default vault:', defaultVaultPath);
-            await handleOpenVaultPath(defaultVaultPath);
-          }
-        } else {
-          // No last vault - create/open default vault
-          console.log('[App] No last vault, ensuring default vault exists');
-          const defaultVaultPath = await ensureDefaultVault();
-          console.log('[App] Opening default vault:', defaultVaultPath);
-          await handleOpenVaultPath(defaultVaultPath);
-        }
-
-        setIsInitialized(true);
       } catch (e) {
-        console.error('[App] Failed to initialize:', e);
-        // Try to open default vault as fallback, or show vault picker
+        console.error('[App] Store init failed, using default vault:', e);
+      }
+
+      // Determine which vault to open
+      const lastVault = vaultsStore.getLastOpenedVault();
+      let vaultToOpen = defaultVaultPath;
+      let isFirstTimeDefaultVault = false;
+
+      if (lastVault && await fileExists(lastVault)) {
+        console.log('[App] Found last vault:', lastVault);
+        vaultToOpen = lastVault;
+      } else if (lastVault) {
+        console.log('[App] Last vault no longer exists, removing:', lastVault);
+        await vaultsStore.removeVault(lastVault);
+        isFirstTimeDefaultVault = true;
+      } else {
+        // No last vault at all - this is first time using the app
+        isFirstTimeDefaultVault = true;
+      }
+
+      // Open the vault
+      try {
+        console.log('[App] Opening vault:', vaultToOpen);
+        await handleOpenVaultPath(vaultToOpen);
+
+        // Auto-open Welcome.md on first launch with default vault
+        if (isFirstTimeDefaultVault && vaultToOpen === defaultVaultPath) {
+          const welcomePath = `${defaultVaultPath}/Welcome.md`;
+          if (await fileExists(welcomePath)) {
+            console.log('[App] Auto-opening Welcome.md');
+            // Small delay to ensure vault is fully loaded
+            setTimeout(() => {
+              handleFileSelect(welcomePath, false);
+            }, 100);
+          }
+        }
+      } catch (e) {
+        console.error('[App] Failed to open vault, trying default:', e);
         try {
-          const defaultVaultPath = await ensureDefaultVault();
           await handleOpenVaultPath(defaultVaultPath);
-        } catch (fallbackError) {
-          console.error('[App] Fallback to default vault also failed:', fallbackError);
+        } catch (e2) {
+          console.error('[App] Failed to open default vault:', e2);
           setShowVaultPicker(true);
         }
-        setIsInitialized(true);
       }
+
+      setIsInitialized(true);
     }
 
     initializeApp();
@@ -493,12 +561,28 @@ function App() {
     };
   }, [handleOpenStandaloneFile]);
 
-  // Keyboard shortcut for "Open File" (Cmd+O)
+  // Keyboard shortcuts for file operations (Cmd+O and Cmd+N)
+  // These use direct window listeners because CodeMirror can intercept events
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+O - Open File
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'o') {
         e.preventDefault();
         handleOpenFile();
+        return;
+      }
+      // Cmd+N - New File (use ref to get latest vault path)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'n') {
+        e.preventDefault();
+        const currentVaultPath = vaultPathRef.current;
+        if (!currentVaultPath) {
+          console.log('[App] Cmd+N: No vault path');
+          return;
+        }
+        const newTab = createVirtualUntitledFile(currentVaultPath);
+        setOpenTabs(prev => [...prev, newTab]);
+        setActiveTabPath(newTab.path);
+        return;
       }
     };
 
@@ -569,10 +653,18 @@ function App() {
   }, []);
 
   // Close a tab
+  // Virtual files with no content are silently discarded (not written to disk)
   const closeTab = useCallback((path: string) => {
     setOpenTabs(prev => {
       const index = prev.findIndex(tab => tab.path === path);
       if (index === -1) return prev;
+
+      const tabToClose = prev[index];
+      // Virtual files with no content just get discarded - no disk operation needed
+      // (they were never written to disk in the first place)
+      if (tabToClose.isVirtual) {
+        console.log('[App] Discarding virtual file:', tabToClose.name);
+      }
 
       const newTabs = prev.filter(tab => tab.path !== path);
 
@@ -649,35 +741,9 @@ function App() {
 
   const handleNewFile = useCallback(async () => {
     if (!vaultPath) return;
-
-    // Use timestamp-based naming to avoid collisions even with stale file tree state
-    const timestamp = Date.now();
-    const fileName = `Untitled-${timestamp}.md`;
-    const untitledPath = `${vaultPath}/${fileName}`;
-
-    // Create the file immediately with empty content
-    try {
-      await invoke('write_file', { path: untitledPath, content: '' });
-      // Inline openTab logic to avoid circular dependency
-      setOpenTabs(prev => {
-        const existing = prev.find(tab => tab.path === untitledPath);
-        if (existing) {
-          setActiveTabPath(untitledPath);
-          return prev.map(tab =>
-            tab.path === untitledPath ? { ...tab, content: '', isDirty: false } : tab
-          );
-        }
-        const newTab: OpenFile = { path: untitledPath, name: fileName, content: '', isDirty: false };
-        return [...prev, newTab];
-      });
-      setActiveTabPath(untitledPath);
-      // Refresh file list and re-index
-      const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
-      setFiles(entries);
-      await searchStore.indexFiles(vaultPath, entries);
-    } catch (e) {
-      console.error(e);
-    }
+    const newTab = createVirtualUntitledFile(vaultPath);
+    setOpenTabs(prev => [...prev, newTab]);
+    setActiveTabPath(newTab.path);
   }, [vaultPath]);
 
   const handleFileSelect = useCallback(
@@ -771,10 +837,99 @@ function App() {
     }
   }, [getActiveTab, vaultPath]);
 
-  const handleContentChange = useCallback((path: string, content: string) => {
-    setOpenTabs(prev => prev.map(tab =>
-      tab.path === path ? { ...tab, content, isDirty: true } : tab
+  // Auto-save timer ref
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup auto-save timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleContentChange = useCallback(async (path: string, content: string) => {
+    // Check if this is a virtual file that needs materializing
+    // Use a promise to get current state without stale closure
+    const tabInfo = await new Promise<{ isVirtual: boolean; name: string } | null>(resolve => {
+      setOpenTabs(prev => {
+        const tab = prev.find(t => t.path === path);
+        if (tab?.isVirtual && content.trim()) {
+          resolve({ isVirtual: true, name: tab.name });
+        } else {
+          resolve(null);
+        }
+        return prev; // No change yet, just reading
+      });
+    });
+
+    if (tabInfo) {
+      // Materialize virtual file - check for existing file first
+      try {
+        const meta = await invoke<{ exists: boolean }>('stat_path', { path });
+        let finalPath = path;
+        let finalName = tabInfo.name;
+
+        if (meta.exists) {
+          // File already exists, find a unique path
+          const dirPath = path.substring(0, path.lastIndexOf('/'));
+          finalPath = await findUniqueFilePath(dirPath, UNTITLED_BASE);
+          finalName = finalPath.substring(finalPath.lastIndexOf('/') + 1);
+          console.log('[App] File existed, using unique path:', finalPath);
+        }
+
+        await invoke('write_file', { path: finalPath, content });
+
+        // Update tab with final path and mark as non-virtual
+        setOpenTabs(prev => prev.map(t =>
+          t.path === path ? { ...t, path: finalPath, name: finalName, content, isDirty: false, isVirtual: false } : t
+        ));
+        setActiveTabPath(finalPath);
+
+        // Refresh file list
+        const currentVaultPath = vaultPathRef.current;
+        if (currentVaultPath) {
+          const { filterHiddenFiles } = await import('./utils/fileFilters');
+          const rawEntries = await invoke<FileEntry[]>('read_directory', { path: currentVaultPath });
+          const entries = filterHiddenFiles(rawEntries);
+          setFiles(entries);
+          await searchStore.indexFiles(currentVaultPath, entries);
+        }
+      } catch (e) {
+        console.error('[App] Failed to materialize virtual file:', e);
+      }
+      return;
+    }
+
+    // Regular content update for non-virtual files
+    setOpenTabs(prev => prev.map(t =>
+      t.path === path ? { ...t, content, isDirty: true } : t
     ));
+
+    // Auto-save after 1 second of no typing (debounced)
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    autoSaveTimerRef.current = setTimeout(async () => {
+      // Get the latest tab state
+      setOpenTabs(currentTabs => {
+        const tabToSave = currentTabs.find(t => t.path === path);
+        if (tabToSave && tabToSave.isDirty && !tabToSave.isVirtual) {
+          // Save async
+          invoke('write_file', { path: tabToSave.path, content: tabToSave.content })
+            .then(() => {
+              console.log('[App] Auto-saved:', tabToSave.name);
+              // Mark as not dirty after save
+              setOpenTabs(tabs => tabs.map(t =>
+                t.path === path ? { ...t, isDirty: false } : t
+              ));
+            })
+            .catch(e => console.error('[App] Auto-save failed:', e));
+        }
+        return currentTabs; // No state change here
+      });
+    }, 1000);
   }, []);
 
   const handleFileNameChange = useCallback(async (newName: string) => {
@@ -1002,26 +1157,11 @@ function App() {
 
   const handleNewFileInFolder = useCallback(async () => {
     if (!contextMenu || !vaultPath) return;
-
-    // Use timestamp-based naming to avoid collisions even with stale file tree state
-    const timestamp = Date.now();
-    const fileName = `Untitled-${timestamp}.md`;
-    const newFilePath = `${contextMenu.path}/${fileName}`;
-
-    // Create the file immediately with empty content
-    try {
-      await invoke('write_file', { path: newFilePath, content: '' });
-      openTab(newFilePath, fileName, '', false);
-      // Refresh file list and re-index
-      const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
-      setFiles(entries);
-      await searchStore.indexFiles(vaultPath, entries);
-    } catch (e) {
-      console.error(e);
-    }
-
+    const newTab = createVirtualUntitledFile(vaultPath, contextMenu.path);
+    setOpenTabs(prev => [...prev, newTab]);
+    setActiveTabPath(newTab.path);
     setContextMenu(null);
-  }, [contextMenu, vaultPath, openTab]);
+  }, [contextMenu, vaultPath]);
 
   const handleNewFolder = useCallback(async () => {
     if (!contextMenu) return;
@@ -1385,6 +1525,60 @@ function App() {
     closeTab,
   ]);
 
+  // Listen for native menu events from Tauri
+  // Uses refs to avoid stale closure issues
+  useEffect(() => {
+    const setupMenuListeners = async () => {
+      const { listen } = await import('@tauri-apps/api/event');
+
+      const unlisteners = await Promise.all([
+        listen('menu-new-file', () => {
+          console.log('[App] Menu: New File, vaultPath:', vaultPathRef.current);
+          const currentVaultPath = vaultPathRef.current;
+          if (!currentVaultPath) {
+            console.log('[App] No vault path, cannot create file');
+            return;
+          }
+          const newTab = createVirtualUntitledFile(currentVaultPath);
+          setOpenTabs(prev => [...prev, newTab]);
+          setActiveTabPath(newTab.path);
+        }),
+        listen('menu-open-file', () => {
+          console.log('[App] Menu: Open File');
+          handleOpenFile();
+        }),
+        listen('menu-save-file', () => {
+          console.log('[App] Menu: Save');
+          handleSave();
+        }),
+        listen('menu-close-tab', () => {
+          console.log('[App] Menu: Close Tab');
+          const currentActiveTab = activeTabPathRef.current;
+          if (currentActiveTab) {
+            closeTab(currentActiveTab);
+          }
+        }),
+        listen('menu-quick-switcher', () => {
+          console.log('[App] Menu: Quick Switcher');
+          setIsQuickSwitcherOpen(prev => !prev);
+        }),
+        listen('menu-settings', () => {
+          console.log('[App] Menu: Settings');
+          setShowSettings(true);
+        }),
+      ]);
+
+      return () => {
+        unlisteners.forEach(unlisten => unlisten());
+      };
+    };
+
+    const cleanup = setupMenuListeners();
+    return () => {
+      cleanup.then(fn => fn?.());
+    };
+  }, []); // Empty deps - use refs for stable values
+
   // Use keyboard shortcuts hook
   useKeyboardShortcuts({
     onSave: handleSave,
@@ -1592,6 +1786,7 @@ function App() {
               <div style={styles.sidebarHeader}>
                 <div style={styles.vaultName}>{vaultName}</div>
                 <button
+                  type="button"
                   data-testid="create-file-button"
                   onClick={handleNewFile}
                   style={{
@@ -1998,6 +2193,7 @@ function App() {
           currentName={renameTarget.path.split(/[/\\]/).pop() || ''}
           onClose={() => setRenameTarget(null)}
           onRename={handleRenameConfirm}
+          isFolder={renameTarget.isFolder}
           data-testid="rename-dialog"
         />
       )}

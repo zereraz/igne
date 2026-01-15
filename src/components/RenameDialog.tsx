@@ -4,10 +4,15 @@ interface RenameDialogProps {
   currentName: string;
   onClose: () => void;
   onRename: (newName: string) => void;
+  isFolder?: boolean;
 }
 
-export function RenameDialog({ currentName, onClose, onRename }: RenameDialogProps) {
-  const [name, setName] = useState(currentName);
+export function RenameDialog({ currentName, onClose, onRename, isFolder = false }: RenameDialogProps) {
+  // Strip .md extension for display (markdown files only)
+  const isMarkdown = !isFolder && (currentName.endsWith('.md') || currentName.endsWith('.markdown'));
+  const displayName = isMarkdown ? currentName.replace(/\.(md|markdown)$/, '') : currentName;
+
+  const [name, setName] = useState(displayName);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -21,7 +26,13 @@ export function RenameDialog({ currentName, onClose, onRename }: RenameDialogPro
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim()) {
-      onRename(name.trim());
+      // Add .md extension back for markdown files (only if user didn't type one)
+      const trimmedName = name.trim();
+      let finalName = trimmedName;
+      if (isMarkdown && !trimmedName.endsWith('.md') && !trimmedName.endsWith('.markdown')) {
+        finalName = `${trimmedName}.md`;
+      }
+      onRename(finalName);
     }
   };
 

@@ -30,6 +30,8 @@ export interface OpenFile {
   name: string;
   content: string;
   isDirty: boolean;
+  /** If true, file only exists in memory until content is typed */
+  isVirtual?: boolean;
 }
 
 // =============================================================================

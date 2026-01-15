@@ -10,6 +10,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { FileEntry } from '../types';
 import { searchStore } from '../stores/searchStore';
+import { filterHiddenFiles } from '../utils/fileFilters';
 
 interface UseFileWatcherOptions {
   vaultPath: string | null;
@@ -51,7 +52,8 @@ export function useFileWatcher({
           }
 
           try {
-            const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+            const rawEntries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+            const entries = filterHiddenFiles(rawEntries);
             const currentFileCount = entries.length;
 
             console.log('[useFileWatcher] Files changed, count:', currentFileCount);
@@ -127,7 +129,8 @@ export function useDirectoryLoader({
       isIndexingRef.current = true;
 
       try {
-        const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+        const rawEntries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+        const entries = filterHiddenFiles(rawEntries);
 
         // Check if aborted after async operation
         if (abortControllerRef.current.signal.aborted) {
