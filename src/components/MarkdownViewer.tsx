@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 // @ts-ignore - remark-footnotes types may not be available
@@ -18,6 +18,10 @@ interface MarkdownViewerProps {
   onLinkClick?: (targetName: string) => void;
   getEmbedContent?: (noteName: string) => Promise<string | null>;
   vaultPath?: string;
+  /** When true, renders wikilinks as styled text without vault-dependent features */
+  standaloneMode?: boolean;
+  /** Scroll to this heading text when it changes */
+  scrollToHeading?: string;
 }
 
 // Image extensions that should be rendered as images
@@ -129,7 +133,63 @@ function MermaidBlock({ code }: { code: string }) {
   return <div dangerouslySetInnerHTML={{ __html: svg }} style={{ display: 'flex', justifyContent: 'center', padding: '1rem 0' }} />;
 }
 
-export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPath }: MarkdownViewerProps) {
+export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPath, standaloneMode = false, scrollToHeading }: MarkdownViewerProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to heading when scrollToHeading changes
+  useEffect(() => {
+    if (!scrollToHeading || !containerRef.current) return;
+
+    // Find all headings in the container
+    const headings = containerRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    for (const heading of headings) {
+      // Compare heading text (trimmed) with target
+      if (heading.textContent?.trim() === scrollToHeading.trim()) {
+        heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        break;
+      }
+    }
+  }, [scrollToHeading]);
+
+  // Helper to render wikilinks - respects standalone mode
+  const renderWikilink = (target: string, children: React.ReactNode) => {
+    if (standaloneMode) {
+      // In standalone mode, render as styled text (not clickable)
+      return (
+        <span
+          style={{
+            color: '#a78bfa',
+            borderBottom: '1px dashed #a78bfa',
+            cursor: 'default',
+          }}
+          title={`Wikilink: ${target}`}
+        >
+          {children}
+        </span>
+      );
+    }
+    // Normal mode: check if note exists and make clickable
+    const exists = searchStore.noteExists(target);
+    return (
+      <a
+        href="#"
+        onClick={(e) => {
+          e.preventDefault();
+          onLinkClick?.(target);
+        }}
+        style={{
+          color: exists ? '#a78bfa' : '#f59e0b',
+          textDecoration: 'none',
+          borderBottom: exists ? '1px dashed #a78bfa' : '1px dashed #f59e0b',
+          cursor: 'pointer',
+        }}
+        title={exists ? `Go to ${target}` : `Create ${target}`}
+      >
+        {children}
+      </a>
+    );
+  };
+
   // Parse math blocks and replace with placeholders
   const parseMath = (text: string): { content: string; mathBlocks: Array<{ latex: string; display: boolean; id: string }> } => {
     const mathBlocks: Array<{ latex: string; display: boolean; id: string }> = [];
@@ -252,10 +312,10 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
   };
 
   return (
-    <div style={{ maxWidth: '48rem', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '1.5rem', paddingBottom: '1.5rem' }}>
+    <div ref={containerRef} style={{ maxWidth: '48rem', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '1.5rem', paddingBottom: '1.5rem' }}>
       <div className="prose">
         <ReactMarkdown
-          remarkPlugins={[remarkGfm, remarkFootnotes]}
+          remarkPlugins={[remarkGfm, remarkFootnotes as any]}
           components={{
             p: ({ children }) => {
               // Handle math placeholders in paragraphs
@@ -294,25 +354,7 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
                                 a: ({ href, children }) => {
                                   if (href?.startsWith('wikilink:')) {
                                     const target = href.replace('wikilink:', '');
-                                    const exists = searchStore.noteExists(target);
-                                    return (
-                                      <a
-                                        href="#"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          onLinkClick?.(target);
-                                        }}
-                                        style={{
-                                          color: exists ? '#a78bfa' : '#f59e0b',
-                                          textDecoration: 'none',
-                                          borderBottom: exists ? '1px dashed #a78bfa' : '1px dashed #f59e0b',
-                                          cursor: 'pointer',
-                                        }}
-                                        title={exists ? `Go to ${target}` : `Create ${target}`}
-                                      >
-                                        {children}
-                                      </a>
-                                    );
+                                    return renderWikilink(target, children);
                                   }
                                   return <a href={href}>{children}</a>;
                                 }
@@ -337,25 +379,7 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
                       a: ({ href, children }) => {
                         if (href?.startsWith('wikilink:')) {
                           const target = href.replace('wikilink:', '');
-                          const exists = searchStore.noteExists(target);
-                          return (
-                            <a
-                              href="#"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                onLinkClick?.(target);
-                              }}
-                              style={{
-                                color: exists ? '#a78bfa' : '#f59e0b',
-                                textDecoration: 'none',
-                                borderBottom: exists ? '1px dashed #a78bfa' : '1px dashed #f59e0b',
-                                cursor: 'pointer',
-                              }}
-                              title={exists ? `Go to ${target}` : `Create ${target}`}
-                            >
-                              {children}
-                            </a>
-                          );
+                          return renderWikilink(target, children);
                         }
                         return <a href={href}>{children}</a>;
                       }
@@ -513,6 +537,16 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
               // Check for embed syntax: ![[note]]
               if (href?.startsWith('embed:')) {
                 const noteName = href.replace('embed:', '');
+
+                // In standalone mode, show embed as placeholder
+                if (standaloneMode) {
+                  return (
+                    <div style={{ padding: '1rem', backgroundColor: '#27272a', borderRadius: '0.375rem', borderLeft: '3px solid #a78bfa' }}>
+                      <span style={{ color: '#a78bfa', fontSize: '0.875rem' }}>Embedded note: {noteName}</span>
+                    </div>
+                  );
+                }
+
                 const notePath = searchStore.getFilePathByName(noteName);
 
                 if (notePath && getEmbedContent) {
@@ -528,25 +562,7 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
 
               if (href?.startsWith('wikilink:')) {
                 const target = href.replace('wikilink:', '');
-                const exists = searchStore.noteExists(target);
-                return (
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onLinkClick?.(target);
-                    }}
-                    style={{
-                      color: exists ? '#a78bfa' : '#f59e0b',
-                      textDecoration: 'none',
-                      borderBottom: exists ? '1px dashed #a78bfa' : '1px dashed #f59e0b',
-                      cursor: 'pointer',
-                    }}
-                    title={exists ? `Go to ${target}` : `Create ${target}`}
-                  >
-                    {children}
-                  </a>
-                );
+                return renderWikilink(target, children);
               }
               return <a href={href}>{children}</a>;
             },

@@ -1,6 +1,6 @@
 import { syntaxTree } from '@codemirror/language';
 import { EditorView, Decoration, DecorationSet, ViewPlugin, ViewUpdate } from '@codemirror/view';
-import { Range, EditorState } from '@codemirror/state';
+import { Range, EditorState, StateField, StateEffect } from '@codemirror/state';
 import {
   WikilinkWidget,
   EmbedWidget,
@@ -238,9 +238,15 @@ function findMermaidBlocks(state: EditorState): { from: number; to: number; code
   return blocks;
 }
 
-function buildDecorations(view: EditorView, config: LivePreviewConfig): DecorationSet {
+// Build decorations separated into inline and block categories
+// Block decorations cannot be provided via ViewPlugin, they must use StateField
+function buildAllDecorations(
+  view: EditorView,
+  config: LivePreviewConfig
+): { inline: DecorationSet; block: DecorationSet } {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
-  const decorations: Range<Decoration>[] = [];
+  const inlineDecorations: Range<Decoration>[] = [];
+  const blockDecorations: Range<Decoration>[] = [];
   const { head: cursor } = view.state.selection.main;
   const cursorLine = view.state.doc.lineAt(cursor).number;
   const doc = view.state.doc;
@@ -264,7 +270,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       // Line-based hiding (headers)
       if (node.name === 'HeaderMark') {
         if (!cursorOnLine) {
-          decorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
+          inlineDecorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
         }
         return;
       }
@@ -277,7 +283,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
           return;
         }
         if (!cursorInParent) {
-          decorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
+          inlineDecorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
         }
         return;
       }
@@ -285,7 +291,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       // URL and link marks hide when cursor outside link
       if (node.name === 'URL' || node.name === 'LinkMark') {
         if (!cursorInParent) {
-          decorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
+          inlineDecorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
         }
         return;
       }
@@ -295,31 +301,31 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       // Headings
       if (node.name.startsWith('ATXHeading')) {
         const level = parseInt(node.name.slice(-1)) || 1;
-        decorations.push(Decoration.mark({ class: `cm-heading-${level}` }).range(node.from, node.to));
+        inlineDecorations.push(Decoration.mark({ class: `cm-heading-${level}` }).range(node.from, node.to));
         return;
       }
 
       // Bold
       if (node.name === 'StrongEmphasis') {
-        decorations.push(Decoration.mark({ class: 'cm-strong' }).range(node.from, node.to));
+        inlineDecorations.push(Decoration.mark({ class: 'cm-strong' }).range(node.from, node.to));
         return;
       }
 
       // Italic
       if (node.name === 'Emphasis') {
-        decorations.push(Decoration.mark({ class: 'cm-em' }).range(node.from, node.to));
+        inlineDecorations.push(Decoration.mark({ class: 'cm-em' }).range(node.from, node.to));
         return;
       }
 
       // Inline code
       if (node.name === 'InlineCode') {
-        decorations.push(Decoration.mark({ class: 'cm-inline-code' }).range(node.from, node.to));
+        inlineDecorations.push(Decoration.mark({ class: 'cm-inline-code' }).range(node.from, node.to));
         return;
       }
 
       // Strikethrough
       if (node.name === 'Strikethrough') {
-        decorations.push(Decoration.mark({ class: 'cm-strikethrough' }).range(node.from, node.to));
+        inlineDecorations.push(Decoration.mark({ class: 'cm-strikethrough' }).range(node.from, node.to));
         return;
       }
 
@@ -327,14 +333,14 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       if (node.name === 'Emphasis') {
         const text = doc.sliceString(node.from, node.to);
         if (text.startsWith('~~') && text.endsWith('~~')) {
-          decorations.push(Decoration.mark({ class: 'cm-strikethrough' }).range(node.from, node.to));
+          inlineDecorations.push(Decoration.mark({ class: 'cm-strikethrough' }).range(node.from, node.to));
           return;
         }
       }
 
       // Highlight
       if (node.name === 'Highlight') {
-        decorations.push(Decoration.mark({ class: 'cm-highlight' }).range(node.from, node.to));
+        inlineDecorations.push(Decoration.mark({ class: 'cm-highlight' }).range(node.from, node.to));
         return;
       }
 
@@ -342,7 +348,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       if (node.name === 'Emphasis' || node.name === 'StrongEmphasis') {
         const text = doc.sliceString(node.from, node.to);
         if (text.startsWith('==') && text.endsWith('==')) {
-          decorations.push(Decoration.mark({ class: 'cm-highlight' }).range(node.from, node.to));
+          inlineDecorations.push(Decoration.mark({ class: 'cm-highlight' }).range(node.from, node.to));
           return;
         }
       }
@@ -359,7 +365,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
           const display = match[2] || target;
           const resolved = fullConfig.resolveWikilink(target);
 
-          decorations.push(
+          inlineDecorations.push(
             Decoration.replace({
               widget: new WikilinkWidget(
                 target,
@@ -385,7 +391,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
           const display = wikilinkMatch[2] || target;
           const resolved = fullConfig.resolveWikilink(target);
 
-          decorations.push(
+          inlineDecorations.push(
             Decoration.replace({
               widget: new WikilinkWidget(
                 target,
@@ -401,6 +407,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       }
 
       // Embeds - render content inline when cursor outside
+      // NOTE: Embeds are block-level decorations
       if (node.name === 'Embed' && !cursorInParent) {
         const text = doc.sliceString(node.from, node.to);
         const match = text.match(/!\[\[([^\]]+)\]\]/);
@@ -413,7 +420,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
           if (isImageFile(path)) {
             // Image embed with parameters
             const imageSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
-            decorations.push(
+            blockDecorations.push(
               Decoration.replace({
                 widget: new ImageWidget(
                   imageSrc,
@@ -429,7 +436,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
           } else if (isVideoFile(path)) {
             // Video embed with parameters
             const videoSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
-            decorations.push(
+            blockDecorations.push(
               Decoration.replace({
                 widget: new VideoWidget(
                   videoSrc,
@@ -447,7 +454,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
           } else if (isPdfFile(path)) {
             // PDF embed with parameters
             const pdfSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
-            decorations.push(
+            blockDecorations.push(
               Decoration.replace({
                 widget: new PdfWidget(
                   pdfSrc,
@@ -462,7 +469,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
             );
           } else {
             // Default note embed
-            decorations.push(
+            blockDecorations.push(
               Decoration.replace({
                 widget: new EmbedWidget(
                   target,
@@ -478,6 +485,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       }
 
       // Handle Image nodes that are actually embeds (parsed as images by standard parser)
+      // NOTE: Embeds are block-level decorations
       if (node.name === 'Image' && !cursorInParent) {
         const text = doc.sliceString(node.from, node.to);
         const embedMatch = text.match(/^!\[\[([^\]]+)\]\]$/);
@@ -490,7 +498,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
           if (isImageFile(path)) {
             // Image embed with parameters
             const imageSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
-            decorations.push(
+            blockDecorations.push(
               Decoration.replace({
                 widget: new ImageWidget(
                   imageSrc,
@@ -506,7 +514,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
           } else if (isVideoFile(path)) {
             // Video embed with parameters
             const videoSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
-            decorations.push(
+            blockDecorations.push(
               Decoration.replace({
                 widget: new VideoWidget(
                   videoSrc,
@@ -524,7 +532,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
             return;
           } else {
             // Default note embed
-            decorations.push(
+            blockDecorations.push(
               Decoration.replace({
                 widget: new EmbedWidget(
                   target,
@@ -542,7 +550,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       // Tags - render as pills when cursor outside
       if (node.name === 'Tag' && !cursorInParent) {
         const tag = doc.sliceString(node.from + 1, node.to); // skip #
-        decorations.push(
+        inlineDecorations.push(
           Decoration.replace({
             widget: new TagWidget(tag, fullConfig.onTagClick),
           }).range(node.from, node.to)
@@ -554,7 +562,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       if (node.name === 'TaskMarker') {
         const text = doc.sliceString(node.from, node.to);
         const checked = text.includes('x') || text.includes('X');
-        decorations.push(
+        inlineDecorations.push(
           Decoration.replace({
             widget: new CheckboxWidget(checked, node.from, fullConfig.onCheckboxToggle),
           }).range(node.from, node.to)
@@ -562,14 +570,14 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
         return;
       }
 
-      // Images
+      // Images (standard markdown images are block-level)
       if (node.name === 'Image' && !cursorInParent) {
         const text = doc.sliceString(node.from, node.to);
         const match = text.match(/!\[([^\]]*)\]\(([^)]+)\)/);
         if (match) {
           const alt = match[1];
           const src = fullConfig.resolveImage(match[2]);
-          decorations.push(
+          blockDecorations.push(
             Decoration.replace({
               widget: new ImageWidget(src, alt),
               block: true,
@@ -601,7 +609,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       continue;
     }
     if (cursor < block.from || cursor > block.to) {
-      decorations.push(
+      blockDecorations.push(
         Decoration.replace({
           widget: new CodeBlockWidget(block.code, block.language),
           block: true,
@@ -614,19 +622,29 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
   const mathBlocks = findMathBlocks(view.state);
   for (const block of mathBlocks) {
     if (cursor >= block.from && cursor <= block.to) continue; // Cursor inside, show raw
-    decorations.push(
-      Decoration.replace({
-        widget: new MathWidget(block.latex, block.display),
-        block: block.display,
-      }).range(block.from, block.to)
-    );
+    if (block.display) {
+      // Display math is block-level
+      blockDecorations.push(
+        Decoration.replace({
+          widget: new MathWidget(block.latex, block.display),
+          block: true,
+        }).range(block.from, block.to)
+      );
+    } else {
+      // Inline math is inline-level
+      inlineDecorations.push(
+        Decoration.replace({
+          widget: new MathWidget(block.latex, block.display),
+        }).range(block.from, block.to)
+      );
+    }
   }
 
   // Mermaid diagrams
   const mermaidBlocks = findMermaidBlocks(view.state);
   for (const block of mermaidBlocks) {
     if (cursor >= block.from && cursor <= block.to) continue; // Cursor inside, show raw
-    decorations.push(
+    blockDecorations.push(
       Decoration.replace({
         widget: new MermaidWidget(block.code),
         block: true,
@@ -643,7 +661,7 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
       // Cursor inside callout, show raw
       continue;
     }
-    decorations.push(
+    blockDecorations.push(
       Decoration.replace({
         widget: new CalloutWidget(
           callout.type,
@@ -657,51 +675,112 @@ function buildDecorations(view: EditorView, config: LivePreviewConfig): Decorati
     );
   }
 
-  return Decoration.set(decorations, true);
+  return {
+    inline: Decoration.set(inlineDecorations, true),
+    block: Decoration.set(blockDecorations, true),
+  };
 }
+
+// Effect to update block decorations in the StateField
+const setBlockDecorations = StateEffect.define<DecorationSet>();
 
 export function createLivePreview(config: LivePreviewConfig = {}) {
   const resolvedConfig = { ...DEFAULT_CONFIG, ...config };
   const refreshTrigger = resolvedConfig.refreshTrigger;
   let lastRefreshTrigger = refreshTrigger?.current ?? 0;
 
-  return ViewPlugin.fromClass(
+  // StateField for block decorations (required by CodeMirror for block-level widgets)
+  const blockDecorationsField = StateField.define<DecorationSet>({
+    create() {
+      return Decoration.none;
+    },
+    update(value, tr) {
+      // Check for our effect to update decorations
+      for (const effect of tr.effects) {
+        if (effect.is(setBlockDecorations)) {
+          return effect.value;
+        }
+      }
+      // Map through document changes
+      if (tr.docChanged) {
+        return value.map(tr.changes);
+      }
+      return value;
+    },
+    provide: (field) => EditorView.decorations.from(field),
+  });
+
+  // ViewPlugin for inline decorations and coordinating block decoration updates
+  const livePreviewPlugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
+      pendingBlockUpdate: DecorationSet | null = null;
 
       constructor(view: EditorView) {
-        this.decorations = buildDecorations(view, resolvedConfig);
+        const result = buildAllDecorations(view, resolvedConfig);
+        this.decorations = result.inline;
+        // Schedule block decorations update for next frame
+        this.pendingBlockUpdate = result.block;
+        requestAnimationFrame(() => {
+          if (this.pendingBlockUpdate) {
+            view.dispatch({ effects: setBlockDecorations.of(this.pendingBlockUpdate) });
+            this.pendingBlockUpdate = null;
+          }
+        });
       }
 
       update(update: ViewUpdate) {
-        // Rebuild decorations when files change (refreshTrigger incremented)
+        // Skip if this update was caused by our own block decoration dispatch
+        const isBlockDecorationsUpdate = update.transactions.some((tr) =>
+          tr.effects.some((e) => e.is(setBlockDecorations))
+        );
+        if (isBlockDecorationsUpdate) {
+          return;
+        }
+
         const currentTrigger = refreshTrigger?.current ?? 0;
         const triggerChanged = currentTrigger !== lastRefreshTrigger;
 
         if (update.docChanged || update.selectionSet || update.viewportChanged || triggerChanged) {
-          this.decorations = buildDecorations(update.view, resolvedConfig);
+          const result = buildAllDecorations(update.view, resolvedConfig);
+          this.decorations = result.inline;
+          // Schedule block decorations update for next frame to avoid recursive dispatch
+          this.pendingBlockUpdate = result.block;
+          requestAnimationFrame(() => {
+            if (this.pendingBlockUpdate) {
+              update.view.dispatch({ effects: setBlockDecorations.of(this.pendingBlockUpdate) });
+              this.pendingBlockUpdate = null;
+            }
+          });
           if (triggerChanged) {
             lastRefreshTrigger = currentTrigger;
           }
         }
       }
     },
-    { decorations: (v) => v.decorations }
+    {
+      decorations: (v) => v.decorations,
+    }
   );
+
+  return [blockDecorationsField, livePreviewPlugin];
 }
 
-// Static version for tests (no config)
+// Static version for tests (no config) - returns just inline decorations to avoid the error
 export const livePreview = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
 
     constructor(view: EditorView) {
-      this.decorations = buildDecorations(view, DEFAULT_CONFIG);
+      // Only use inline decorations for the static version
+      const result = buildAllDecorations(view, DEFAULT_CONFIG);
+      this.decorations = result.inline;
     }
 
     update(update: ViewUpdate) {
       if (update.docChanged || update.selectionSet) {
-        this.decorations = buildDecorations(update.view, DEFAULT_CONFIG);
+        const result = buildAllDecorations(update.view, DEFAULT_CONFIG);
+        this.decorations = result.inline;
       }
     }
   },

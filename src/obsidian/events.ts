@@ -4,10 +4,20 @@
 
 import type { EventRef } from './eventRef';
 
+/**
+ * Base class for event emitters.
+ * Matches Obsidian's Events class for plugin compatibility.
+ */
 export abstract class Events {
   private events: Map<string, EventRef[]> = new Map();
 
-  on(name: string, callback: (...args: any[]) => any): EventRef {
+  /**
+   * Register an event handler
+   * @param name - Event name
+   * @param callback - Handler function
+   * @returns EventRef that can be used to unregister
+   */
+  on(name: string, callback: (...args: unknown[]) => unknown): EventRef {
     const ref: EventRef = {
       registered: true,
       ctx: null,
@@ -22,6 +32,11 @@ export abstract class Events {
     return ref;
   }
 
+  /**
+   * Unregister an event handler
+   * @param name - Event name
+   * @param ref - EventRef returned from on()
+   */
   off(name: string, ref: EventRef): void {
     const callbacks = this.events.get(name);
     if (callbacks) {
@@ -32,7 +47,12 @@ export abstract class Events {
     }
   }
 
-  trigger(name: string, ...args: any[]): void {
+  /**
+   * Trigger an event
+   * @param name - Event name
+   * @param args - Arguments to pass to handlers
+   */
+  trigger(name: string, ...args: unknown[]): void {
     const callbacks = this.events.get(name);
     if (callbacks) {
       for (const callback of callbacks) {
@@ -43,7 +63,10 @@ export abstract class Events {
     }
   }
 
-  tryTrigger(evt: string, ...args: any[]): void {
+  /**
+   * Try to trigger an event (same as trigger, for Obsidian compatibility)
+   */
+  tryTrigger(evt: string, ...args: unknown[]): void {
     this.trigger(evt, ...args);
   }
 }

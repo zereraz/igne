@@ -19,6 +19,8 @@
     "fs:default",
     { "identifier": "fs:allow-read", "allow": [{ "path": "**" }] },
     { "identifier": "fs:allow-write", "allow": [{ "path": "**" }] },
-    { "identifier": "fs:allow-exists", "allow": [{ "path": "**" }] }
+    { "identifier": "fs:allow-exists", "allow": [{ "path": "**" }] },
+    "updater:default",
+    "process:allow-restart"
   ]
 }

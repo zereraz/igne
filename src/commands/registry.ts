@@ -25,11 +25,12 @@ class CommandRegistryClass {
 
   /**
    * Register a command
-   * @throws Error if a command with the same ID already exists
+   * Idempotent - skips if command with same ID already exists
    */
   register(command: Command): void {
     if (this.commands.has(command.id)) {
-      throw new Error(`Command with id "${command.id}" already registered`);
+      // Already registered - skip (handles React StrictMode double-render)
+      return;
     }
     this.commands.set(command.id, command);
   }

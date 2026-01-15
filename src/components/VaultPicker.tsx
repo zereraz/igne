@@ -28,7 +28,7 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: 'Open Vault',
+      title: 'Open',
     });
 
     if (selected && typeof selected === 'string') {
@@ -142,14 +142,15 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
         >
           <button
             onClick={handleOpenFolder}
+            title="Open a folder or drag a file (⌘O)"
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
               width: '100%',
-              padding: '12px',
-              fontSize: '13px',
+              padding: '14px',
+              fontSize: '14px',
               fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
               fontWeight: 500,
               backgroundColor: '#7c3aed',
@@ -167,7 +168,16 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
             }}
           >
             <FolderOpen size={16} />
-            Open folder as vault
+            Open
+            <kbd style={{
+              opacity: 0.5,
+              fontSize: '10px',
+              marginLeft: '8px',
+              padding: '2px 6px',
+              backgroundColor: 'rgba(0,0,0,0.2)',
+              borderRadius: '3px',
+              fontFamily: 'system-ui, -apple-system, sans-serif',
+            }}>⌘ O</kbd>
           </button>
 
           <button
@@ -197,8 +207,18 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
             }}
           >
             <Plus size={16} />
-            Create new vault
+            Create new
           </button>
+
+          {/* Hint for file opening */}
+          <p style={{
+            fontSize: '11px',
+            color: '#52525b',
+            textAlign: 'center',
+            marginTop: '8px',
+          }}>
+            Drag & drop .md files to preview
+          </p>
         </div>
       </div>
 

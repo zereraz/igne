@@ -1,10 +1,31 @@
 use serde::Serialize;
+use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, EventKind};
+
+/// State for managing file watchers - allows proper cleanup
+pub struct WatcherState {
+    watchers: Arc<Mutex<HashMap<String, RecommendedWatcher>>>,
+}
+
+impl WatcherState {
+    pub fn new() -> Self {
+        Self {
+            watchers: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+impl Default for WatcherState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Serialize, Clone)]
 pub struct FileEntry {
@@ -238,14 +259,28 @@ fn write_file_binary(path: String, data: Vec<u8>) -> Result<(), String> {
 /// Watch a directory for changes and emit events to the frontend
 /// This is more efficient than polling and provides real-time updates
 #[tauri::command]
-fn watch_directory(path: String, app: AppHandle) -> Result<(), String> {
+fn watch_directory(
+    path: String,
+    app: AppHandle,
+    watcher_state: State<'_, WatcherState>,
+) -> Result<(), String> {
     let path_obj = PathBuf::from(&path);
 
     if !path_obj.exists() || !path_obj.is_dir() {
         return Err(format!("Path does not exist or is not a directory: {}", path));
     }
 
-    let (_tx, rx) = channel::<()>();
+    // Check if we're already watching this path
+    {
+        let watchers = watcher_state.watchers.lock().map_err(|e| e.to_string())?;
+        if watchers.contains_key(&path) {
+            // Already watching, no-op
+            return Ok(());
+        }
+    }
+
+    let path_for_emit = path.clone();
+    let path_for_key = path.clone();
 
     // Create a watcher with debouncing to avoid excessive events
     let mut watcher: RecommendedWatcher = Watcher::new(
@@ -258,7 +293,7 @@ fn watch_directory(path: String, app: AppHandle) -> Result<(), String> {
                     EventKind::Remove(_) |
                     EventKind::Any => {
                         // Emit the path that changed
-                        let _ = app.emit("fs-change", path.clone());
+                        let _ = app.emit("fs-change", path_for_emit.clone());
                     }
                     _ => {}
                 }
@@ -273,13 +308,35 @@ fn watch_directory(path: String, app: AppHandle) -> Result<(), String> {
     watcher.watch(&path_obj, RecursiveMode::Recursive)
         .map_err(|e| e.to_string())?;
 
-    // Keep the watcher alive by preventing it from being dropped
-    // In production, you'd want to store this in a state management system
-    std::thread::spawn(move || {
-        // Keep the channel open to prevent the watcher from being dropped
-        let _ = rx.recv();
-    });
+    // Store the watcher in state so it stays alive and can be cleaned up
+    let mut watchers = watcher_state.watchers.lock().map_err(|e| e.to_string())?;
+    watchers.insert(path_for_key, watcher);
 
+    Ok(())
+}
+
+/// Stop watching a directory
+#[tauri::command]
+fn unwatch_directory(
+    path: String,
+    watcher_state: State<'_, WatcherState>,
+) -> Result<(), String> {
+    let mut watchers = watcher_state.watchers.lock().map_err(|e| e.to_string())?;
+
+    // Remove the watcher - it will be dropped and stop watching
+    if watchers.remove(&path).is_some() {
+        Ok(())
+    } else {
+        // Not an error if we weren't watching - idempotent
+        Ok(())
+    }
+}
+
+/// Stop all watchers (useful for cleanup)
+#[tauri::command]
+fn unwatch_all(watcher_state: State<'_, WatcherState>) -> Result<(), String> {
+    let mut watchers = watcher_state.watchers.lock().map_err(|e| e.to_string())?;
+    watchers.clear();
     Ok(())
 }
 
@@ -292,10 +349,19 @@ fn get_app_data_dir(app: AppHandle) -> String {
         .unwrap_or_else(|_| ".".to_string())
 }
 
+/// Check if a path is a markdown file
+fn is_markdown_file(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    lower.ends_with(".md") || lower.ends_with(".markdown") || lower.ends_with(".mdx")
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .manage(WatcherState::new())
         .invoke_handler(tauri::generate_handler![
             read_directory,
             read_file,
@@ -309,8 +375,56 @@ pub fn run() {
             create_directory,
             move_file,
             watch_directory,
+            unwatch_directory,
+            unwatch_all,
             get_app_data_dir
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .setup(|app| {
+            // Check CLI arguments for a file path
+            let args: Vec<String> = env::args().collect();
+
+            // Skip the first arg (program name) and look for a file path
+            // Also skip any Tauri-specific args that start with --
+            for arg in args.iter().skip(1) {
+                if arg.starts_with("--") || arg.starts_with("-") {
+                    continue;
+                }
+
+                // Check if this looks like a file path
+                let path = PathBuf::from(arg);
+                if path.exists() && path.is_file() && is_markdown_file(arg) {
+                    let absolute_path = path.canonicalize()
+                        .unwrap_or(path)
+                        .to_string_lossy()
+                        .to_string();
+
+                    // Emit event to frontend after a short delay to ensure it's ready
+                    let app_handle = app.handle().clone();
+                    std::thread::spawn(move || {
+                        // Wait for frontend to initialize
+                        std::thread::sleep(Duration::from_millis(500));
+                        let _ = app_handle.emit("open-standalone-file", absolute_path);
+                    });
+                    break;
+                }
+            }
+
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Handle files opened while app is already running (e.g., double-click on macOS)
+            if let tauri::RunEvent::Opened { urls } = event {
+                for url in urls {
+                    // Convert URL to file path
+                    if let Ok(path) = url.to_file_path() {
+                        let path_str = path.to_string_lossy().to_string();
+                        if is_markdown_file(&path_str) {
+                            let _ = app.emit("open-standalone-file", path_str);
+                        }
+                    }
+                }
+            }
+        });
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { registerStandaloneHandler } from './main';
 import {
   FolderOpen,
   FileText,
@@ -34,6 +35,7 @@ import { DailyNotesNav } from './components/DailyNotesNav';
 import { StarredFilesPanel } from './components/StarredFilesPanel';
 import { VaultPicker } from './components/VaultPicker';
 import { SettingsModal } from './components/SettingsModal';
+import { StandaloneViewer } from './components/StandaloneViewer';
 import { FileEntry, OpenFile } from './types';
 import { searchStore } from './stores/searchStore';
 import { vaultsStore } from './stores/VaultsStore';
@@ -189,6 +191,10 @@ function App() {
   const [vaultSettings, setVaultSettings] = useState<any>(null);
   const [appearanceSettings, setAppearanceSettings] = useState<any>(null);
 
+  // Standalone file mode
+  const [standaloneFilePath, setStandaloneFilePath] = useState<string | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+
   // App state
   const [vaultPath, setVaultPath] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -338,6 +344,40 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // No deps - read vaultPath/openTabs at call time to avoid circular dependency
 
+  // Handle opening a standalone markdown file
+  const handleOpenStandaloneFile = useCallback((filePath: string) => {
+    console.log('[App] Opening standalone file:', filePath);
+    // Close any vault and show standalone viewer
+    setVaultPath(null);
+    setShowVaultPicker(false);
+    setStandaloneFilePath(filePath);
+  }, []);
+
+  // Handle closing standalone file mode
+  const handleCloseStandaloneFile = useCallback(() => {
+    setStandaloneFilePath(null);
+    setShowVaultPicker(true);
+  }, []);
+
+  // Handle "Open File" action (menu or keyboard shortcut)
+  const handleOpenFile = useCallback(async () => {
+    try {
+      const selected = await open({
+        multiple: false,
+        title: 'Open Markdown File',
+        filters: [
+          { name: 'Markdown', extensions: ['md', 'markdown'] },
+        ],
+      });
+
+      if (selected && typeof selected === 'string') {
+        handleOpenStandaloneFile(selected);
+      }
+    } catch (e) {
+      console.error('Failed to open file:', e);
+    }
+  }, [handleOpenStandaloneFile]);
+
   // Initialize stores and auto-open vault on app mount
   useEffect(() => {
     async function initializeApp() {
@@ -385,6 +425,73 @@ function App() {
     initializeApp();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount - handleOpenVaultPath is stable
+
+  // Register handler for standalone file open events (handles queued events from startup)
+  useEffect(() => {
+    console.log('[App] Registering standalone file handler');
+    registerStandaloneHandler(handleOpenStandaloneFile);
+  }, [handleOpenStandaloneFile]);
+
+  // Handle drag & drop of files onto the window (Tauri 2 uses window events)
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    const setupDragDrop = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const currentWindow = getCurrentWindow();
+
+        unlisten = await currentWindow.onDragDropEvent((event) => {
+          const payload = event.payload;
+
+          if (payload.type === 'enter') {
+            // Check if any dragged file is a markdown file
+            const hasMd = payload.paths?.some((p: string) => {
+              const lower = p.toLowerCase();
+              return lower.endsWith('.md') || lower.endsWith('.markdown');
+            });
+            setIsDraggingFile(hasMd || false);
+          } else if (payload.type === 'over') {
+            // 'over' event doesn't have paths, just position
+            // Keep the current drag state
+          } else if (payload.type === 'drop') {
+            setIsDraggingFile(false);
+            if (payload.paths && payload.paths.length > 0) {
+              const filePath = payload.paths[0];
+              const lower = filePath.toLowerCase();
+              if (lower.endsWith('.md') || lower.endsWith('.markdown')) {
+                console.log('[App] File dropped:', filePath);
+                handleOpenStandaloneFile(filePath);
+              }
+            }
+          } else if (payload.type === 'leave') {
+            setIsDraggingFile(false);
+          }
+        });
+      } catch (e) {
+        console.warn('[App] Failed to setup drag-drop:', e);
+      }
+    };
+
+    setupDragDrop();
+
+    return () => {
+      unlisten?.();
+    };
+  }, [handleOpenStandaloneFile]);
+
+  // Keyboard shortcut for "Open File" (Cmd+O)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'o') {
+        e.preventDefault();
+        handleOpenFile();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleOpenFile]);
 
   // Apply appearance settings when they change
   useEffect(() => {
@@ -1352,13 +1459,99 @@ function App() {
     );
   }
 
+  // Show standalone file viewer if a file is open
+  if (standaloneFilePath) {
+    return (
+      <>
+        {isDraggingFile && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(124, 58, 237, 0.15)',
+            border: '3px dashed #a78bfa',
+            borderRadius: '8px',
+            margin: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            pointerEvents: 'none',
+          }}>
+            <div style={{
+              backgroundColor: '#1f1f23',
+              padding: '16px 32px',
+              borderRadius: '8px',
+              boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+            }}>
+              <span style={{
+                color: '#a78bfa',
+                fontSize: '14px',
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontWeight: 500,
+              }}>
+                Drop to open
+              </span>
+            </div>
+          </div>
+        )}
+        <StandaloneViewer
+          filePath={standaloneFilePath}
+          onClose={handleCloseStandaloneFile}
+          onOpenVault={(path) => {
+            setStandaloneFilePath(null);
+            handleOpenVaultPath(path);
+          }}
+        />
+      </>
+    );
+  }
+
+  // Drop overlay for visual feedback
+  const dropOverlay = isDraggingFile && (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      backgroundColor: 'rgba(124, 58, 237, 0.15)',
+      border: '3px dashed #a78bfa',
+      borderRadius: '8px',
+      margin: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 9999,
+      pointerEvents: 'none',
+    }}>
+      <div style={{
+        backgroundColor: '#1f1f23',
+        padding: '16px 32px',
+        borderRadius: '8px',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+      }}>
+        <span style={{
+          color: '#a78bfa',
+          fontSize: '14px',
+          fontFamily: "'IBM Plex Mono', monospace",
+          fontWeight: 500,
+        }}>
+          Drop to open
+        </span>
+      </div>
+    </div>
+  );
+
   // Show vault picker if requested
   if (showVaultPicker) {
-    return <VaultPicker onOpen={handleOpenVaultPath} />;
+    return (
+      <>
+        {dropOverlay}
+        <VaultPicker onOpen={handleOpenVaultPath} />
+      </>
+    );
   }
 
   return (
     <div style={styles.app}>
+      {dropOverlay}
       {/* Custom Title Bar with Tabs */}
       <TitleBar
         openTabs={openTabs}
@@ -1713,7 +1906,7 @@ function App() {
                         key={activeTab.path}
                         content={activeTab.content}
                         currentLine={currentLine}
-                        onHeadingClick={(position) => {
+                        onHeadingClick={(position, _headingText) => {
                           setScrollToPosition(position);
                         }}
                       />

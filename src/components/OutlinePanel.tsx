@@ -4,7 +4,7 @@ import { Hash } from 'lucide-react';
 
 interface OutlinePanelProps {
   content: string;
-  onHeadingClick?: (position: number) => void;
+  onHeadingClick?: (position: number, headingText: string) => void;
   currentLine?: number;
 }
 
@@ -79,7 +79,7 @@ export function OutlinePanel({ content, onHeadingClick, currentLine }: OutlinePa
             <div
               key={heading.id}
               ref={isActive ? activeHeadingRef : null}
-              onClick={() => onHeadingClick?.(heading.position)}
+              onClick={() => onHeadingClick?.(heading.position, heading.text)}
               style={{
                 padding: '0.25rem 1rem',
                 paddingLeft: `${0.5 + heading.level * 0.75}rem`,

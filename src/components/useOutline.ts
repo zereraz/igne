@@ -12,9 +12,22 @@ export function useOutline(content: string): Heading[] {
   return useMemo(() => {
     const headings: Heading[] = [];
     const lines = content.split('\n');
+    let inCodeBlock = false;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+
+      // Check for fenced code block delimiters (``` or ~~~)
+      if (line.match(/^```|^~~~/)) {
+        inCodeBlock = !inCodeBlock;
+        continue;
+      }
+
+      // Skip headings inside code blocks
+      if (inCodeBlock) {
+        continue;
+      }
+
       const match = line.match(/^(#{1,6})\s+(.+)$/);
 
       if (match) {

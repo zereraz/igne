@@ -15,8 +15,9 @@
     "test:run": "vitest run",
     "test:e2e": "./scripts/run-e2e-tests.sh",
     "test:e2e:dev": "./scripts/run-e2e-tests.sh --dev-mode",
-    "test:e2e:ui": "playwright test --ui",
-    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:docker": "./scripts/run-e2e-tests.sh --docker",
+    "test:e2e:ui": "playwright test --project=dev --ui",
+    "test:e2e:headed": "playwright test --project=dev --headed",
     "check:compat": "npm run obsidian:check-contract && npm run obsidian:check-invariants",
     "obsidian:check-contract": "node --no-warnings --experimental-strip-types scripts/obsidian/check-contract.ts",
     "obsidian:update-contract": "node --no-warnings --experimental-strip-types scripts/obsidian/update-contract.ts",
@@ -49,6 +50,8 @@
     "@tauri-apps/api": "^2.9.1",
     "@tauri-apps/plugin-dialog": "^2.5.0",
     "@tauri-apps/plugin-fs": "^2.4.5",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.9.0",
     "codemirror": "^6.0.2",
     "d3": "^7.9.0",
     "fuse.js": "^7.1.0",
@@ -57,7 +60,7 @@
     "minisearch": "^7.2.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "remark-footnotes": "^5.0.0"
+    "remark-footnotes": "^4.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

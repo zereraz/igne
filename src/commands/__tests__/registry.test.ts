@@ -30,7 +30,7 @@ describe('CommandRegistry', () => {
       expect(CommandRegistry.get('test.command')).toEqual(command);
     });
 
-    it('should throw when registering duplicate command ID', () => {
+    it('should be idempotent when registering duplicate command ID', () => {
       const command: Command = {
         id: 'test.command',
         name: 'Test Command',
@@ -39,9 +39,13 @@ describe('CommandRegistry', () => {
 
       CommandRegistry.register(command);
 
+      // Should not throw - idempotent for React StrictMode compatibility
       expect(() => {
         CommandRegistry.register(command);
-      }).toThrow('Command with id "test.command" already registered');
+      }).not.toThrow();
+
+      // Should still only have one command
+      expect(CommandRegistry.getAll().filter(c => c.id === 'test.command')).toHaveLength(1);
     });
 
     it('should unregister a command', () => {

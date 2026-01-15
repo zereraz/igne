@@ -9,3 +9,4 @@
 export { useWorkspaceSync } from './useWorkspaceSync';
 export { useKeyboardShortcuts, useCustomShortcuts } from './useKeyboardShortcuts';
 export { useFileWatcher, useDirectoryLoader } from './useFileWatcher';
+export { useUpdater } from './useUpdater';
