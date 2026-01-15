@@ -114,7 +114,7 @@ export class Plugins {
     // Verify app version compatibility
     if (!isPluginCompatible(manifest.minAppVersion)) {
       const error = `Plugin "${pluginId}" requires Obsidian ${manifest.minAppVersion} or later. ` +
-        `Igne currently supports Obsidian API ${OBSIDIAN_COMPAT_VERSION} (pinned baseline). ` +
+        `Igne currently supports Obsidian API ${OBSIDIAN_COMPAT_VERSION}. ` +
         `Please check if a compatible version is available.`;
       console.error(`[Plugins] ${error}`);
       throw new Error(error);

@@ -50,6 +50,9 @@ export function toVaultPath(osPath: string, vaultRoot: string): string {
  * @returns The OS-absolute file path
  */
 export function toOsPath(vaultPath: string, vaultRoot: string): string {
+  const shouldUseBackslashes =
+    vaultRoot.includes('\\') || /^[A-Za-z]:[\\/]/.test(vaultRoot);
+
   // Normalize vault root for OS
   const normalizedVaultRoot = vaultRoot.replace(/\\/g, '/');
 
@@ -68,7 +71,7 @@ export function toOsPath(vaultPath: string, vaultRoot: string): string {
   const osPath = `${normalizedVaultRoot}/${relativePath}`;
 
   // Convert back to OS-specific separators
-  if (process.platform === 'win32') {
+  if (shouldUseBackslashes) {
     return osPath.replace(/\//g, '\\');
   }
 

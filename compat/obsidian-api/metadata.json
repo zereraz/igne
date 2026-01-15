@@ -1,6 +1,23 @@
 {
-  "obsidianNpmVersion": "1.11.4",
-  "upstreamCommitSha": "e30998d580abffad28cc9f370d2f4defbfa2081b",
-  "upstreamBlobSha": "5cbc81f3587573e71bc1e2dc10543d9f939f33cc",
-  "pinnedAtUtc": "2026-01-13T00:00:00Z"
+  "package": {
+    "name": "obsidian",
+    "version": "1.11.4",
+    "license": "MIT",
+    "repository": {
+      "type": "git",
+      "url": "git+https://github.com/obsidianmd/obsidian-api.git"
+    },
+    "dist": {
+      "tarball": "https://registry.npmjs.org/obsidian/-/obsidian-1.11.4.tgz",
+      "shasum": "41f3d0e98b44e82c3cd17f4779735720df5104cc",
+      "integrity": "sha512-n0KD3S+VndgaByrEtEe8NELy0ya6/s+KZ7OcxA6xOm5NN4thxKpQjo6eqEudHEvfGCeT/TYToAKJzitQ1I3XTg=="
+    }
+  },
+  "capturedAtUtc": "2026-01-13T00:00:00Z",
+  "files": {
+    "obsidian.d.ts": {
+      "sha256": "d34f26bf7d34c8b742b5337057ac45d4bd00b19aa430ccd5941c797642d7a464",
+      "bytes": 174671
+    }
+  }
 }

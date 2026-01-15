@@ -6,8 +6,8 @@
  */
 
 /**
- * The pinned Obsidian API compatibility version
- * Igne supports plugins compatible with this version or earlier
+ * The declared Obsidian API compatibility version.
+ * Igne supports plugins whose `minAppVersion` is <= this version.
  */
 export const OBSIDIAN_COMPAT_VERSION = '1.11.4';
 

@@ -73,10 +73,10 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
             const manifestContent = await invoke<string>('read_file', { path: manifestPath });
             const manifest: PluginManifest = JSON.parse(manifestContent);
 
-            // Check compatibility with pinned baseline
+            // Check compatibility with the supported baseline
             let compatibilityError: string | undefined;
             if (!isPluginCompatible(manifest.minAppVersion)) {
-              compatibilityError = `Plugin requires Obsidian ${manifest.minAppVersion} or later. Igne currently supports Obsidian API ${OBSIDIAN_COMPAT_VERSION} (pinned baseline).`;
+              compatibilityError = `Plugin requires Obsidian ${manifest.minAppVersion} or later. Igne currently supports Obsidian API ${OBSIDIAN_COMPAT_VERSION}.`;
             }
 
             // Check if plugin has settings (main.js exists)

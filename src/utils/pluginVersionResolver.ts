@@ -47,7 +47,7 @@ export interface PluginRelease {
  *
  * This mimics Obsidian's behavior: if the latest release requires a newer
  * app version than we support, we look for the newest release that is
- * compatible with our pinned baseline.
+ * compatible with our supported baseline.
  *
  * @param latestRelease - The latest plugin release from the repository
  * @param versionsJson - The versions.json mapping from the repository
@@ -84,7 +84,7 @@ export function resolveCompatibleVersion(
       version: null,
       minAppVersion: latestRelease.minAppVersion,
       reason: `No compatible version found. Latest ${latestRelease.version} requires Obsidian ${latestRelease.minAppVersion}, ` +
-        `but Igne only supports Obsidian API ${OBSIDIAN_COMPAT_VERSION} (pinned baseline).`,
+        `but Igne only supports Obsidian API ${OBSIDIAN_COMPAT_VERSION}.`,
     };
   }
 
@@ -93,7 +93,7 @@ export function resolveCompatibleVersion(
     version: selected.version,
     minAppVersion: selected.minAppVersion,
     reason: `Latest version ${latestRelease.version} requires Obsidian ${latestRelease.minAppVersion}, ` +
-      `which is newer than Igne's pinned baseline (${OBSIDIAN_COMPAT_VERSION}). ` +
+      `which is newer than Igne's supported baseline (${OBSIDIAN_COMPAT_VERSION}). ` +
       `Installing compatible version ${selected.version} instead.`,
   };
 }
@@ -200,7 +200,7 @@ export async function resolvePluginVersionForInstall(
       version: null,
       minAppVersion: latestRelease.minAppVersion,
       reason: `Latest version ${latestRelease.version} requires Obsidian ${latestRelease.minAppVersion}, ` +
-        `which is newer than Igne's pinned baseline (${OBSIDIAN_COMPAT_VERSION}). ` +
+        `which is newer than Igne's supported baseline (${OBSIDIAN_COMPAT_VERSION}). ` +
         `No versions.json available to find compatible version.`,
     };
   }

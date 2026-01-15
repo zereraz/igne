@@ -28,9 +28,59 @@ pub struct FileMetadata {
 }
 
 #[tauri::command]
-fn read_directory(path: String) -> Result<Vec<FileEntry>, String> {
+fn read_directory(
+    path: String,
+    recursive: Option<bool>,
+    max_depth: Option<u32>,
+) -> Result<Vec<FileEntry>, String> {
     let path = PathBuf::from(&path);
-    read_dir_recursive(&path, 0, 3)
+    let recursive = recursive.unwrap_or(true);
+    if recursive {
+        read_dir_recursive(&path, 0, max_depth.unwrap_or(u32::MAX))
+    } else {
+        read_dir_shallow(&path)
+    }
+}
+
+fn read_dir_shallow(path: &PathBuf) -> Result<Vec<FileEntry>, String> {
+    let mut entries = vec![];
+    let dir = fs::read_dir(path).map_err(|e| e.to_string())?;
+
+    for entry in dir {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        let file_path = entry.path();
+        let metadata = entry.metadata().map_err(|e| e.to_string())?;
+        let is_dir = metadata.is_dir();
+
+        let size = metadata.len();
+        let modified = metadata
+            .modified()
+            .map(|t| {
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+            })
+            .unwrap_or(0);
+
+        entries.push(FileEntry {
+            name: file_name,
+            path: file_path.to_string_lossy().to_string(),
+            is_dir,
+            size,
+            modified,
+            children: None,
+        });
+    }
+
+    // Sort: folders first, then alphabetically
+    entries.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+    });
+
+    Ok(entries)
 }
 
 fn read_dir_recursive(
