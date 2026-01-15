@@ -98,7 +98,7 @@ export function TitleBar({
         overflowX: 'auto',
         gap: '2px',
         height: '100%',
-        alignItems: 'center',
+        alignItems: 'stretch',
       }}>
         {openTabs.map((tab) => (
           <div
@@ -108,7 +108,7 @@ export function TitleBar({
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '6px 12px',
+              padding: '0 12px',
               backgroundColor: tab.path === activeTabPath ? '#18181b' : 'transparent',
               border: tab.path === activeTabPath ? '1px solid #3f3f46' : '1px solid transparent',
               borderBottom: tab.path === activeTabPath ? '1px solid #18181b' : '1px solid transparent',
@@ -117,7 +117,7 @@ export function TitleBar({
               cursor: 'pointer',
               minWidth: 'fit-content',
               maxWidth: '200px',
-              height: '100%',
+              boxSizing: 'border-box',
             }}
             onMouseEnter={(e) => {
               if (tab.path !== activeTabPath) {
