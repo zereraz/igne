@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, placeholder } from '@codemirror/view';
-import { oneDark } from '@codemirror/theme-one-dark';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { invoke } from '@tauri-apps/api/core';
+import { highlightSelectionMatches, SearchQuery, setSearchQuery, findNext, findPrevious, search } from '@codemirror/search';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { searchWikilinks } from '../utils/wikilinkCompletion';
 import { createLivePreview } from '../extensions/livePreview';
 import { createMarkdownLanguage } from '../extensions/markdownLanguage';
@@ -115,105 +115,86 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       setSelectedIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter' && searchResults.length > 0) {
       e.preventDefault();
-      selectWikilink(searchResults[selectedIndex].name);
+      const safeIndex = Math.min(Math.max(0, selectedIndex), searchResults.length - 1);
+      selectWikilink(searchResults[safeIndex].name);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setWikilinkSearch(null);
     }
   }, [searchResults, selectedIndex, selectWikilink]);
 
-  // Handle find in search panel
+  // Handle find in search panel - uses CodeMirror's search for highlighting
   const handleFind = useCallback((query: string, options: FindOptions) => {
     const view = viewRef.current;
-    if (!view || !query.trim()) return;
+    if (!view || !query.trim()) {
+      // Clear search when query is empty
+      if (view) {
+        view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: '' })) });
+      }
+      setSearchResultCount(0);
+      setCurrentResultIndex(undefined);
+      return;
+    }
 
     try {
-      const doc = view.state.doc.toString();
-      const cursor = view.state.selection.main.head;
-
-      // Parse search operators
-      let searchPattern = query;
-
-      // Check for advanced search operators
+      // Parse search operators for tag search
+      let searchTerm = query;
       const tagMatch = query.match(/^tag:(.+)$/i);
-      const fileMatch = query.match(/^file:(.+)$/i);
-      const pathMatch = query.match(/^path:(.+)$/i);
       const hashTagMatch = query.match(/^#(.+)$/);
 
       if (tagMatch) {
-        // Search for tags: #tag
-        const tag = tagMatch[1].trim();
-        searchPattern = `#${tag}`;
-      } else if (fileMatch) {
-        // Search in filenames only
-        const fileName = fileMatch[1].trim();
-        // This is a meta-search - search through all files
-        console.log('File search:', fileName);
-        setSearchResultCount(0);
-        setCurrentResultIndex(undefined);
-        return; // File search requires different handling
-      } else if (pathMatch) {
-        // Search in specific path
-        const folderPath = pathMatch[1].trim();
-        console.log('Path search:', folderPath);
-        setSearchResultCount(0);
-        setCurrentResultIndex(undefined);
-        return; // Path search requires different handling
+        searchTerm = `#${tagMatch[1].trim()}`;
       } else if (hashTagMatch) {
-        // Alternative hashtag syntax
-        const tag = hashTagMatch[1].trim();
-        searchPattern = `#${tag}`;
-      } else {
-        // Regular search
-        if (options.wholeWord) {
-          searchPattern = `\\b${query}\\b`;
-        }
+        searchTerm = `#${hashTagMatch[1].trim()}`;
       }
 
+      // Create CodeMirror search query - this highlights all matches
+      const searchQuery = new SearchQuery({
+        search: searchTerm,
+        caseSensitive: options.caseSensitive,
+        regexp: options.regex,
+        wholeWord: options.wholeWord,
+      });
+
+      // Set the search query to highlight all matches
+      view.dispatch({ effects: setSearchQuery.of(searchQuery) });
+
+      // Count matches manually for display
+      const doc = view.state.doc.toString();
       const flags = options.caseSensitive ? 'g' : 'gi';
-      const pattern = options.regex
-        ? new RegExp(searchPattern, flags)
-        : new RegExp(searchPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+      let pattern: RegExp;
 
-      // Find all matches
-      const matches: Array<{ index: number; length: number }> = [];
-      let match;
-      pattern.lastIndex = 0;
-
-      while ((match = pattern.exec(doc)) !== null) {
-        matches.push({ index: match.index, length: match[0].length });
+      if (options.regex) {
+        pattern = new RegExp(searchTerm, flags);
+      } else if (options.wholeWord) {
+        pattern = new RegExp(`\\b${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, flags);
+      } else {
+        pattern = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
       }
 
-      if (matches.length === 0) {
-        setSearchResultCount(0);
-        setCurrentResultIndex(undefined);
-        return;
+      const matches: number[] = [];
+      let match;
+      while ((match = pattern.exec(doc)) !== null) {
+        matches.push(match.index);
       }
 
       setSearchResultCount(matches.length);
 
-      // Find next match after cursor
-      let nextMatch = matches.find(m => m.index > cursor);
-      if (!nextMatch) {
-        // Wrap around to first match
-        nextMatch = matches[0];
-        setCurrentResultIndex(1);
-      } else {
-        const indexBefore = matches.filter(m => m.index <= cursor).length;
-        setCurrentResultIndex(indexBefore + 1);
-      }
+      if (matches.length > 0) {
+        // Find current match index based on cursor position
+        const cursor = view.state.selection.main.head;
+        const currentIdx = matches.findIndex(idx => idx >= cursor);
+        setCurrentResultIndex(currentIdx >= 0 ? currentIdx + 1 : 1);
 
-      // Select the match
-      view.dispatch({
-        selection: {
-          anchor: nextMatch.index,
-          head: nextMatch.index + nextMatch.length,
-        },
-        scrollIntoView: true,
-      });
+        // Navigate to next match
+        findNext(view);
+      } else {
+        setCurrentResultIndex(undefined);
+      }
     } catch (e) {
       console.error('Search error:', e);
       setSearchResultCount(0);
+      setCurrentResultIndex(undefined);
     }
   }, []);
 
@@ -297,9 +278,59 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Theme-aware base theme using CSS variables
+    const baseTheme = EditorView.theme({
+      '&': {
+        backgroundColor: 'var(--background-primary)',
+        color: 'var(--text-normal)',
+      },
+      '.cm-content': {
+        caretColor: 'var(--color-accent)',
+      },
+      '.cm-cursor, .cm-dropCursor': {
+        borderLeftColor: 'var(--color-accent)',
+      },
+      '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+        backgroundColor: 'rgba(var(--color-accent-rgb), 0.3)',
+      },
+      '.cm-activeLine': {
+        backgroundColor: 'var(--background-modifier-hover)',
+      },
+      '.cm-gutters': {
+        backgroundColor: 'var(--background-secondary)',
+        color: 'var(--text-faint)',
+        borderRight: '1px solid var(--background-modifier-border)',
+      },
+      '.cm-activeLineGutter': {
+        backgroundColor: 'var(--background-modifier-hover)',
+      },
+      '.cm-foldPlaceholder': {
+        backgroundColor: 'var(--background-secondary)',
+        color: 'var(--text-muted)',
+        border: 'none',
+      },
+      '.cm-tooltip': {
+        backgroundColor: 'var(--background-secondary)',
+        border: '1px solid var(--background-modifier-border)',
+      },
+      '.cm-tooltip-autocomplete ul li[aria-selected]': {
+        backgroundColor: 'var(--background-modifier-hover)',
+      },
+      // Search highlighting
+      '.cm-searchMatch': {
+        backgroundColor: 'rgba(var(--color-yellow-rgb), 0.3)',
+        outline: '1px solid rgba(var(--color-yellow-rgb), 0.5)',
+      },
+      '.cm-searchMatch.cm-searchMatch-selected': {
+        backgroundColor: 'rgba(var(--color-yellow-rgb), 0.5)',
+      },
+    }, { dark: false }); // We handle dark/light via CSS variables
+
     const extensions = [
-      oneDark,
+      baseTheme,
       history(),
+      search({ top: true }), // Enable search functionality with highlighting
+      highlightSelectionMatches(), // Highlight all matches when text is selected
       keymap.of([
         ...defaultKeymap,
         ...historyKeymap,
@@ -357,6 +388,17 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           const exists = searchStore.noteExists(target);
           return exists ? { exists: true } : { exists: false };
         },
+        resolveImage: (src: string) => {
+          // Convert vault-relative path to Tauri asset URL
+          if (!vaultPath) return src;
+          // If already a URL, return as-is
+          if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('asset://')) {
+            return src;
+          }
+          // Build full path and convert to Tauri asset URL
+          const fullPath = `${vaultPath}/${src}`;
+          return convertFileSrc(fullPath);
+        },
         resolveHeading: (note: string, heading: string) => {
           const filePath = searchStore.getFilePathByName(note);
           if (!filePath) {
@@ -407,7 +449,7 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           padding: '0',
         },
         '.cm-placeholder': {
-          color: '#52525b',
+          color: 'var(--text-faint)',
         },
         // Live preview heading styles
         '.cm-heading-1': {
@@ -457,8 +499,8 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         },
         // Inline code
         '.cm-inline-code': {
-          backgroundColor: '#27272a',
-          color: '#a78bfa',
+          backgroundColor: 'var(--code-background)',
+          color: 'var(--color-accent)',
           padding: '0.125rem 0.25rem',
           borderRadius: '0.25rem',
           fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
@@ -470,10 +512,10 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         },
         // Blockquote
         '.cm-blockquote': {
-          borderLeft: '3px solid #3f3f46',
+          borderLeft: '3px solid var(--background-modifier-border)',
           paddingLeft: '0.75rem',
           marginLeft: '0',
-          color: '#a1a1aa',
+          color: 'var(--text-muted)',
           fontStyle: 'italic',
         },
         // Lists
@@ -482,8 +524,8 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         },
         // Tooltip styles
         '.cm-tooltip': {
-          backgroundColor: '#27272a',
-          border: '1px solid #3f3f46',
+          backgroundColor: 'var(--background-secondary)',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '0.25rem',
         },
         '.cm-tooltip-autocomplete': {
@@ -493,61 +535,61 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           maxHeight: '200px',
         },
         '.cm-tooltip-autocomplete ul li': {
-          color: '#a1a1aa',
+          color: 'var(--text-muted)',
           padding: '0.25rem 0.5rem',
         },
         '.cm-tooltip-autocomplete ul li[aria-selected]': {
-          backgroundColor: '#3f3f46',
-          color: 'white',
+          backgroundColor: 'var(--background-modifier-hover)',
+          color: 'var(--text-normal)',
         },
         // Strikethrough
         '.cm-strikethrough': {
           textDecoration: 'line-through',
-          color: '#71717a',
+          color: 'var(--text-faint)',
         },
         // Highlight
         '.cm-highlight': {
-          backgroundColor: 'rgba(250, 204, 21, 0.3)',
+          backgroundColor: 'var(--text-highlight-bg)',
           padding: '0 2px',
           borderRadius: '2px',
         },
         // Wikilinks
         '.cm-wikilink': {
-          color: '#a78bfa',
+          color: 'var(--color-accent)',
           cursor: 'pointer',
           textDecoration: 'none',
-          borderBottom: '1px dashed #a78bfa',
+          borderBottom: '1px dashed var(--color-accent)',
         },
         '.cm-wikilink:hover': {
-          color: '#c4b5fd',
+          color: 'var(--color-accent-1)',
           borderBottomStyle: 'solid',
         },
         '.cm-wikilink-missing': {
-          color: '#f87171',
-          borderBottomColor: '#f87171',
+          color: 'var(--color-red)',
+          borderBottomColor: 'var(--color-red)',
         },
         '.cm-wikilink-missing:hover': {
-          color: '#fca5a5',
+          color: 'var(--color-red-1)',
         },
         // Tags
         '.cm-tag-pill': {
           display: 'inline-block',
-          backgroundColor: '#3f3f46',
-          color: '#a78bfa',
+          backgroundColor: 'var(--background-modifier-hover)',
+          color: 'var(--color-accent)',
           padding: '1px 8px',
           borderRadius: '12px',
           fontSize: '0.85em',
           cursor: 'pointer',
         },
         '.cm-tag-pill:hover': {
-          backgroundColor: '#52525b',
+          backgroundColor: 'var(--background-tertiary)',
         },
         // Embeds
         '.cm-embed': {
           margin: '12px 0',
-          border: '1px solid #3f3f46',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '6px',
-          backgroundColor: '#18181b',
+          backgroundColor: 'var(--background-primary)',
           overflow: 'hidden',
         },
         '.cm-embed-header': {
@@ -555,40 +597,40 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           alignItems: 'center',
           gap: '8px',
           padding: '8px 12px',
-          backgroundColor: '#27272a',
-          borderBottom: '1px solid #3f3f46',
+          backgroundColor: 'var(--background-secondary)',
+          borderBottom: '1px solid var(--background-modifier-border)',
           cursor: 'pointer',
         },
         '.cm-embed-header:hover': {
-          backgroundColor: '#3f3f46',
+          backgroundColor: 'var(--background-modifier-hover)',
         },
         '.cm-embed-icon': {
           fontSize: '14px',
         },
         '.cm-embed-title': {
-          color: '#a78bfa',
+          color: 'var(--color-accent)',
           fontSize: '0.9em',
         },
         '.cm-embed-body': {
           padding: '12px',
-          color: '#d4d4d8',
+          color: 'var(--text-normal)',
           fontSize: '0.9em',
         },
         '.cm-embed-missing': {
-          color: '#71717a',
+          color: 'var(--text-faint)',
           fontStyle: 'italic',
         },
         // Heading embeds
         '.cm-heading-embed': {
           margin: '12px 0',
-          border: '1px solid #3f3f46',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '6px',
-          backgroundColor: '#18181b',
+          backgroundColor: 'var(--background-primary)',
           overflow: 'hidden',
         },
         '.cm-heading-embed-body': {
           padding: '12px',
-          color: '#d4d4d8',
+          color: 'var(--text-normal)',
           fontSize: '0.9em',
         },
         '.cm-heading-embed-content': {
@@ -608,7 +650,7 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           borderRadius: '6px',
         },
         '.cm-image-error': {
-          color: '#f87171',
+          color: 'var(--color-red)',
           fontStyle: 'italic',
         },
         // Tasks
@@ -617,7 +659,7 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           height: '16px',
           marginRight: '8px',
           cursor: 'pointer',
-          accentColor: '#a78bfa',
+          accentColor: 'var(--color-accent)',
         },
         // Math
         '.cm-math-inline': {
@@ -630,12 +672,12 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         },
         '.cm-math-fallback, .cm-math-error': {
           fontFamily: 'ui-monospace, monospace',
-          color: '#f87171',
+          color: 'var(--color-red)',
         },
         // Code blocks
         '.cm-codeblock': {
-          backgroundColor: '#18181b',
-          border: '1px solid #3f3f46',
+          backgroundColor: 'var(--code-background)',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '6px',
           padding: '12px',
           margin: '12px 0',
@@ -644,9 +686,9 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         '.cm-codeblock code': {
           fontFamily: 'ui-monospace, monospace',
           fontSize: '0.9em',
-          color: '#e4e4e7',
+          color: 'var(--text-normal)',
         },
-        // Callouts
+        // Callouts - keep semantic colors for these
         '.cm-callout': {
           margin: '12px 0',
           borderRadius: '6px',
@@ -672,58 +714,58 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         '.cm-callout-body': {
           padding: '8px 12px',
         },
-        // Callout types
+        // Callout types (keep semantic colors)
         '.cm-callout-note': {
-          borderColor: '#60a5fa',
-          backgroundColor: 'rgba(96, 165, 250, 0.1)',
+          borderColor: 'var(--color-blue)',
+          backgroundColor: 'rgba(var(--color-blue-rgb), 0.1)',
         },
         '.cm-callout-info': {
-          borderColor: '#60a5fa',
-          backgroundColor: 'rgba(96, 165, 250, 0.1)',
+          borderColor: 'var(--color-blue)',
+          backgroundColor: 'rgba(var(--color-blue-rgb), 0.1)',
         },
         '.cm-callout-tip': {
-          borderColor: '#34d399',
-          backgroundColor: 'rgba(52, 211, 153, 0.1)',
+          borderColor: 'var(--color-green)',
+          backgroundColor: 'rgba(var(--color-green-rgb), 0.1)',
         },
         '.cm-callout-warning': {
-          borderColor: '#fbbf24',
-          backgroundColor: 'rgba(251, 191, 36, 0.1)',
+          borderColor: 'var(--color-yellow)',
+          backgroundColor: 'rgba(var(--color-yellow-rgb), 0.1)',
         },
         '.cm-callout-danger': {
-          borderColor: '#f87171',
-          backgroundColor: 'rgba(248, 113, 113, 0.1)',
+          borderColor: 'var(--color-red)',
+          backgroundColor: 'rgba(var(--color-red-rgb), 0.1)',
         },
         '.cm-callout-example': {
-          borderColor: '#a78bfa',
-          backgroundColor: 'rgba(167, 139, 250, 0.1)',
+          borderColor: 'var(--color-accent)',
+          backgroundColor: 'rgba(var(--color-accent-rgb), 0.1)',
         },
         '.cm-callout-quote': {
-          borderColor: '#71717a',
-          backgroundColor: 'rgba(113, 113, 122, 0.1)',
+          borderColor: 'var(--text-faint)',
+          backgroundColor: 'var(--background-modifier-hover)',
         },
         '.cm-callout-bug': {
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderColor: 'var(--color-red)',
+          backgroundColor: 'rgba(var(--color-red-rgb), 0.1)',
         },
         '.cm-callout-success': {
-          borderColor: '#22c55e',
-          backgroundColor: 'rgba(34, 197, 94, 0.1)',
+          borderColor: 'var(--color-green)',
+          backgroundColor: 'rgba(var(--color-green-rgb), 0.1)',
         },
         '.cm-callout-failure': {
-          borderColor: '#ef4444',
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+          borderColor: 'var(--color-red)',
+          backgroundColor: 'rgba(var(--color-red-rgb), 0.1)',
         },
         '.cm-callout-question': {
-          borderColor: '#a78bfa',
-          backgroundColor: 'rgba(167, 139, 250, 0.1)',
+          borderColor: 'var(--color-accent)',
+          backgroundColor: 'rgba(var(--color-accent-rgb), 0.1)',
         },
         '.cm-callout-important': {
-          borderColor: '#fbbf24',
-          backgroundColor: 'rgba(251, 191, 36, 0.1)',
+          borderColor: 'var(--color-yellow)',
+          backgroundColor: 'rgba(var(--color-yellow-rgb), 0.1)',
         },
         '.cm-callout-caution': {
-          borderColor: '#f59e0b',
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          borderColor: 'var(--color-orange)',
+          backgroundColor: 'rgba(var(--color-orange-rgb), 0.1)',
         },
         // Mermaid
         '.cm-mermaid': {
@@ -732,7 +774,7 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           margin: '12px 0',
         },
         '.cm-mermaid-error': {
-          color: '#f87171',
+          color: 'var(--color-red)',
           fontFamily: 'ui-monospace, monospace',
           fontSize: '0.9em',
         },
@@ -750,6 +792,14 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
     });
 
     viewRef.current = view;
+
+    // Expose view on DOM element for E2E testing
+    if (view.dom) {
+      (view.dom as any).__editorView = view;
+    }
+
+    // Auto-focus the editor
+    view.focus();
 
     return () => {
       view.destroy();
@@ -771,6 +821,10 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           insert: content,
         },
       });
+      // Focus editor when switching to new/empty file
+      if (content === '') {
+        view.focus();
+      }
     }
   }, [content]);
 
@@ -782,9 +836,13 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
 
       scrollPositionRef.current = scrollPosition;
 
+      // Validate position is within document bounds
+      const docLength = view.state.doc.length;
+      const validPosition = Math.min(Math.max(0, scrollPosition), docLength);
+
       // Scroll to the position
       view.dispatch({
-        selection: { anchor: scrollPosition, head: scrollPosition },
+        selection: { anchor: validPosition, head: validPosition },
         scrollIntoView: true,
       });
     }
@@ -904,7 +962,7 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       style={{
         height: '100%',
         width: '100%',
-        backgroundColor: '#18181b',
+        backgroundColor: 'var(--background-primary)',
       }}
     >
       {/* Wikilink Search Popup */}
@@ -916,8 +974,8 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
             left: wikilinkSearch.position.left,
             zIndex: 1000,
             minWidth: '280px',
-            backgroundColor: '#27272a',
-            border: '1px solid #3f3f46',
+            backgroundColor: 'var(--background-secondary)',
+            border: '1px solid var(--background-modifier-border)',
             borderRadius: '2px',
             boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
             overflow: 'hidden',
@@ -930,7 +988,7 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
               display: 'flex',
               alignItems: 'center',
               padding: '10px 12px',
-              borderBottom: '1px solid #3f3f46',
+              borderBottom: '1px solid var(--background-modifier-border)',
             }}
           >
             <input
@@ -946,13 +1004,13 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
                 backgroundColor: 'transparent',
                 border: 'none',
                 outline: 'none',
-                color: '#e4e4e7',
+                color: 'var(--text-normal)',
                 fontSize: '13px',
-                fontFamily: "'IBM Plex Mono', monospace",
+                fontFamily: 'var(--font-interface)',
               }}
               autoFocus
             />
-            <span style={{ color: '#71717a', fontSize: '11px' }}>Esc</span>
+            <span style={{ color: 'var(--text-faint)', fontSize: '11px' }}>Esc</span>
           </div>
 
           {/* Results */}
@@ -965,11 +1023,11 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
                   style={{
                     padding: '8px 12px',
                     cursor: 'pointer',
-                    backgroundColor: index === selectedIndex ? 'rgba(167, 139, 250, 0.15)' : 'transparent',
-                    borderLeft: index === selectedIndex ? '2px solid #a78bfa' : '2px solid transparent',
-                    color: index === selectedIndex ? '#e4e4e7' : '#a1a1aa',
+                    backgroundColor: index === selectedIndex ? 'rgba(var(--color-accent-rgb), 0.15)' : 'transparent',
+                    borderLeft: index === selectedIndex ? '2px solid var(--color-accent)' : '2px solid transparent',
+                    color: index === selectedIndex ? 'var(--text-normal)' : 'var(--text-muted)',
                     fontSize: '12px',
-                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontFamily: 'var(--font-interface)',
                   }}
                   onMouseEnter={() => setSelectedIndex(index)}
                 >
@@ -985,9 +1043,9 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
               style={{
                 padding: '16px 12px',
                 textAlign: 'center',
-                color: '#71717a',
+                color: 'var(--text-faint)',
                 fontSize: '12px',
-                fontFamily: "'IBM Plex Mono', monospace",
+                fontFamily: 'var(--font-interface)',
               }}
             >
               No notes found
@@ -1002,7 +1060,16 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           onFind={handleFind}
           onReplace={handleReplace}
           onReplaceAll={handleReplaceAll}
-          onClose={() => setShowSearchPanel(false)}
+          onClose={() => {
+            setShowSearchPanel(false);
+            // Clear search highlighting when panel closes
+            const view = viewRef.current;
+            if (view) {
+              view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: '' })) });
+            }
+            setSearchResultCount(undefined);
+            setCurrentResultIndex(undefined);
+          }}
           resultCount={searchResultCount}
           currentResult={currentResultIndex}
         />

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { openPath } from '@tauri-apps/plugin-opener';
 import { registerStandaloneHandler } from './main';
 import {
   FolderOpen,
@@ -10,6 +11,7 @@ import {
 import { useWorkspaceSync } from './hooks/useWorkspaceSync';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useFileWatcher, useDirectoryLoader } from './hooks/useFileWatcher';
+import { useTabState, TabFile, isTabOpen, getTabByPath } from './hooks/useTabState';
 
 // Helper function to check if a file/directory exists
 async function fileExists(path: string): Promise<boolean> {
@@ -36,7 +38,7 @@ import { StarredFilesPanel } from './components/StarredFilesPanel';
 import { VaultPicker } from './components/VaultPicker';
 import { SettingsModal } from './components/SettingsModal';
 import { StandaloneViewer } from './components/StandaloneViewer';
-import { FileEntry, OpenFile } from './types';
+import { FileEntry } from './types';
 import { searchStore } from './stores/searchStore';
 import { vaultsStore } from './stores/VaultsStore';
 import { windowStateStore } from './stores/WindowStateStore';
@@ -49,21 +51,24 @@ import {
   loadDailyNotesConfig,
 } from './utils/dailyNotes';
 import { renameFileWithLinkUpdates, getLinkUpdateCount } from './utils/fileManager';
+import { isImageFile, isVideoFile, isPdfFile } from './utils/embedParams';
 import { loadTemplates, insertTemplateIntoFile, createFileFromTemplate } from './utils/templateLoader';
 import { ensureDefaultVault } from './utils/defaultVault';
 import { CommandRegistry } from './commands/registry';
 import { setWorkspaceManager } from './tools/workspace';
 
-// Dynamic app styles based on theme - backgroundColor controlled by CSS theme classes
+// Dynamic app styles based on theme - using CSS variables from obsidian.css
 const styles = {
   app: {
     height: '100vh',
     display: 'flex',
     flexDirection: 'column' as const,
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+    fontFamily: 'var(--font-interface)',
+    backgroundColor: 'var(--background-primary)',
+    color: 'var(--text-normal)',
   },
   dirtyIndicator: {
-    color: '#f59e0b',
+    color: 'var(--color-orange)',
   },
   // Premium button: sharp corners, 100ms transitions
   button: {
@@ -75,14 +80,14 @@ const styles = {
     paddingTop: '8px',
     paddingBottom: '8px',
     fontSize: '12px',
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+    fontFamily: 'var(--font-interface)',
     fontWeight: 500,
-    backgroundColor: '#3f3f46',
+    backgroundColor: 'var(--interactive-normal)',
     border: 'none',
     borderRadius: '2px',
     cursor: 'pointer',
     transition: 'background-color 100ms ease',
-    color: 'white',
+    color: 'var(--text-normal)',
   },
   mainContent: {
     display: 'flex',
@@ -91,8 +96,8 @@ const styles = {
   },
   sidebar: {
     width: '256px',
-    backgroundColor: '#1f1f23',
-    borderRight: '1px solid #3f3f46',
+    backgroundColor: 'var(--background-secondary)',
+    borderRight: '1px solid var(--background-modifier-border)',
     overflowY: 'auto' as const,
     flexShrink: 0,
   },
@@ -113,11 +118,11 @@ const styles = {
   },
   vaultName: {
     fontSize: '11px',
-    color: '#71717a',
+    color: 'var(--text-muted)',
     textTransform: 'uppercase' as const,
     letterSpacing: '0.05em',
     fontWeight: 500,
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+    fontFamily: 'var(--font-interface)',
   },
   newFileButton: {
     display: 'flex',
@@ -125,12 +130,12 @@ const styles = {
     gap: '4px',
     padding: '4px 8px',
     fontSize: '11px',
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+    fontFamily: 'var(--font-interface)',
     backgroundColor: 'transparent',
-    border: '1px solid #3f3f46',
+    border: '1px solid var(--background-modifier-border)',
     borderRadius: '2px',
     cursor: 'pointer',
-    color: '#a1a1aa',
+    color: 'var(--text-muted)',
     transition: 'border-color 100ms ease, color 100ms ease',
   },
   loading: {
@@ -138,9 +143,9 @@ const styles = {
     paddingRight: '12px',
     paddingTop: '16px',
     paddingBottom: '16px',
-    color: '#71717a',
+    color: 'var(--text-muted)',
     fontSize: '12px',
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+    fontFamily: 'var(--font-interface)',
   },
   emptyState: {
     display: 'flex',
@@ -148,16 +153,16 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    color: '#71717a',
+    color: 'var(--text-muted)',
     fontSize: '12px',
     padding: '16px',
     textAlign: 'center' as const,
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+    fontFamily: 'var(--font-interface)',
   },
   contentArea: {
     flex: 1,
     overflow: 'hidden',
-    backgroundColor: '#18181b',
+    backgroundColor: 'var(--background-primary)',
     display: 'flex',
     flexDirection: 'column' as const,
   },
@@ -167,8 +172,8 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    color: '#71717a',
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+    color: 'var(--text-muted)',
+    fontFamily: 'var(--font-interface)',
   },
   editorContainer: {
     flex: 1,
@@ -178,19 +183,34 @@ const styles = {
 
 const UNTITLED_BASE = 'Untitled';
 
-// Counter for untitled files (persists across the session)
-let untitledCounter = 0;
-
 /**
  * Create a virtual untitled file (exists only in memory until content is typed)
  * Returns the new tab object to be added to openTabs
- * Note: This creates a virtual file - actual disk check happens when materializing
+ * Checks existing tabs to avoid path collisions
  */
-function createVirtualUntitledFile(vaultPath: string, subFolder?: string): OpenFile {
-  untitledCounter++;
-  const fileName = `${UNTITLED_BASE}-${untitledCounter}.md`;
+function createVirtualUntitledFile(vaultPath: string, existingTabs: TabFile[], subFolder?: string): TabFile {
   const basePath = subFolder || vaultPath;
+
+  // Find the highest existing Untitled-N number in open tabs
+  let maxCounter = 0;
+  const untitledPattern = /^Untitled-(\d+)\.md$/;
+
+  for (const tab of existingTabs) {
+    const fileName = tab.path.split('/').pop() || '';
+    const match = fileName.match(untitledPattern);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxCounter) {
+        maxCounter = num;
+      }
+    }
+  }
+
+  // Use next available number
+  const counter = maxCounter + 1;
+  const fileName = `${UNTITLED_BASE}-${counter}.md`;
   const filePath = `${basePath}/${fileName}`;
+
   return {
     path: filePath,
     name: fileName,
@@ -244,9 +264,27 @@ function App() {
   // App state
   const [vaultPath, setVaultPath] = useState<string | null>(null);
   const [files, setFiles] = useState<FileEntry[]>([]);
-  const [openTabs, setOpenTabs] = useState<OpenFile[]>([]);
-  const [activeTabPath, setActiveTabPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Tab state management - uses reducer pattern to eliminate stale closures
+  const {
+    tabs: openTabs,
+    activeTab,
+    activeTabPath,
+    openTab,
+    forceOpenTab,
+    closeTab,
+    closeActiveTab,
+    setActive,
+    updateContent,
+    syncContent,
+    replaceActiveTab,
+    markSaved,
+    materialize,
+    renameTab,
+    restoreWorkspace,
+    stateRef: tabStateRef,
+  } = useTabState();
   const [isVaultReady, setIsVaultReady] = useState(false);
   const [fileTreeError, setFileTreeError] = useState<string | null>(null);
   const [wikilinkQueue, setWikilinkQueue] = useState<Array<{target: string; newTab: boolean}>>([]);
@@ -260,10 +298,6 @@ function App() {
   const [templates, setTemplates] = useState<Array<{ name: string; path: string }>>([]);
   const [showSettings, setShowSettings] = useState(false);
   const switchingVaultRef = useRef(false);
-
-  // Ref for stable access to activeTabPath in closures (fixes stale closure issues)
-  const activeTabPathRef = useRef(activeTabPath);
-  activeTabPathRef.current = activeTabPath;
 
   // Ref to trigger editor decoration rebuilds when files change
   // Used by livePreview extension to refresh wikilink colors
@@ -299,9 +333,11 @@ function App() {
     try {
       console.log('[App] Opening vault:', path);
 
-      // Save current workspace if we have one
-      if (vaultPath && openTabs.length > 0) {
-        const lastOpenFiles = openTabs.map(t => t.path);
+      // Save current workspace if we have one (use refs to avoid stale closure)
+      const currentVault = vaultPathRef.current;
+      const currentTabs = tabStateRef.current.tabs;
+      if (currentVault && currentTabs.length > 0) {
+        const lastOpenFiles = currentTabs.map(t => t.path);
         await workspaceStateManager.saveNow(lastOpenFiles);
         console.log('[App] Saved previous workspace');
       }
@@ -345,6 +381,10 @@ function App() {
           console.log('[App] Loaded theme:', appearance.cssTheme);
         } catch (e) {
           console.warn('[App] Failed to load theme:', appearance.cssTheme, e);
+          // Fallback: clear the theme setting so built-in theme is used
+          appearance.cssTheme = '';
+          await vaultConfigStore.updateAppearance({ cssTheme: '' });
+          console.log('[App] Reset to built-in theme due to load failure');
         }
       }
 
@@ -366,22 +406,36 @@ function App() {
       console.log('[App] Restored workspace:', { fileCount: openFiles.length, activeTab });
 
       // Load file contents for restored workspace
-      const openTabsWithContent = await Promise.all(
-        openFiles.map(async (file: OpenFile) => {
+      // Note: Workspace files may have isVirtual as undefined, normalize to false
+      const openTabsWithContent: TabFile[] = await Promise.all(
+        openFiles.map(async (file) => {
           try {
             const content = await invoke<string>('read_file', { path: file.path });
-            return { ...file, content };
+            return {
+              path: file.path,
+              name: file.name,
+              content,
+              isDirty: file.isDirty ?? false,
+              isVirtual: file.isVirtual ?? false,
+            };
           } catch (e) {
             console.error('[App] Failed to load file:', file.path, e);
-            return { ...file, content: '' };
+            return {
+              path: file.path,
+              name: file.name,
+              content: '',
+              isDirty: file.isDirty ?? false,
+              isVirtual: file.isVirtual ?? false,
+            };
           }
         })
       );
 
       // Update state
       setVaultPath(path);
-      setOpenTabs(openTabsWithContent);
-      setActiveTabPath(activeTab);
+      // Restore tabs using the hook's action
+      const activeIndex = openTabsWithContent.findIndex(t => t.path === activeTab);
+      restoreWorkspace(openTabsWithContent, activeIndex >= 0 ? activeIndex : openTabsWithContent.length > 0 ? 0 : -1);
       setVaultSettings(vaultSettings);
       setAppearanceSettings(appearance);
       setShowVaultPicker(false);
@@ -507,6 +561,15 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount - handleOpenVaultPath is stable
 
+  // Cleanup stores on unmount to prevent resource leaks
+  useEffect(() => {
+    return () => {
+      console.log('[App] Cleaning up stores on unmount');
+      windowStateStore.destroy();
+      workspaceStateManager.destroy();
+    };
+  }, []);
+
   // Register handler for standalone file open events (handles queued events from startup)
   useEffect(() => {
     console.log('[App] Registering standalone file handler');
@@ -561,7 +624,7 @@ function App() {
     };
   }, [handleOpenStandaloneFile]);
 
-  // Keyboard shortcuts for file operations (Cmd+O and Cmd+N)
+  // Keyboard shortcuts for file operations (Cmd+O, Cmd+N, Cmd+W)
   // These use direct window listeners because CodeMirror can intercept events
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -571,7 +634,7 @@ function App() {
         handleOpenFile();
         return;
       }
-      // Cmd+N - New File (use ref to get latest vault path)
+      // Cmd+N - New File
       if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'n') {
         e.preventDefault();
         const currentVaultPath = vaultPathRef.current;
@@ -579,9 +642,21 @@ function App() {
           console.log('[App] Cmd+N: No vault path');
           return;
         }
-        const newTab = createVirtualUntitledFile(currentVaultPath);
-        setOpenTabs(prev => [...prev, newTab]);
-        setActiveTabPath(newTab.path);
+        // Use tabStateRef to get existing tabs (avoids stale closure)
+        const currentState = tabStateRef.current;
+        const newTab = createVirtualUntitledFile(currentVaultPath, currentState.tabs);
+        openTab(newTab.path, newTab.name, newTab.content, true);
+        return;
+      }
+      // Cmd+W - Close current tab
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'w') {
+        e.preventDefault();
+        // Use tabStateRef to get current active tab (avoids stale closure)
+        const currentState = tabStateRef.current;
+        const currentActiveTab = currentState.activeIndex >= 0 ? currentState.tabs[currentState.activeIndex] : null;
+        if (currentActiveTab) {
+          closeTab(currentActiveTab.path);
+        }
         return;
       }
     };
@@ -629,59 +704,10 @@ function App() {
     }
   }, [appearanceSettings]);
 
-  // Helper to get the active tab
+  // Helper to get the active tab - now provided by useTabState hook
   const getActiveTab = useCallback(() => {
-    return openTabs.find(tab => tab.path === activeTabPath) || null;
-  }, [openTabs, activeTabPath]);
-
-  // Open a file in a tab (or switch to it if already open)
-  const openTab = useCallback((path: string, name: string, content: string, isDirty = false) => {
-    setOpenTabs(prev => {
-      const existing = prev.find(tab => tab.path === path);
-      if (existing) {
-        // File already open, just switch to it and update content if changed
-        setActiveTabPath(path);
-        return prev.map(tab =>
-          tab.path === path ? { ...tab, content, isDirty: tab.isDirty || isDirty } : tab
-        );
-      }
-      // Open new tab
-      const newTab: OpenFile = { path, name, content, isDirty };
-      return [...prev, newTab];
-    });
-    setActiveTabPath(path);
-  }, []);
-
-  // Close a tab
-  // Virtual files with no content are silently discarded (not written to disk)
-  const closeTab = useCallback((path: string) => {
-    setOpenTabs(prev => {
-      const index = prev.findIndex(tab => tab.path === path);
-      if (index === -1) return prev;
-
-      const tabToClose = prev[index];
-      // Virtual files with no content just get discarded - no disk operation needed
-      // (they were never written to disk in the first place)
-      if (tabToClose.isVirtual) {
-        console.log('[App] Discarding virtual file:', tabToClose.name);
-      }
-
-      const newTabs = prev.filter(tab => tab.path !== path);
-
-      // If closing the active tab, switch to another
-      if (path === activeTabPath) {
-        if (newTabs.length > 0) {
-          // Try to select the tab to the right, or the one to the left
-          const newIndex = Math.min(index, newTabs.length - 1);
-          setActiveTabPath(newTabs[newIndex].path);
-        } else {
-          setActiveTabPath(null);
-        }
-      }
-
-      return newTabs;
-    });
-  }, [activeTabPath]);
+    return activeTab;
+  }, [activeTab]);
 
   // Use hooks for file watching and directory loading
   // Reset loading state when vault path changes
@@ -741,53 +767,55 @@ function App() {
 
   const handleNewFile = useCallback(async () => {
     if (!vaultPath) return;
-    const newTab = createVirtualUntitledFile(vaultPath);
-    setOpenTabs(prev => [...prev, newTab]);
-    setActiveTabPath(newTab.path);
-  }, [vaultPath]);
+    // Use tabStateRef to get existing tabs (avoids stale closure)
+    const currentState = tabStateRef.current;
+    const newTab = createVirtualUntitledFile(vaultPath, currentState.tabs);
+    openTab(newTab.path, newTab.name, newTab.content, true);
+  }, [vaultPath, openTab, tabStateRef]);
 
   const handleFileSelect = useCallback(
-    (path: string, newTab = false) => {
+    (path: string, newTabFlag = false) => {
+      // Open binary files (images, videos, PDFs) with system default app
+      if (isImageFile(path) || isVideoFile(path) || isPdfFile(path)) {
+        openPath(path).catch(console.error);
+        return;
+      }
+
       invoke<string>('read_file', { path })
         .then((content) => {
           const parts = path.split(/[/\\]/);
           const name = parts[parts.length - 1] || '';
 
-          setOpenTabs(prev => {
-            const existing = prev.find(tab => tab.path === path);
+          // Use tabStateRef to check current state (avoids stale closure)
+          const currentState = tabStateRef.current;
+          const existingTab = currentState.tabs.find(tab => tab.path === path);
 
-            // Cmd+click: always open a new tab even if file is already open
-            if (newTab) {
-              const newTabItem: OpenFile = { path, name, content, isDirty: false };
-              return [...prev, newTabItem];
-            }
+          // Cmd+click: always open a new tab even if file is already open
+          if (newTabFlag) {
+            forceOpenTab(path, name, content);
+            return;
+          }
 
-            if (existing) {
-              // Regular click: file already open - just switch to it and update content
-              return prev.map(tab =>
-                tab.path === path ? { ...tab, content } : tab
-              );
-            }
+          if (existingTab) {
+            // Regular click: file already open - switch to it and sync content from disk
+            setActive(path);
+            syncContent(path, content);
+            return;
+          }
 
-            // Replace active tab content
-            if (prev.length === 0) {
-              // No tabs yet, create first one
-              const newTabItem: OpenFile = { path, name, content, isDirty: false };
-              return [newTabItem];
-            }
+          // No existing tab - check if we have any tabs
+          if (currentState.tabs.length === 0) {
+            // No tabs yet, create first one
+            openTab(path, name, content);
+            return;
+          }
 
-            // Replace the active tab's content (use ref to avoid stale closure)
-            return prev.map(tab =>
-              tab.path === activeTabPathRef.current ? { path, name, content, isDirty: false } : tab
-            );
-          });
-
-          // Set active tab path after state update
-          setActiveTabPath(path);
+          // Replace the active tab with this file (Obsidian-like behavior)
+          replaceActiveTab(path, name, content);
         })
         .catch(console.error);
     },
-    [] // Empty deps - use refs for stable closure
+    [forceOpenTab, setActive, syncContent, openTab, replaceActiveTab, tabStateRef]
   );
 
   // Process queued wikilink clicks when vault becomes ready
@@ -814,18 +842,16 @@ function App() {
   }, [isVaultReady, handleFileSelect]); // handleFileSelect is stable (empty deps)
 
   const handleSave = useCallback(async () => {
-    const activeTab = getActiveTab();
-    if (!activeTab) return;
+    const currentActiveTab = getActiveTab();
+    if (!currentActiveTab) return;
 
     try {
       await invoke('write_file', {
-        path: activeTab.path,
-        content: activeTab.content,
+        path: currentActiveTab.path,
+        content: currentActiveTab.content,
       });
 
-      setOpenTabs(prev => prev.map(tab =>
-        tab.path === activeTab.path ? { ...tab, isDirty: false } : tab
-      ));
+      markSaved(currentActiveTab.path);
 
       if (vaultPath) {
         invoke<FileEntry[]>('read_directory', { path: vaultPath })
@@ -835,7 +861,7 @@ function App() {
     } catch (e) {
       console.error('Failed to save file:', e);
     }
-  }, [getActiveTab, vaultPath]);
+  }, [getActiveTab, markSaved, vaultPath]);
 
   // Auto-save timer ref
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -851,25 +877,15 @@ function App() {
 
   const handleContentChange = useCallback(async (path: string, content: string) => {
     // Check if this is a virtual file that needs materializing
-    // Use a promise to get current state without stale closure
-    const tabInfo = await new Promise<{ isVirtual: boolean; name: string } | null>(resolve => {
-      setOpenTabs(prev => {
-        const tab = prev.find(t => t.path === path);
-        if (tab?.isVirtual && content.trim()) {
-          resolve({ isVirtual: true, name: tab.name });
-        } else {
-          resolve(null);
-        }
-        return prev; // No change yet, just reading
-      });
-    });
+    const currentState = tabStateRef.current;
+    const tab = currentState.tabs.find(t => t.path === path);
 
-    if (tabInfo) {
+    if (tab?.isVirtual && content.trim()) {
       // Materialize virtual file - check for existing file first
       try {
         const meta = await invoke<{ exists: boolean }>('stat_path', { path });
         let finalPath = path;
-        let finalName = tabInfo.name;
+        let finalName = tab.name;
 
         if (meta.exists) {
           // File already exists, find a unique path
@@ -881,11 +897,8 @@ function App() {
 
         await invoke('write_file', { path: finalPath, content });
 
-        // Update tab with final path and mark as non-virtual
-        setOpenTabs(prev => prev.map(t =>
-          t.path === path ? { ...t, path: finalPath, name: finalName, content, isDirty: false, isVirtual: false } : t
-        ));
-        setActiveTabPath(finalPath);
+        // Use hook's materialize action to update tab
+        materialize(path, finalPath, finalName);
 
         // Refresh file list
         const currentVaultPath = vaultPathRef.current;
@@ -903,34 +916,27 @@ function App() {
     }
 
     // Regular content update for non-virtual files
-    setOpenTabs(prev => prev.map(t =>
-      t.path === path ? { ...t, content, isDirty: true } : t
-    ));
+    updateContent(path, content);
 
     // Auto-save after 1 second of no typing (debounced)
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
     }
     autoSaveTimerRef.current = setTimeout(async () => {
-      // Get the latest tab state
-      setOpenTabs(currentTabs => {
-        const tabToSave = currentTabs.find(t => t.path === path);
-        if (tabToSave && tabToSave.isDirty && !tabToSave.isVirtual) {
-          // Save async
-          invoke('write_file', { path: tabToSave.path, content: tabToSave.content })
-            .then(() => {
-              console.log('[App] Auto-saved:', tabToSave.name);
-              // Mark as not dirty after save
-              setOpenTabs(tabs => tabs.map(t =>
-                t.path === path ? { ...t, isDirty: false } : t
-              ));
-            })
-            .catch(e => console.error('[App] Auto-save failed:', e));
+      // Get the latest tab state using ref (avoids stale closure)
+      const latestState = tabStateRef.current;
+      const tabToSave = latestState.tabs.find(t => t.path === path);
+      if (tabToSave && tabToSave.isDirty && !tabToSave.isVirtual) {
+        try {
+          await invoke('write_file', { path: tabToSave.path, content: tabToSave.content });
+          console.log('[App] Auto-saved:', tabToSave.name);
+          markSaved(path);
+        } catch (e) {
+          console.error('[App] Auto-save failed:', e);
         }
-        return currentTabs; // No state change here
-      });
+      }
     }, 1000);
-  }, []);
+  }, [materialize, updateContent, markSaved, tabStateRef]);
 
   const handleFileNameChange = useCallback(async (newName: string) => {
     const activeTab = getActiveTab();
@@ -967,14 +973,8 @@ function App() {
         updateLinks: true,
       });
 
-      // Update tab path/name, explicitly preserving content
-      // Also update activeTabPath to match the new path
-      setActiveTabPath(newPath);
-      setOpenTabs(prev => prev.map(tab =>
-        tab.path === activeTab.path
-          ? { ...tab, path: newPath, name: newName, content: tab.content }
-          : tab
-      ));
+      // Update tab path/name using hook's action
+      renameTab(activeTab.path, newPath, newName);
 
       // Refresh file list
       if (vaultPath) {
@@ -986,7 +986,7 @@ function App() {
       console.error('Failed to rename:', error);
       alert('Failed to rename file: ' + (error as Error).message);
     }
-  }, [getActiveTab, vaultPath]);
+  }, [getActiveTab, renameTab, vaultPath]);
 
   // Daily Notes handlers
   const handleOpenDailyNote = useCallback(async () => {
@@ -1003,20 +1003,17 @@ function App() {
     setFiles(entries);
     await searchStore.indexFiles(vaultPath, entries);
 
-    // Inline openTab logic to avoid circular dependency
-    setOpenTabs(prev => {
-      const existing = prev.find(tab => tab.path === notePath);
-      if (existing) {
-        setActiveTabPath(notePath);
-        return prev.map(tab =>
-          tab.path === notePath ? { ...tab, content, isDirty: false } : tab
-        );
-      }
-      const newTab: OpenFile = { path: notePath, name, content, isDirty: false };
-      return [...prev, newTab];
-    });
-    setActiveTabPath(notePath);
-  }, [vaultPath]);
+    // Check if already open using tabStateRef
+    const currentState = tabStateRef.current;
+    const existingTab = currentState.tabs.find(tab => tab.path === notePath);
+
+    if (existingTab) {
+      setActive(notePath);
+      syncContent(notePath, content);
+    } else {
+      openTab(notePath, name, content);
+    }
+  }, [vaultPath, setActive, syncContent, openTab, tabStateRef]);
 
   // TODO: Implement daily notes navigation UI to use this function
   // const handleNavigateDailyNotes = useCallback(async (offset: number) => {
@@ -1114,21 +1111,15 @@ function App() {
         await searchStore.indexFiles(vaultPath, entries);
       }
 
-      // Update open tabs if file was renamed
-      setOpenTabs(prev => prev.map(tab => {
-        if (tab.path === renameTarget.path) {
-          const newParts = newPath.split(/[/\\]/);
-          const name = newParts[newParts.length - 1] || '';
-          return { ...tab, path: newPath, name };
-        }
-        return tab;
-      }));
+      // Update open tabs if file was renamed using hook's action
+      const newName = newPath.split(/[/\\]/).pop() || '';
+      renameTab(renameTarget.path, newPath, newName);
     } catch (error) {
       console.error('Failed to rename:', error);
     }
 
     setRenameTarget(null);
-  }, [renameTarget, vaultPath]);
+  }, [renameTarget, renameTab, vaultPath]);
 
   const handleDelete = useCallback(async () => {
     if (!contextMenu) return;
@@ -1157,11 +1148,13 @@ function App() {
 
   const handleNewFileInFolder = useCallback(async () => {
     if (!contextMenu || !vaultPath) return;
-    const newTab = createVirtualUntitledFile(vaultPath, contextMenu.path);
-    setOpenTabs(prev => [...prev, newTab]);
-    setActiveTabPath(newTab.path);
+    const folderPath = contextMenu.path;
+    // Use tabStateRef to get existing tabs (avoids stale closure)
+    const currentState = tabStateRef.current;
+    const newTab = createVirtualUntitledFile(vaultPath, currentState.tabs, folderPath);
+    openTab(newTab.path, newTab.name, newTab.content, true);
     setContextMenu(null);
-  }, [contextMenu, vaultPath]);
+  }, [contextMenu, vaultPath, openTab, tabStateRef]);
 
   const handleNewFolder = useCallback(async () => {
     if (!contextMenu) return;
@@ -1205,48 +1198,41 @@ function App() {
         setFiles(entries);
         await searchStore.indexFiles(vaultPath, entries);
 
-        // Open the new file - inline openTab logic
+        // Open the new file using hook's action
         const parts = newFilePath.split(/[/\\]/);
         const name = parts[parts.length - 1] || '';
-        setOpenTabs(prev => {
-          const existing = prev.find(tab => tab.path === newFilePath);
-          if (existing) {
-            setActiveTabPath(newFilePath);
-            return prev.map(tab =>
-              tab.path === newFilePath ? { ...tab, content, isDirty: false } : tab
-            );
-          }
-          const newTab: OpenFile = { path: newFilePath, name, content, isDirty: false };
-          return [...prev, newTab];
-        });
-        setActiveTabPath(newFilePath);
+        const currentState = tabStateRef.current;
+        const existingTab = currentState.tabs.find(tab => tab.path === newFilePath);
+
+        if (existingTab) {
+          setActive(newFilePath);
+          syncContent(newFilePath, content);
+        } else {
+          openTab(newFilePath, name, content);
+        }
       } else {
         // Insert template into current file
-        const activeTab = getActiveTab();
-        if (!activeTab) {
+        const currentActiveTab = getActiveTab();
+        if (!currentActiveTab) {
           alert('Please open a file first to insert a template');
           setIsTemplateModalOpen(false);
           return;
         }
 
         // Get cursor position (we'll insert at end for now)
-        const cursorPosition = activeTab.content.length;
+        const cursorPosition = currentActiveTab.content.length;
 
         const { content: newContent } = await insertTemplateIntoFile(
           templatePath,
-          activeTab.content,
+          currentActiveTab.content,
           cursorPosition
         );
 
-        // Update tab content
-        setOpenTabs(prev => prev.map(tab =>
-          tab.path === activeTab.path
-            ? { ...tab, content: newContent, isDirty: true }
-            : tab
-        ));
+        // Update tab content using hook's action
+        updateContent(currentActiveTab.path, newContent);
 
         // Update search index
-        await searchStore.updateFile(activeTab.path, newContent);
+        await searchStore.updateFile(currentActiveTab.path, newContent);
       }
 
       setIsTemplateModalOpen(false);
@@ -1254,7 +1240,7 @@ function App() {
       console.error('Failed to insert template:', error);
       alert('Failed to insert template: ' + (error as Error).message);
     }
-  }, [vaultPath, getActiveTab]);
+  }, [vaultPath, getActiveTab, openTab, setActive, syncContent, updateContent, tabStateRef]);
 
   const handleOpenTemplateModal = useCallback(async () => {
     if (!vaultPath) return;
@@ -1333,12 +1319,12 @@ function App() {
         closeTab(path);
       },
       setActiveFile: async (path: string) => {
-        setActiveTabPath(path);
+        setActive(path);
       },
       getOpenFiles: () => openTabs.map(t => t.path),
       getActiveFile: () => activeTabPath,
     });
-  }, [handleFileSelect, closeTab, openTabs, activeTabPath]);
+  }, [handleFileSelect, closeTab, setActive, openTabs, activeTabPath]);
 
   // Register commands on mount (Phase D: Command Registry)
   // This must be after all handlers are defined to avoid forward reference issues
@@ -1456,7 +1442,7 @@ function App() {
       name: 'Switch Tab',
       icon: 'ArrowRight',
       category: 'tab',
-      callback: (...args: unknown[]) => setActiveTabPath(...(args as [string])),
+      callback: (...args: unknown[]) => setActive(...(args as [string])),
     });
 
     // Theme commands
@@ -1539,9 +1525,10 @@ function App() {
             console.log('[App] No vault path, cannot create file');
             return;
           }
-          const newTab = createVirtualUntitledFile(currentVaultPath);
-          setOpenTabs(prev => [...prev, newTab]);
-          setActiveTabPath(newTab.path);
+          // Use tabStateRef to get existing tabs (avoids stale closure)
+          const currentState = tabStateRef.current;
+          const newTab = createVirtualUntitledFile(currentVaultPath, currentState.tabs);
+          openTab(newTab.path, newTab.name, newTab.content, true);
         }),
         listen('menu-open-file', () => {
           console.log('[App] Menu: Open File');
@@ -1553,9 +1540,11 @@ function App() {
         }),
         listen('menu-close-tab', () => {
           console.log('[App] Menu: Close Tab');
-          const currentActiveTab = activeTabPathRef.current;
+          // Use tabStateRef to get current active tab (avoids stale closure)
+          const currentState = tabStateRef.current;
+          const currentActiveTab = currentState.activeIndex >= 0 ? currentState.tabs[currentState.activeIndex] : null;
           if (currentActiveTab) {
-            closeTab(currentActiveTab);
+            closeTab(currentActiveTab.path);
           }
         }),
         listen('menu-quick-switcher', () => {
@@ -1565,6 +1554,24 @@ function App() {
         listen('menu-settings', () => {
           console.log('[App] Menu: Settings');
           setShowSettings(true);
+        }),
+        // Global quick capture shortcut (Ctrl+Alt+N)
+        listen('global-quick-capture', () => {
+          console.log('[App] Global Quick Capture triggered');
+          const currentVaultPath = vaultPathRef.current;
+          if (!currentVaultPath) {
+            console.log('[App] No vault path, cannot create quick capture note');
+            return;
+          }
+          // Create a new quick capture note with timestamp
+          const now = new Date();
+          const timestamp = now.toISOString().slice(0, 16).replace('T', ' ').replace(':', '-');
+          const currentState = tabStateRef.current;
+          const newTab = createVirtualUntitledFile(currentVaultPath, currentState.tabs);
+          // Update the name to include "Quick Note" prefix
+          const quickNoteName = `Quick Note ${timestamp}.md`;
+          const quickNotePath = `${currentVaultPath}/${quickNoteName}`;
+          openTab(quickNotePath, quickNoteName, '', true);
         }),
       ]);
 
@@ -1609,17 +1616,12 @@ function App() {
           .catch(console.error);
       }
 
-      // Update open tabs if file was moved
-      setOpenTabs(prev => prev.map(tab => {
-        if (tab.path === sourcePath) {
-          return { ...tab, path: destination };
-        }
-        return tab;
-      }));
+      // Update open tabs if file was moved using hook's action
+      renameTab(sourcePath, destination, fileName);
     } catch (error) {
       console.error('Failed to move file:', error);
     }
-  }, [vaultPath]);
+  }, [vaultPath, renameTab]);
 
   // Theme toggle handler - must be before early returns
   const handleToggleTheme = useCallback(async () => {
@@ -1644,22 +1646,22 @@ function App() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#18181b',
+        backgroundColor: 'var(--background-primary)',
         flexDirection: 'column',
         gap: '16px',
       }}>
         <div style={{
-          color: '#a78bfa',
+          color: 'var(--color-accent)',
           fontSize: '24px',
           fontWeight: 600,
-          fontFamily: "'IBM Plex Mono', monospace",
+          fontFamily: 'var(--font-interface)',
         }}>
           Igne
         </div>
         <div style={{
-          color: '#71717a',
+          color: 'var(--text-muted)',
           fontSize: '12px',
-          fontFamily: "'IBM Plex Mono', monospace",
+          fontFamily: 'var(--font-interface)',
         }}>
           Loading...
         </div>
@@ -1675,8 +1677,8 @@ function App() {
           <div style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(124, 58, 237, 0.15)',
-            border: '3px dashed #a78bfa',
+            backgroundColor: 'rgba(var(--color-accent-rgb), 0.15)',
+            border: '3px dashed var(--color-accent)',
             borderRadius: '8px',
             margin: '8px',
             display: 'flex',
@@ -1686,15 +1688,15 @@ function App() {
             pointerEvents: 'none',
           }}>
             <div style={{
-              backgroundColor: '#1f1f23',
+              backgroundColor: 'var(--background-secondary)',
               padding: '16px 32px',
               borderRadius: '8px',
               boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
             }}>
               <span style={{
-                color: '#a78bfa',
+                color: 'var(--color-accent)',
                 fontSize: '14px',
-                fontFamily: "'IBM Plex Mono', monospace",
+                fontFamily: 'var(--font-interface)',
                 fontWeight: 500,
               }}>
                 Drop to open
@@ -1719,8 +1721,8 @@ function App() {
     <div style={{
       position: 'fixed',
       inset: 0,
-      backgroundColor: 'rgba(124, 58, 237, 0.15)',
-      border: '3px dashed #a78bfa',
+      backgroundColor: 'rgba(var(--color-accent-rgb), 0.15)',
+      border: '3px dashed var(--color-accent)',
       borderRadius: '8px',
       margin: '8px',
       display: 'flex',
@@ -1730,15 +1732,15 @@ function App() {
       pointerEvents: 'none',
     }}>
       <div style={{
-        backgroundColor: '#1f1f23',
+        backgroundColor: 'var(--background-secondary)',
         padding: '16px 32px',
         borderRadius: '8px',
         boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
       }}>
         <span style={{
-          color: '#a78bfa',
+          color: 'var(--color-accent)',
           fontSize: '14px',
-          fontFamily: "'IBM Plex Mono', monospace",
+          fontFamily: 'var(--font-interface)',
           fontWeight: 500,
         }}>
           Drop to open
@@ -1764,17 +1766,10 @@ function App() {
       <TitleBar
         openTabs={openTabs}
         activeTabPath={activeTabPath}
-        onTabClick={setActiveTabPath}
+        onTabClick={setActive}
         onTabClose={closeTab}
         onFileNameChange={handleFileNameChange}
-        onThemeChange={async (theme) => {
-          if (!appearanceSettings) return;
-          const updated = { ...appearanceSettings, baseTheme: theme };
-          setAppearanceSettings(updated);
-          await vaultConfigStore.updateAppearance({ baseTheme: theme });
-        }}
         onOpenSettings={() => setShowSettings(true)}
-        baseTheme={appearanceSettings?.baseTheme || 'dark'}
       />
 
       {/* Main Content */}
@@ -1796,12 +1791,12 @@ function App() {
                     height: '24px',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#a78bfa';
-                    e.currentTarget.style.color = '#e4e4e7';
+                    e.currentTarget.style.borderColor = 'var(--color-accent)';
+                    e.currentTarget.style.color = 'var(--text-normal)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#3f3f46';
-                    e.currentTarget.style.color = '#a1a1aa';
+                    e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
+                    e.currentTarget.style.color = 'var(--text-muted)';
                   }}
                   title="New File"
                 >
@@ -1819,9 +1814,9 @@ function App() {
                   }}
                   style={{
                     padding: '16px',
-                    color: '#f87171',
+                    color: 'var(--color-red)',
                     fontSize: '12px',
-                    fontFamily: "'IBM Plex Mono', monospace",
+                    fontFamily: 'var(--font-interface)',
                     cursor: 'pointer',
                     textAlign: 'center',
                   }}
@@ -1843,7 +1838,7 @@ function App() {
                 style={{
                   marginTop: 'auto',
                   padding: '6px 8px',
-                  borderTop: '1px solid #3f3f46',
+                  borderTop: '1px solid var(--background-modifier-border)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
@@ -1867,13 +1862,13 @@ function App() {
                   }
                 }}
               >
-                <FolderOpen size={12} style={{ color: '#71717a', flexShrink: 0, pointerEvents: 'none' }} />
+                <FolderOpen size={12} style={{ color: 'var(--text-faint)', flexShrink: 0, pointerEvents: 'none' }} />
                 {vaultName && (
                   <span
                     style={{
-                      color: '#71717a',
+                      color: 'var(--text-faint)',
                       fontSize: '10px',
-                      fontFamily: "'IBM Plex Mono', monospace",
+                      fontFamily: 'var(--font-interface)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -1898,12 +1893,12 @@ function App() {
                     WebkitUserSelect: 'none',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = '#a78bfa';
-                    e.currentTarget.style.color = '#e4e4e7';
+                    e.currentTarget.style.borderColor = 'var(--color-accent)';
+                    e.currentTarget.style.color = 'var(--text-normal)';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#3f3f46';
-                    e.currentTarget.style.color = '#a1a1aa';
+                    e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
+                    e.currentTarget.style.color = 'var(--text-muted)';
                   }}
                   title="Change Vault"
                   onMouseDown={(e) => {
@@ -1930,12 +1925,12 @@ function App() {
                   gap: '8px',
                   padding: '8px 16px',
                   fontSize: '12px',
-                  fontFamily: "'IBM Plex Mono', monospace",
-                  backgroundColor: '#a78bfa',
+                  fontFamily: 'var(--font-interface)',
+                  backgroundColor: 'var(--color-accent)',
                   border: 'none',
                   borderRadius: '2px',
                   cursor: 'pointer',
-                  color: 'white',
+                  color: 'var(--text-on-accent)',
                 }}
               >
                 <FolderOpen size={14} />
@@ -2008,8 +2003,8 @@ function App() {
                 <div
                   style={{
                     width: '256px',
-                    backgroundColor: '#1f1f23',
-                    borderLeft: '1px solid #3f3f46',
+                    backgroundColor: 'var(--background-secondary)',
+                    borderLeft: '1px solid var(--background-modifier-border)',
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
@@ -2019,7 +2014,7 @@ function App() {
                   <div
                     style={{
                       display: 'flex',
-                      borderBottom: '1px solid #27272a',
+                      borderBottom: '1px solid var(--background-modifier-border)',
                     }}
                   >
                     <button
@@ -2027,9 +2022,9 @@ function App() {
                       style={{
                         flex: 1,
                         padding: '0.5rem',
-                        backgroundColor: rightPanel === 'backlinks' ? '#27272a' : 'transparent',
+                        backgroundColor: rightPanel === 'backlinks' ? 'var(--background-tertiary)' : 'transparent',
                         border: 'none',
-                        color: rightPanel === 'backlinks' ? '#a78bfa' : '#71717a',
+                        color: rightPanel === 'backlinks' ? 'var(--color-accent)' : 'var(--text-faint)',
                         cursor: 'pointer',
                         fontSize: '0.7rem',
                         fontWeight: 600,
@@ -2044,9 +2039,9 @@ function App() {
                       style={{
                         flex: 1,
                         padding: '0.5rem',
-                        backgroundColor: rightPanel === 'outline' ? '#27272a' : 'transparent',
+                        backgroundColor: rightPanel === 'outline' ? 'var(--background-tertiary)' : 'transparent',
                         border: 'none',
-                        color: rightPanel === 'outline' ? '#a78bfa' : '#71717a',
+                        color: rightPanel === 'outline' ? 'var(--color-accent)' : 'var(--text-faint)',
                         cursor: 'pointer',
                         fontSize: '0.7rem',
                         fontWeight: 600,
@@ -2061,9 +2056,9 @@ function App() {
                       style={{
                         flex: 1,
                         padding: '0.5rem',
-                        backgroundColor: rightPanel === 'tags' ? '#27272a' : 'transparent',
+                        backgroundColor: rightPanel === 'tags' ? 'var(--background-tertiary)' : 'transparent',
                         border: 'none',
-                        color: rightPanel === 'tags' ? '#a78bfa' : '#71717a',
+                        color: rightPanel === 'tags' ? 'var(--color-accent)' : 'var(--text-faint)',
                         cursor: 'pointer',
                         fontSize: '0.7rem',
                         fontWeight: 600,
@@ -2078,9 +2073,9 @@ function App() {
                       style={{
                         flex: 1,
                         padding: '0.5rem',
-                        backgroundColor: rightPanel === 'graph' ? '#27272a' : 'transparent',
+                        backgroundColor: rightPanel === 'graph' ? 'var(--background-tertiary)' : 'transparent',
                         border: 'none',
-                        color: rightPanel === 'graph' ? '#a78bfa' : '#71717a',
+                        color: rightPanel === 'graph' ? 'var(--color-accent)' : 'var(--text-faint)',
                         cursor: 'pointer',
                         fontSize: '0.7rem',
                         fontWeight: 600,
@@ -2095,9 +2090,9 @@ function App() {
                       style={{
                         flex: 1,
                         padding: '0.5rem',
-                        backgroundColor: rightPanel === 'starred' ? '#27272a' : 'transparent',
+                        backgroundColor: rightPanel === 'starred' ? 'var(--background-tertiary)' : 'transparent',
                         border: 'none',
-                        color: rightPanel === 'starred' ? '#a78bfa' : '#71717a',
+                        color: rightPanel === 'starred' ? 'var(--color-accent)' : 'var(--text-faint)',
                         cursor: 'pointer',
                         fontSize: '0.7rem',
                         fontWeight: 600,

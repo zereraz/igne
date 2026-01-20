@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, EventKind};
 
 /// State for managing file watchers - allows proper cleanup
@@ -439,6 +440,21 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == ShortcutState::Pressed {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                        let _ = app.emit("global-quick-capture", ());
+                    }
+                })
+                .build(),
+        )
         .manage(WatcherState::new())
         .menu(|app| {
             // macOS App menu (with About, Hide, Quit)
@@ -574,6 +590,18 @@ pub fn run() {
             ensure_default_vault
         ])
         .setup(|app| {
+            // Global shortcut: Cmd+Option+N (⌘+⌥+N) for quick capture
+            #[cfg(desktop)]
+            {
+                let shortcut = Shortcut::new(
+                    Some(Modifiers::SUPER | Modifiers::ALT),
+                    Code::KeyN
+                );
+                if let Err(e) = app.global_shortcut().register(shortcut) {
+                    eprintln!("Failed to register global shortcut: {}", e);
+                }
+            }
+
             // Check CLI arguments for a file path
             let args: Vec<String> = env::args().collect();
 

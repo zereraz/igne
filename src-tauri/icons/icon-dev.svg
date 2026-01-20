@@ -1,0 +1,6 @@
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#f97316"/>
+  <text x="50%" y="45%" font-size="280" font-family="Arial, sans-serif" fill="white" text-anchor="middle" dominant-baseline="middle">I</text>
+  <rect x="280" y="380" width="220" height="100" rx="10" fill="#18181b"/>
+  <text x="390" y="445" font-size="60" font-family="Arial, sans-serif" fill="#f97316" text-anchor="middle" dominant-baseline="middle" font-weight="bold">DEV</text>
+</svg>

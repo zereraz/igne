@@ -1,6 +1,6 @@
 import { syntaxTree } from '@codemirror/language';
 import { EditorView, Decoration, DecorationSet, ViewPlugin, ViewUpdate } from '@codemirror/view';
-import { Range, EditorState, StateField, StateEffect } from '@codemirror/state';
+import { Range, EditorState, StateField, StateEffect, RangeSet } from '@codemirror/state';
 import {
   WikilinkWidget,
   EmbedWidget,
@@ -238,15 +238,20 @@ function findMermaidBlocks(state: EditorState): { from: number; to: number; code
   return blocks;
 }
 
+// Simple marker decoration for atomic ranges
+const atomicMarker = Decoration.mark({});
+
 // Build decorations separated into inline and block categories
 // Block decorations cannot be provided via ViewPlugin, they must use StateField
+// Also returns blockRanges for atomicRanges facet
 function buildAllDecorations(
   view: EditorView,
   config: LivePreviewConfig
-): { inline: DecorationSet; block: DecorationSet } {
+): { inline: DecorationSet; block: DecorationSet; blockRanges: { from: number; to: number }[] } {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
   const inlineDecorations: Range<Decoration>[] = [];
   const blockDecorations: Range<Decoration>[] = [];
+  const blockRanges: { from: number; to: number }[] = []; // Track ranges for atomicRanges
   const { head: cursor } = view.state.selection.main;
   const cursorLine = view.state.doc.lineAt(cursor).number;
   const doc = view.state.doc;
@@ -417,6 +422,9 @@ function buildAllDecorations(
           const resolved = fullConfig.resolveWikilink(path);
 
           // Determine embed type based on file extension
+          // Track all block ranges for atomicRanges facet
+          blockRanges.push({ from: node.from, to: node.to });
+
           if (isImageFile(path)) {
             // Image embed with parameters
             const imageSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
@@ -493,6 +501,9 @@ function buildAllDecorations(
           const target = embedMatch[1];
           const { path, params } = parseEmbedTarget(target);
           const resolved = fullConfig.resolveWikilink(path);
+
+          // Track block range for atomicRanges facet
+          blockRanges.push({ from: node.from, to: node.to });
 
           // Determine embed type based on file extension
           if (isImageFile(path)) {
@@ -609,6 +620,8 @@ function buildAllDecorations(
       continue;
     }
     if (cursor < block.from || cursor > block.to) {
+      // Track range for atomicRanges (only when decorated)
+      blockRanges.push({ from: block.from, to: block.to });
       blockDecorations.push(
         Decoration.replace({
           widget: new CodeBlockWidget(block.code, block.language),
@@ -623,7 +636,8 @@ function buildAllDecorations(
   for (const block of mathBlocks) {
     if (cursor >= block.from && cursor <= block.to) continue; // Cursor inside, show raw
     if (block.display) {
-      // Display math is block-level
+      // Display math is block-level - track range for atomicRanges
+      blockRanges.push({ from: block.from, to: block.to });
       blockDecorations.push(
         Decoration.replace({
           widget: new MathWidget(block.latex, block.display),
@@ -644,6 +658,8 @@ function buildAllDecorations(
   const mermaidBlocks = findMermaidBlocks(view.state);
   for (const block of mermaidBlocks) {
     if (cursor >= block.from && cursor <= block.to) continue; // Cursor inside, show raw
+    // Track range for atomicRanges
+    blockRanges.push({ from: block.from, to: block.to });
     blockDecorations.push(
       Decoration.replace({
         widget: new MermaidWidget(block.code),
@@ -661,6 +677,8 @@ function buildAllDecorations(
       // Cursor inside callout, show raw
       continue;
     }
+    // Track range for atomicRanges
+    blockRanges.push({ from: callout.from, to: callout.to });
     blockDecorations.push(
       Decoration.replace({
         widget: new CalloutWidget(
@@ -678,11 +696,15 @@ function buildAllDecorations(
   return {
     inline: Decoration.set(inlineDecorations, true),
     block: Decoration.set(blockDecorations, true),
+    blockRanges,
   };
 }
 
 // Effect to update block decorations in the StateField
 const setBlockDecorations = StateEffect.define<DecorationSet>();
+
+// Effect to update atomic ranges (for cursor motion around block widgets)
+const setAtomicRanges = StateEffect.define<RangeSet<Decoration>>();
 
 export function createLivePreview(config: LivePreviewConfig = {}) {
   const resolvedConfig = { ...DEFAULT_CONFIG, ...config };
@@ -710,31 +732,71 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
     provide: (field) => EditorView.decorations.from(field),
   });
 
+  // StateField for atomic ranges (used by cursor motion to skip over block widgets)
+  const atomicRangesField = StateField.define<RangeSet<Decoration>>({
+    create() {
+      return RangeSet.empty;
+    },
+    update(value, tr) {
+      for (const effect of tr.effects) {
+        if (effect.is(setAtomicRanges)) {
+          return effect.value;
+        }
+      }
+      if (tr.docChanged) {
+        return value.map(tr.changes);
+      }
+      return value;
+    },
+    provide: (field) => EditorView.atomicRanges.of((view) => view.state.field(field)),
+  });
+
   // ViewPlugin for inline decorations and coordinating block decoration updates
   const livePreviewPlugin = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
       pendingBlockUpdate: DecorationSet | null = null;
+      pendingAtomicRanges: RangeSet<Decoration> | null = null;
+      destroyed = false;
 
       constructor(view: EditorView) {
         const result = buildAllDecorations(view, resolvedConfig);
         this.decorations = result.inline;
-        // Schedule block decorations update for next frame
+        // Schedule block decorations and atomic ranges update for next frame
         this.pendingBlockUpdate = result.block;
+        this.pendingAtomicRanges = this.buildAtomicRanges(result.blockRanges);
         requestAnimationFrame(() => {
-          if (this.pendingBlockUpdate) {
-            view.dispatch({ effects: setBlockDecorations.of(this.pendingBlockUpdate) });
-            this.pendingBlockUpdate = null;
+          if (!this.destroyed) {
+            const effects: StateEffect<any>[] = [];
+            if (this.pendingBlockUpdate) {
+              effects.push(setBlockDecorations.of(this.pendingBlockUpdate));
+              this.pendingBlockUpdate = null;
+            }
+            if (this.pendingAtomicRanges) {
+              effects.push(setAtomicRanges.of(this.pendingAtomicRanges));
+              this.pendingAtomicRanges = null;
+            }
+            if (effects.length > 0) {
+              view.dispatch({ effects });
+            }
           }
         });
       }
 
+      buildAtomicRanges(ranges: { from: number; to: number }[]): RangeSet<Decoration> {
+        if (ranges.length === 0) return RangeSet.empty;
+        // Sort ranges by position (required for RangeSet)
+        const sorted = [...ranges].sort((a, b) => a.from - b.from);
+        const markers: Range<Decoration>[] = sorted.map((r) => atomicMarker.range(r.from, r.to));
+        return RangeSet.of(markers);
+      }
+
       update(update: ViewUpdate) {
-        // Skip if this update was caused by our own block decoration dispatch
-        const isBlockDecorationsUpdate = update.transactions.some((tr) =>
-          tr.effects.some((e) => e.is(setBlockDecorations))
+        // Skip if this update was caused by our own dispatch
+        const isOwnUpdate = update.transactions.some((tr) =>
+          tr.effects.some((e) => e.is(setBlockDecorations) || e.is(setAtomicRanges))
         );
-        if (isBlockDecorationsUpdate) {
+        if (isOwnUpdate) {
           return;
         }
 
@@ -744,12 +806,23 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
         if (update.docChanged || update.selectionSet || update.viewportChanged || triggerChanged) {
           const result = buildAllDecorations(update.view, resolvedConfig);
           this.decorations = result.inline;
-          // Schedule block decorations update for next frame to avoid recursive dispatch
+          // Schedule block decorations and atomic ranges update for next frame to avoid recursive dispatch
           this.pendingBlockUpdate = result.block;
+          this.pendingAtomicRanges = this.buildAtomicRanges(result.blockRanges);
           requestAnimationFrame(() => {
-            if (this.pendingBlockUpdate) {
-              update.view.dispatch({ effects: setBlockDecorations.of(this.pendingBlockUpdate) });
-              this.pendingBlockUpdate = null;
+            if (!this.destroyed) {
+              const effects: StateEffect<any>[] = [];
+              if (this.pendingBlockUpdate) {
+                effects.push(setBlockDecorations.of(this.pendingBlockUpdate));
+                this.pendingBlockUpdate = null;
+              }
+              if (this.pendingAtomicRanges) {
+                effects.push(setAtomicRanges.of(this.pendingAtomicRanges));
+                this.pendingAtomicRanges = null;
+              }
+              if (effects.length > 0) {
+                update.view.dispatch({ effects });
+              }
             }
           });
           if (triggerChanged) {
@@ -757,13 +830,19 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
           }
         }
       }
+
+      destroy() {
+        this.destroyed = true;
+        this.pendingBlockUpdate = null;
+        this.pendingAtomicRanges = null;
+      }
     },
     {
       decorations: (v) => v.decorations,
     }
   );
 
-  return [blockDecorationsField, livePreviewPlugin];
+  return [blockDecorationsField, atomicRangesField, livePreviewPlugin];
 }
 
 // Static version for tests (no config) - returns just inline decorations to avoid the error

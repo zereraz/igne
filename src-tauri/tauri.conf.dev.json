@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Igne",
+  "productName": "Igne Dev",
   "version": "0.2.0",
-  "identifier": "com.igne.app",
+  "identifier": "com.igne.dev",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Igne",
+        "title": "Igne Dev",
         "width": 1200,
         "height": 800,
         "resizable": true,
@@ -40,33 +40,15 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/64x64.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "fileAssociations": [
-      {
-        "ext": ["md", "markdown", "mdx"],
-        "mimeType": "text/markdown",
-        "name": "Markdown",
-        "description": "Markdown document",
-        "role": "Editor"
-      }
+      "icons-dev/32x32.png",
+      "icons-dev/128x128.png",
+      "icons-dev/128x128@2x.png",
+      "icons-dev/64x64.png",
+      "icons-dev/icon.icns",
+      "icons-dev/icon.ico"
     ],
     "macOS": {
       "minimumSystemVersion": "10.15"
-    },
-    "createUpdaterArtifacts": true
-  },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc1QUE4NUY3QjBCOUUwMDEKUldRQjRMbXc5NFdxZFJ5TDN4SGZzL3Z0aHFGbjRieXhHY3NWNGZYS3hMMFJCRVdKV1M0NWU4NFEK",
-      "endpoints": [
-        "https://github.com/zereraz/igne/releases/latest/download/latest.json"
-      ]
     }
   }
 }

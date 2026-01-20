@@ -21,6 +21,11 @@
     { "identifier": "fs:allow-write", "allow": [{ "path": "**" }] },
     { "identifier": "fs:allow-exists", "allow": [{ "path": "**" }] },
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "global-shortcut:allow-is-registered",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "global-shortcut:allow-unregister-all",
+    "opener:default"
   ]
 }
