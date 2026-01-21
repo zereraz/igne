@@ -58,6 +58,15 @@
     ],
     "macOS": {
       "minimumSystemVersion": "10.15"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNFRUU4MUE2RTdBMDg4NzUKUldSMWlLRG5wb0h1UGhtUTAvZkF5djA0MVhKM0szdFdkRExNd1BKazM1aG0xUVN5bnFFWDRCd0YK",
+      "endpoints": [
+        "https://github.com/zereraz/igne/releases/latest/download/latest.json"
+      ]
     }
   }
 }
