@@ -128,6 +128,7 @@ class WorkspaceStateManager {
                 name: filePath.split(/[/\\]/).pop() || '',
                 content: '', // Will be loaded separately
                 isDirty: false,
+                isVirtual: false,
               };
               tabs.push(tab);
 

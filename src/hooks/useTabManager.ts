@@ -24,7 +24,7 @@ export function useTabManager() {
         );
       }
       // Open new tab
-      const newTab: OpenFile = { path, name, content, isDirty };
+      const newTab: OpenFile = { path, name, content, isDirty, isVirtual: false };
       return [...prev, newTab];
     });
     setActiveTabPath(path);
