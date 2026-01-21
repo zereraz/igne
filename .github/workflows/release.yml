@@ -47,6 +47,9 @@ jobs:
             - **macOS (Intel)**: Download `Igne_${{ steps.get-version.outputs.version }}_x64.dmg`
             - **Windows**: Download `Igne_${{ steps.get-version.outputs.version }}_x64-setup.exe`
             - **Linux**: Download `Igne_${{ steps.get-version.outputs.version }}_amd64.deb` or `.AppImage`
+
+            ### macOS Note
+            If you see "app is damaged", run: `xattr -cr /Applications/Igne.app`
           draft: true
           prerelease: false
         env:
