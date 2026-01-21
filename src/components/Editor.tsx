@@ -10,6 +10,7 @@ import { createMarkdownLanguage } from '../extensions/markdownLanguage';
 import { searchStore } from '../stores/searchStore';
 import { handleImagePaste, handleImageDrop } from '../utils/imageHandler';
 import { extractHeadingContent, headingCache } from '../utils/headingFinder';
+import { safeArrayIndex } from '../utils/clamp';
 import { SearchReplacePanel, FindOptions } from './SearchReplacePanel';
 import type { WikilinkSearchResult, EditorChangeHandler, WikilinkClickHandler } from '../types';
 
@@ -29,9 +30,10 @@ interface EditorProps {
   currentFilePath?: string | null;
   scrollPosition?: number;
   refreshTrigger?: { current: number };
+  lineWrapping?: boolean;
 }
 
-export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick, onCursorPositionChange, vaultPath, currentFilePath, scrollPosition, refreshTrigger }: EditorProps) {
+export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick, onCursorPositionChange, vaultPath, currentFilePath, scrollPosition, refreshTrigger, lineWrapping = true }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -115,8 +117,8 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       setSelectedIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter' && searchResults.length > 0) {
       e.preventDefault();
-      const safeIndex = Math.min(Math.max(0, selectedIndex), searchResults.length - 1);
-      selectWikilink(searchResults[safeIndex].name);
+      const idx = safeArrayIndex(selectedIndex, searchResults.length);
+      selectWikilink(searchResults[idx].name);
     } else if (e.key === 'Escape') {
       e.preventDefault();
       setWikilinkSearch(null);
@@ -328,6 +330,8 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
 
     const extensions = [
       baseTheme,
+      // Line wrapping - wrap long lines to fit the editor width
+      ...(lineWrapping ? [EditorView.lineWrapping] : []),
       history(),
       search({ top: true }), // Enable search functionality with highlighting
       highlightSelectionMatches(), // Highlight all matches when text is selected

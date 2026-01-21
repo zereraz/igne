@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { AppearanceSettingsTab } from './AppearanceSettingsTab';
+import { EditorSettingsTab } from './EditorSettingsTab';
 import { PluginsTab } from './PluginsTab';
 import type { VaultSettings, AppearanceSettings } from '../types';
 
@@ -11,9 +12,11 @@ interface SettingsModalProps {
   appearanceSettings: AppearanceSettings;
   onUpdateAppearance: (settings: Partial<AppearanceSettings>) => void;
   vaultPath: string | null;
+  lineWrapping: boolean;
+  onLineWrappingChange: (enabled: boolean) => void;
 }
 
-type SettingsTab = 'general' | 'appearance' | 'plugins' | 'editor' | 'hotkeys';
+type SettingsTab = 'appearance' | 'editor' | 'plugins';
 
 export function SettingsModal({
   isOpen,
@@ -22,8 +25,13 @@ export function SettingsModal({
   appearanceSettings,
   onUpdateAppearance,
   vaultPath,
+  lineWrapping,
+  onLineWrappingChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('appearance');
+
+  // Suppress unused variable warning
+  void vaultSettings;
 
   // Close modal on ESC key
   useEffect(() => {
@@ -39,14 +47,10 @@ export function SettingsModal({
   if (!isOpen) return null;
 
   const tabs: { id: SettingsTab; label: string }[] = [
-    { id: 'general', label: 'General' },
     { id: 'appearance', label: 'Appearance' },
-    { id: 'plugins', label: 'Plugins' },
     { id: 'editor', label: 'Editor' },
-    { id: 'hotkeys', label: 'Hotkeys' },
+    { id: 'plugins', label: 'Plugins' },
   ];
-
-  const fontFamily = '"IBM Plex Mono", monospace';
 
   return (
     <div
@@ -66,8 +70,8 @@ export function SettingsModal({
     >
       <div
         style={{
-          backgroundColor: '#1f1f23',
-          border: '1px solid #3f3f46',
+          backgroundColor: 'var(--background-primary-alt)',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '4px',
           width: '800px',
           maxWidth: '90vw',
@@ -86,7 +90,7 @@ export function SettingsModal({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 20px',
-            borderBottom: '1px solid #3f3f46',
+            borderBottom: '1px solid var(--background-modifier-border)',
           }}
         >
           <h2
@@ -94,8 +98,8 @@ export function SettingsModal({
               margin: 0,
               fontSize: '16px',
               fontWeight: 600,
-              color: '#e4e4e7',
-              fontFamily,
+              color: 'var(--text-normal)',
+              fontFamily: 'var(--font-interface)',
             }}
           >
             Settings
@@ -110,18 +114,18 @@ export function SettingsModal({
               height: '28px',
               border: 'none',
               background: 'transparent',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               cursor: 'pointer',
               borderRadius: '2px',
               padding: '0',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#3f3f46';
-              e.currentTarget.style.color = '#e4e4e7';
+              e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+              e.currentTarget.style.color = 'var(--text-normal)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#71717a';
+              e.currentTarget.style.color = 'var(--text-faint)';
             }}
             title="Close (Esc)"
           >
@@ -135,7 +139,7 @@ export function SettingsModal({
           <div
             style={{
               width: '180px',
-              borderRight: '1px solid #3f3f46',
+              borderRight: '1px solid var(--background-modifier-border)',
               padding: '8px 0',
               overflowY: 'auto',
             }}
@@ -148,18 +152,18 @@ export function SettingsModal({
                   width: '100%',
                   padding: '8px 16px',
                   border: 'none',
-                  background: activeTab === tab.id ? '#27272a' : 'transparent',
-                  color: activeTab === tab.id ? '#a78bfa' : '#a1a1aa',
+                  background: activeTab === tab.id ? 'var(--background-secondary)' : 'transparent',
+                  color: activeTab === tab.id ? 'var(--color-accent)' : 'var(--text-muted)',
                   cursor: 'pointer',
                   fontSize: '13px',
                   fontWeight: 500,
                   textAlign: 'left',
-                  fontFamily,
+                  fontFamily: 'var(--font-interface)',
                   transition: 'background-color 100ms ease',
                 }}
                 onMouseEnter={(e) => {
                   if (activeTab !== tab.id) {
-                    e.currentTarget.style.backgroundColor = '#27272a';
+                    e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
                   }
                 }}
                 onMouseLeave={(e) => {
@@ -188,40 +192,13 @@ export function SettingsModal({
                 vaultPath={vaultPath}
               />
             )}
-            {activeTab === 'plugins' && <PluginsTab vaultPath={vaultPath} />}
-            {activeTab === 'general' && (
-              <div
-                style={{
-                  color: '#71717a',
-                  fontSize: '13px',
-                  fontFamily,
-                }}
-              >
-                <p>General settings coming soon...</p>
-              </div>
-            )}
             {activeTab === 'editor' && (
-              <div
-                style={{
-                  color: '#71717a',
-                  fontSize: '13px',
-                  fontFamily,
-                }}
-              >
-                <p>Editor settings coming soon...</p>
-              </div>
+              <EditorSettingsTab
+                lineWrapping={lineWrapping}
+                onLineWrappingChange={onLineWrappingChange}
+              />
             )}
-            {activeTab === 'hotkeys' && (
-              <div
-                style={{
-                  color: '#71717a',
-                  fontSize: '13px',
-                  fontFamily,
-                }}
-              >
-                <p>Hotkey settings coming soon...</p>
-              </div>
-            )}
+            {activeTab === 'plugins' && <PluginsTab vaultPath={vaultPath} />}
           </div>
         </div>
       </div>

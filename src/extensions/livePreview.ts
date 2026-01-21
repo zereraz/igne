@@ -1,6 +1,7 @@
 import { syntaxTree } from '@codemirror/language';
 import { EditorView, Decoration, DecorationSet, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import { Range, EditorState, StateField, StateEffect, RangeSet } from '@codemirror/state';
+import { logger } from '../utils/logger';
 import {
   WikilinkWidget,
   EmbedWidget,
@@ -735,20 +736,26 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
   // StateField for atomic ranges (used by cursor motion to skip over block widgets)
   const atomicRangesField = StateField.define<RangeSet<Decoration>>({
     create() {
+      logger.debug('livePreview', 'atomicRangesField.create()');
       return RangeSet.empty;
     },
     update(value, tr) {
       for (const effect of tr.effects) {
         if (effect.is(setAtomicRanges)) {
+          logger.debug('livePreview', 'atomicRangesField.update() - setAtomicRanges effect');
           return effect.value;
         }
       }
       if (tr.docChanged) {
+        logger.debug('livePreview', 'atomicRangesField.update() - docChanged');
         return value.map(tr.changes);
       }
       return value;
     },
-    provide: (field) => EditorView.atomicRanges.of((view) => view.state.field(field)),
+    provide: (field) => EditorView.atomicRanges.of((view) => {
+      logger.debug('livePreview', 'atomicRanges.of() provider called');
+      return view.state.field(field);
+    }),
   });
 
   // ViewPlugin for inline decorations and coordinating block decoration updates

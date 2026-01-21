@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { GlobalSettings } from '../types';
 import { readJsonSafe, writeJsonSafe, fileExists } from '../utils/safeJson';
+import { logger } from '../utils/logger';
 
 // Helper function to get app data directory
 async function getAppDataDir(): Promise<string> {
@@ -26,6 +27,7 @@ const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   defaultVaultLocation: '~/Documents',
   nativeMenus: true,
   framelessWindow: false,
+  lineWrapping: true,
 };
 
 class GlobalSettingsStore {
@@ -33,9 +35,11 @@ class GlobalSettingsStore {
   private settingsPath: string = '';
 
   async init(): Promise<void> {
+    logger.debug('GlobalSettingsStore', 'init() called');
     try {
       const appData = await getAppDataDir();
       this.settingsPath = `${appData}/settings.json`;
+      logger.debug('GlobalSettingsStore', 'settingsPath:', this.settingsPath);
 
       // Load existing settings
       if (this.settingsPath && await fileExists(this.settingsPath)) {
@@ -49,18 +53,18 @@ class GlobalSettingsStore {
             version: loaded.version || 1,
           };
 
-          console.log('[GlobalSettingsStore] Loaded settings:', {
+          logger.info('GlobalSettingsStore', 'Loaded settings', {
             openLastVault: this.settings.openLastVault,
             language: this.settings.language,
           });
         } else {
-          console.log('[GlobalSettingsStore] No existing settings found, using defaults');
+          logger.debug('GlobalSettingsStore', 'No existing settings found, using defaults');
         }
       } else {
-        console.log('[GlobalSettingsStore] No existing settings found, using defaults');
+        logger.debug('GlobalSettingsStore', 'No existing settings found, using defaults');
       }
     } catch (e) {
-      console.error('[GlobalSettingsStore] Failed to initialize:', e);
+      logger.error('GlobalSettingsStore', 'Failed to initialize', e);
     }
   }
 
@@ -75,29 +79,32 @@ class GlobalSettingsStore {
         preserveUnknown: true,
         merge: true,
       });
-      console.log('[GlobalSettingsStore] Saved settings');
+      logger.debug('GlobalSettingsStore', 'Saved settings');
     } catch (e) {
-      console.error('[GlobalSettingsStore] Failed to save settings:', e);
+      logger.error('GlobalSettingsStore', 'Failed to save settings', e);
     }
   }
 
   getSettings(): GlobalSettings {
+    logger.debug('GlobalSettingsStore', 'getSettings() called from:', new Error().stack?.split('\n')[2]?.trim());
     return { ...this.settings };
   }
 
   async updateSettings(updates: Partial<GlobalSettings>): Promise<void> {
+    logger.debug('GlobalSettingsStore', 'updateSettings() called with:', updates);
+    logger.debug('GlobalSettingsStore', 'updateSettings() called from:', new Error().stack?.split('\n')[2]?.trim());
     this.settings = {
       ...this.settings,
       ...updates,
     };
     await this.save();
-    console.log('[GlobalSettingsStore] Updated settings:', updates);
+    logger.info('GlobalSettingsStore', 'Updated settings', updates);
   }
 
   async reset(): Promise<void> {
     this.settings = { ...DEFAULT_GLOBAL_SETTINGS };
     await this.save();
-    console.log('[GlobalSettingsStore] Reset settings to defaults');
+    logger.info('GlobalSettingsStore', 'Reset settings to defaults');
   }
 }
 

@@ -8,6 +8,7 @@
 import { useEffect, useCallback } from 'react';
 import { CommandRegistry } from '../commands/registry';
 import type { CommandSource } from '../tools/types';
+import { logger } from '../utils/logger';
 
 interface KeyboardShortcut {
   key: string;
@@ -33,7 +34,8 @@ interface UseKeyboardShortcutsOptions {
  * Check if a keyboard event matches a hotkey pattern
  */
 function matchesHotkey(e: KeyboardEvent, key: string, modifiers?: { meta?: boolean; ctrl?: boolean; alt?: boolean; shift?: boolean }): boolean {
-  if (e.key !== key) return false;
+  // Case-insensitive key matching
+  if (e.key.toLowerCase() !== key.toLowerCase()) return false;
 
   const hasMeta = e.metaKey || e.ctrlKey; // Treat Cmd and Ctrl as equivalent
 
@@ -63,6 +65,23 @@ export function useKeyboardShortcuts({
 
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
+      logger.debug('useKeyboardShortcuts', 'handleKeyDown', {
+        key: e.key,
+        meta: e.metaKey,
+        ctrl: e.ctrlKey,
+        shift: e.shiftKey,
+        alt: e.altKey,
+        target: (e.target as HTMLElement)?.tagName,
+        targetClass: (e.target as HTMLElement)?.className,
+      });
+
+      // Skip if inside input/textarea (but allow in editor)
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        logger.debug('useKeyboardShortcuts', 'Skipping - inside INPUT/TEXTAREA');
+        return;
+      }
+
       // Find all commands with matching hotkeys
       const commands = CommandRegistry.getAll();
 

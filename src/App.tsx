@@ -56,6 +56,7 @@ import { loadTemplates, insertTemplateIntoFile, createFileFromTemplate } from '.
 import { ensureDefaultVault } from './utils/defaultVault';
 import { CommandRegistry } from './commands/registry';
 import { setWorkspaceManager } from './tools/workspace';
+import { logger } from './utils/logger';
 
 // Dynamic app styles based on theme - using CSS variables from obsidian.css
 const styles = {
@@ -297,6 +298,7 @@ function App() {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [templates, setTemplates] = useState<Array<{ name: string; path: string }>>([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [lineWrapping, setLineWrapping] = useState(true);
   const switchingVaultRef = useRef(false);
 
   // Ref to trigger editor decoration rebuilds when files change
@@ -507,6 +509,10 @@ function App() {
           globalSettingsStore.init(),
         ]);
         console.log('[App] Stores initialized');
+
+        // Load global settings
+        const globalSettings = globalSettingsStore.getSettings();
+        setLineWrapping(globalSettings.lineWrapping);
       } catch (e) {
         console.error('[App] Store init failed, using default vault:', e);
       }
@@ -775,9 +781,19 @@ function App() {
 
   const handleFileSelect = useCallback(
     (path: string, newTabFlag = false) => {
+      logger.info('handleFileSelect', 'called', { path, newTabFlag });
+      logger.debug('handleFileSelect', 'file type check', {
+        isImage: isImageFile(path),
+        isVideo: isVideoFile(path),
+        isPdf: isPdfFile(path),
+      });
+
       // Open binary files (images, videos, PDFs) with system default app
       if (isImageFile(path) || isVideoFile(path) || isPdfFile(path)) {
-        openPath(path).catch(console.error);
+        logger.info('handleFileSelect', 'Opening binary file with system app', { path });
+        openPath(path)
+          .then(() => logger.info('handleFileSelect', 'openPath succeeded', { path }))
+          .catch((err) => logger.error('handleFileSelect', 'openPath failed', { path, error: String(err) }));
         return;
       }
 
@@ -1307,6 +1323,12 @@ function App() {
       }
     }
   }, [appearanceSettings]);
+
+  // Handle line wrapping setting changes
+  const handleLineWrappingChange = useCallback(async (enabled: boolean) => {
+    setLineWrapping(enabled);
+    await globalSettingsStore.updateSettings({ lineWrapping: enabled });
+  }, []);
 
   // Use keyboard shortcuts hook
   // This must be after all handlers are defined to avoid forward reference issues
@@ -1971,6 +1993,7 @@ function App() {
                     currentFilePath={activeTab.path}
                     scrollPosition={scrollToPosition}
                     refreshTrigger={editorRefreshTrigger}
+                    lineWrapping={lineWrapping}
                     onWikilinkClick={(target) => {
                       console.log('[App] onWikilinkClick called:', target);
                       if (!isVaultReady) {
@@ -2211,6 +2234,8 @@ function App() {
           appearanceSettings={appearanceSettings}
           onUpdateAppearance={handleUpdateAppearance}
           vaultPath={vaultPath}
+          lineWrapping={lineWrapping}
+          onLineWrappingChange={handleLineWrappingChange}
         />
       )}
     </div>

@@ -1,7 +1,9 @@
+use log::{info, debug, error, LevelFilter};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -9,6 +11,41 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event, EventKind};
+
+/// Initialize logging based on build profile
+fn init_logging() {
+    let is_dev = cfg!(debug_assertions);
+
+    let mut builder = env_logger::Builder::new();
+
+    if is_dev {
+        // Dev mode: verbose logging to stderr
+        builder.filter_level(LevelFilter::Debug);
+        builder.format(|buf, record| {
+            writeln!(
+                buf,
+                "[{}] {} - {}:{} - {}",
+                record.level(),
+                record.target(),
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        });
+    } else {
+        // Prod mode: only warnings and errors
+        builder.filter_level(LevelFilter::Warn);
+        builder.format(|buf, record| {
+            writeln!(buf, "[{}] {}", record.level(), record.args())
+        });
+    }
+
+    // Allow RUST_LOG env var to override
+    builder.parse_env("RUST_LOG");
+    builder.init();
+
+    info!("Logging initialized (dev={})", is_dev);
+}
 
 /// State for managing file watchers - allows proper cleanup
 pub struct WatcherState {
@@ -443,8 +480,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _shortcut, event| {
+                .with_handler(|app, shortcut, event| {
+                    debug!("GlobalShortcut handler: shortcut={:?}, state={:?}", shortcut, event.state());
                     if event.state() == ShortcutState::Pressed {
+                        info!("Global shortcut Cmd+Option+N pressed - bringing window to focus");
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
                             let _ = window.unminimize();
@@ -590,6 +629,10 @@ pub fn run() {
             ensure_default_vault
         ])
         .setup(|app| {
+            // Initialize logging first
+            init_logging();
+            info!("Igne app starting...");
+
             // Global shortcut: Cmd+Option+N (⌘+⌥+N) for quick capture
             #[cfg(desktop)]
             {
@@ -597,8 +640,10 @@ pub fn run() {
                     Some(Modifiers::SUPER | Modifiers::ALT),
                     Code::KeyN
                 );
-                if let Err(e) = app.global_shortcut().register(shortcut) {
-                    eprintln!("Failed to register global shortcut: {}", e);
+                debug!("Registering global shortcut Cmd+Option+N...");
+                match app.global_shortcut().register(shortcut) {
+                    Ok(_) => info!("Global shortcut Cmd+Option+N registered successfully"),
+                    Err(e) => error!("Failed to register global shortcut: {}", e),
                 }
             }
 

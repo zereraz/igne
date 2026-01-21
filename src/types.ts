@@ -31,7 +31,7 @@ export interface OpenFile {
   content: string;
   isDirty: boolean;
   /** If true, file only exists in memory until content is typed */
-  isVirtual?: boolean;
+  isVirtual: boolean;
 }
 
 // =============================================================================
@@ -376,6 +376,7 @@ export interface GlobalSettings {
   defaultVaultLocation: string;
   nativeMenus: boolean;
   framelessWindow: boolean;
+  lineWrapping: boolean;
 }
 
 // --- Vault Settings ---
