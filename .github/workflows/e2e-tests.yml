@@ -27,11 +27,9 @@ jobs:
       - name: Run unit tests
         run: npm run test:run
 
-  # E2E tests - only on Linux (Tauri WebDriver requirement)
+  # E2E tests (dev mode) - uses mocks, no Tauri build required
   e2e-tests:
     runs-on: ubuntu-latest
-    # Only run on main branch or when e2e tests change
-    if: github.ref == 'refs/heads/main' || contains(github.event.pull_request.files, 'tests/')
     steps:
       - uses: actions/checkout@v4
 
@@ -43,37 +41,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          target: x86_64-unknown-linux-gnu
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-3-dev \
-            libwebkit2gtk-4.0-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
-
-      - name: Install tauri-driver
-        run: cargo install tauri-driver --locked
-
-      - name: Build Tauri app
-        run: npm run tauri build
-
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Start tauri-driver
-        run: |
-          tauri-driver --port 4444 &
-          sleep 3
-
-      - name: Run E2E tests
-        run: npx playwright test --project=tauri
+      - name: Run E2E tests (dev mode with mocks)
+        run: npx playwright test --project=dev
         timeout-minutes: 10
 
       - name: Upload artifacts on failure
@@ -83,8 +55,3 @@ jobs:
           name: playwright-traces
           path: test-results/
           retention-days: 7
-
-      - name: Stop tauri-driver
-        if: always()
-        run: |
-          pkill -f tauri-driver || true
