@@ -65,9 +65,9 @@ export function StarredFilesPanel({
         style={{
           padding: '16px',
           textAlign: 'center',
-          color: '#71717a',
+          color: 'var(--text-faint)',
           fontSize: '12px',
-          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+          fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
         }}
       >
         No vault open
@@ -94,7 +94,7 @@ export function StarredFilesPanel({
       <div
         style={{
           padding: '12px 16px',
-          borderBottom: '1px solid #3f3f46',
+          borderBottom: '1px solid var(--background-modifier-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -107,7 +107,7 @@ export function StarredFilesPanel({
             gap: '8px',
             fontSize: '11px',
             fontWeight: 600,
-            color: '#a1a1aa',
+            color: 'var(--text-muted)',
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
           }}
@@ -118,8 +118,8 @@ export function StarredFilesPanel({
         <div
           style={{
             fontSize: '10px',
-            color: '#71717a',
-            fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+            color: 'var(--text-faint)',
+            fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
           }}
         >
           {starredFiles.length} file{starredFiles.length !== 1 ? 's' : ''}
@@ -139,9 +139,9 @@ export function StarredFilesPanel({
             style={{
               padding: '16px',
               textAlign: 'center',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               fontSize: '12px',
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             }}
           >
             Loading...
@@ -151,9 +151,9 @@ export function StarredFilesPanel({
             style={{
               padding: '16px',
               textAlign: 'center',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               fontSize: '12px',
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
               lineHeight: '1.6',
             }}
           >
@@ -171,7 +171,7 @@ export function StarredFilesPanel({
                 gap: '8px',
                 padding: '8px 12px',
                 marginBottom: '4px',
-                backgroundColor: file.path === currentFilePath ? 'rgba(167, 139, 250, 0.1)' : 'transparent',
+                backgroundColor: file.path === currentFilePath ? 'rgba(var(--color-accent-rgb), 0.1)' : 'transparent',
                 border: '1px solid transparent',
                 borderRadius: '4px',
                 cursor: 'pointer',
@@ -179,8 +179,8 @@ export function StarredFilesPanel({
               }}
               onMouseEnter={(e) => {
                 if (file.path !== currentFilePath) {
-                  e.currentTarget.style.backgroundColor = 'rgba(167, 139, 250, 0.05)';
-                  e.currentTarget.style.borderColor = '#3f3f46';
+                  e.currentTarget.style.backgroundColor = 'rgba(var(--color-accent-rgb), 0.05)';
+                  e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
                 }
               }}
               onMouseLeave={(e) => {
@@ -193,7 +193,7 @@ export function StarredFilesPanel({
               <FileText
                 size={14}
                 style={{
-                  color: file.path === currentFilePath ? '#a78bfa' : '#71717a',
+                  color: file.path === currentFilePath ? 'var(--color-accent)' : 'var(--text-faint)',
                   flexShrink: 0,
                 }}
               />
@@ -202,8 +202,8 @@ export function StarredFilesPanel({
                 style={{
                   flex: 1,
                   fontSize: '12px',
-                  color: file.path === currentFilePath ? '#e4e4e7' : '#a1a1aa',
-                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                  color: file.path === currentFilePath ? 'var(--text-normal)' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',

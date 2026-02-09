@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, FileText } from 'lucide-react';
 import { searchStore } from '../stores/searchStore';
+import { safeArrayIndex } from '../utils/clamp';
 import type { SearchResult, ModalProps } from '../types';
 
 interface QuickSwitcherProps extends Omit<ModalProps, 'title' | 'style' | 'className'> {
@@ -37,7 +38,8 @@ export function QuickSwitcher({ isOpen, onClose, onSelectFile }: QuickSwitcherPr
         setSelectedIndex((i) => Math.max(i - 1, 0));
       } else if (e.key === 'Enter' && results.length > 0) {
         e.preventDefault();
-        onSelectFile(results[selectedIndex].path);
+        const idx = safeArrayIndex(selectedIndex, results.length);
+        onSelectFile(results[idx].path);
         onClose();
         setQuery('');
       } else if (e.key === 'Escape') {
@@ -71,9 +73,9 @@ export function QuickSwitcher({ isOpen, onClose, onSelectFile }: QuickSwitcherPr
         style={{
           width: '520px',
           maxWidth: '90%',
-          backgroundColor: '#27272a',
+          backgroundColor: 'var(--background-secondary)',
           borderRadius: '2px',
-          border: '1px solid #3f3f46',
+          border: '1px solid var(--background-modifier-border)',
           boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
           overflow: 'hidden',
         }}
@@ -85,10 +87,10 @@ export function QuickSwitcher({ isOpen, onClose, onSelectFile }: QuickSwitcherPr
             display: 'flex',
             alignItems: 'center',
             padding: '12px 16px',
-            borderBottom: '1px solid #3f3f46',
+            borderBottom: '1px solid var(--background-modifier-border)',
           }}
         >
-          <Search size={18} style={{ color: '#71717a', marginRight: '12px', flexShrink: 0 }} />
+          <Search size={18} style={{ color: 'var(--text-faint)', marginRight: '12px', flexShrink: 0 }} />
           <input
             ref={inputRef}
             type="text"
@@ -101,9 +103,9 @@ export function QuickSwitcher({ isOpen, onClose, onSelectFile }: QuickSwitcherPr
               backgroundColor: 'transparent',
               border: 'none',
               outline: 'none',
-              color: '#e4e4e7',
+              color: 'var(--text-normal)',
               fontSize: '14px',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             }}
           />
         </div>
@@ -131,21 +133,40 @@ export function QuickSwitcher({ isOpen, onClose, onSelectFile }: QuickSwitcherPr
                   gap: '10px',
                   padding: '10px 16px',
                   cursor: 'pointer',
-                  backgroundColor: index === selectedIndex ? 'rgba(167, 139, 250, 0.15)' : 'transparent',
-                  borderLeft: index === selectedIndex ? '2px solid #a78bfa' : '2px solid transparent',
+                  backgroundColor: index === selectedIndex ? 'rgba(var(--color-accent-rgb), 0.15)' : 'transparent',
+                  borderLeft: index === selectedIndex ? '2px solid var(--color-accent)' : '2px solid transparent',
                   transition: 'background-color 100ms ease',
                 }}
               >
-                <FileText size={16} style={{ color: index === selectedIndex ? '#a78bfa' : '#71717a', flexShrink: 0 }} />
-                <span
-                  style={{
-                    color: index === selectedIndex ? '#e4e4e7' : '#a1a1aa',
-                    fontSize: '13px',
-                    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
-                  }}
-                >
-                  {result.name}
-                </span>
+                <FileText size={16} style={{ color: index === selectedIndex ? 'var(--color-accent)' : 'var(--text-faint)', flexShrink: 0 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <span
+                    style={{
+                      color: index === selectedIndex ? 'var(--text-normal)' : 'var(--text-muted)',
+                      fontSize: '13px',
+                      fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
+                    }}
+                  >
+                    {result.name}
+                  </span>
+                  {(() => {
+                    const folderPath = result.path.split('/').slice(0, -1).join('/');
+                    return folderPath ? (
+                      <span
+                        style={{
+                          color: 'var(--text-faint)',
+                          fontSize: '11px',
+                          fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {folderPath}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
               </div>
             ))}
           </div>
@@ -157,9 +178,9 @@ export function QuickSwitcher({ isOpen, onClose, onSelectFile }: QuickSwitcherPr
             style={{
               padding: '32px 16px',
               textAlign: 'center',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               fontSize: '13px',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             }}
           >
             No files found
@@ -171,22 +192,22 @@ export function QuickSwitcher({ isOpen, onClose, onSelectFile }: QuickSwitcherPr
           <div
             style={{
               padding: '10px 16px',
-              borderTop: '1px solid #3f3f46',
-              color: '#71717a',
+              borderTop: '1px solid var(--background-modifier-border)',
+              color: 'var(--text-faint)',
               fontSize: '11px',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
               display: 'flex',
               gap: '16px',
             }}
           >
             <span>
-              <kbd style={{ color: '#a1a1aa', marginRight: '4px' }}>↑↓</kbd> navigate
+              <kbd style={{ color: 'var(--text-muted)', marginRight: '4px' }}>↑↓</kbd> navigate
             </span>
             <span>
-              <kbd style={{ color: '#a1a1aa', marginRight: '4px' }}>Enter</kbd> open
+              <kbd style={{ color: 'var(--text-muted)', marginRight: '4px' }}>Enter</kbd> open
             </span>
             <span>
-              <kbd style={{ color: '#a1a1aa', marginRight: '4px' }}>Esc</kbd> close
+              <kbd style={{ color: 'var(--text-muted)', marginRight: '4px' }}>Esc</kbd> close
             </span>
           </div>
         )}

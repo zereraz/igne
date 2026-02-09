@@ -14,6 +14,8 @@ interface SettingsModalProps {
   vaultPath: string | null;
   lineWrapping: boolean;
   onLineWrappingChange: (enabled: boolean) => void;
+  readableLineLength: boolean;
+  onReadableLineLengthChange: (enabled: boolean) => void;
 }
 
 type SettingsTab = 'appearance' | 'editor' | 'plugins';
@@ -27,6 +29,8 @@ export function SettingsModal({
   vaultPath,
   lineWrapping,
   onLineWrappingChange,
+  readableLineLength,
+  onReadableLineLengthChange,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>('appearance');
 
@@ -196,6 +200,8 @@ export function SettingsModal({
               <EditorSettingsTab
                 lineWrapping={lineWrapping}
                 onLineWrappingChange={onLineWrappingChange}
+                readableLineLength={readableLineLength}
+                onReadableLineLengthChange={onReadableLineLengthChange}
               />
             )}
             {activeTab === 'plugins' && <PluginsTab vaultPath={vaultPath} />}

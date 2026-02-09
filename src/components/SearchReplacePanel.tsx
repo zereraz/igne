@@ -75,7 +75,7 @@ export function SearchReplacePanel({
       if (query.trim()) {
         onFind(query, { caseSensitive, regex, wholeWord });
       }
-    }, 300);
+    }, 150);
     return () => clearTimeout(timer);
   }, [query, caseSensitive, regex, wholeWord, onFind]);
 
@@ -92,8 +92,8 @@ export function SearchReplacePanel({
         position: 'absolute',
         top: '8px',
         right: '8px',
-        backgroundColor: '#27272a',
-        border: '1px solid #3f3f46',
+        backgroundColor: 'var(--background-secondary)',
+        border: '1px solid var(--background-modifier-border)',
         borderRadius: '4px',
         padding: '12px',
         zIndex: 1000,
@@ -110,7 +110,7 @@ export function SearchReplacePanel({
           right: '8px',
           background: 'none',
           border: 'none',
-          color: '#a1a1aa',
+          color: 'var(--text-muted)',
           cursor: 'pointer',
           padding: '4px',
           display: 'flex',
@@ -119,12 +119,12 @@ export function SearchReplacePanel({
           borderRadius: '2px',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-          e.currentTarget.style.color = '#e4e4e7';
+          e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+          e.currentTarget.style.color = 'var(--text-normal)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = 'transparent';
-          e.currentTarget.style.color = '#a1a1aa';
+          e.currentTarget.style.color = 'var(--text-muted)';
         }}
       >
         <X size={16} />
@@ -140,7 +140,7 @@ export function SearchReplacePanel({
               left: '8px',
               top: '50%',
               transform: 'translateY(-50%)',
-              color: '#71717a',
+              color: 'var(--text-faint)',
             }}
           />
           <input
@@ -153,10 +153,10 @@ export function SearchReplacePanel({
             style={{
               width: '100%',
               padding: '6px 8px 6px 32px',
-              backgroundColor: '#18181b',
-              border: '1px solid #3f3f46',
+              backgroundColor: 'var(--background-primary)',
+              border: '1px solid var(--background-modifier-border)',
               borderRadius: '2px',
-              color: '#e4e4e7',
+              color: 'var(--text-normal)',
               fontSize: '14px',
               outline: 'none',
             }}
@@ -175,10 +175,10 @@ export function SearchReplacePanel({
           style={{
             width: '100%',
             padding: '6px 8px',
-            backgroundColor: '#18181b',
-            border: '1px solid #3f3f46',
+            backgroundColor: 'var(--background-primary)',
+            border: '1px solid var(--background-modifier-border)',
             borderRadius: '2px',
-            color: '#e4e4e7',
+            color: 'var(--text-normal)',
             fontSize: '14px',
             outline: 'none',
           }}
@@ -200,7 +200,7 @@ export function SearchReplacePanel({
             alignItems: 'center',
             gap: '4px',
             fontSize: '12px',
-            color: '#a1a1aa',
+            color: 'var(--text-muted)',
             cursor: 'pointer',
             userSelect: 'none',
           }}
@@ -224,7 +224,7 @@ export function SearchReplacePanel({
             alignItems: 'center',
             gap: '4px',
             fontSize: '12px',
-            color: '#a1a1aa',
+            color: 'var(--text-muted)',
             cursor: 'pointer',
             userSelect: 'none',
           }}
@@ -248,7 +248,7 @@ export function SearchReplacePanel({
             alignItems: 'center',
             gap: '4px',
             fontSize: '12px',
-            color: '#a1a1aa',
+            color: 'var(--text-muted)',
             cursor: 'pointer',
             userSelect: 'none',
           }}
@@ -272,20 +272,20 @@ export function SearchReplacePanel({
         <div
           style={{
             fontSize: '11px',
-            color: '#71717a',
+            color: 'var(--text-faint)',
             marginBottom: '8px',
             padding: '6px 8px',
-            backgroundColor: '#18181b',
+            backgroundColor: 'var(--background-primary)',
             borderRadius: '2px',
-            border: '1px solid #3f3f46',
+            border: '1px solid var(--background-modifier-border)',
             lineHeight: '1.4',
           }}
         >
-          <div style={{ marginBottom: '4px', fontWeight: 500, color: '#a1a1aa' }}>Advanced search operators:</div>
-          <div>• <code style={{ color: '#a78bfa' }}>tag:important</code> - Search by tag</div>
-          <div>• <code style={{ color: '#a78bfa' }}>file:note</code> - Search in filename</div>
-          <div>• <code style={{ color: '#a78bfa' }}>path:journal/</code> - Search in folder</div>
-          <div>• <code style={{ color: '#a78bfa' }}>#tag</code> - Alternative tag syntax</div>
+          <div style={{ marginBottom: '4px', fontWeight: 500, color: 'var(--text-muted)' }}>Advanced search operators:</div>
+          <div>• <code style={{ color: 'var(--color-accent)' }}>tag:important</code> - Search by tag</div>
+          <div>• <code style={{ color: 'var(--color-accent)' }}>file:note</code> - Search in filename</div>
+          <div>• <code style={{ color: 'var(--color-accent)' }}>path:journal/</code> - Search in folder</div>
+          <div>• <code style={{ color: 'var(--color-accent)' }}>#tag</code> - Alternative tag syntax</div>
         </div>
       )}
 
@@ -294,7 +294,7 @@ export function SearchReplacePanel({
         <div
           style={{
             fontSize: '12px',
-            color: '#71717a',
+            color: 'var(--text-faint)',
             marginBottom: '8px',
             textAlign: 'center',
           }}
@@ -320,10 +320,10 @@ export function SearchReplacePanel({
           style={{
             flex: 1,
             padding: '6px 12px',
-            backgroundColor: query.trim() ? '#3f3f46' : '#27272a',
-            border: '1px solid #52525b',
+            backgroundColor: query.trim() ? 'var(--background-modifier-border)' : 'var(--background-secondary)',
+            border: '1px solid var(--interactive-normal)',
             borderRadius: '2px',
-            color: '#a1a1aa',
+            color: 'var(--text-muted)',
             cursor: query.trim() ? 'pointer' : 'not-allowed',
             fontSize: '12px',
             display: 'flex',
@@ -333,13 +333,13 @@ export function SearchReplacePanel({
           }}
           onMouseEnter={(e) => {
             if (query.trim()) {
-              e.currentTarget.style.backgroundColor = '#52525b';
-              e.currentTarget.style.borderColor = '#71717a';
+              e.currentTarget.style.backgroundColor = 'var(--interactive-normal)';
+              e.currentTarget.style.borderColor = 'var(--text-faint)';
             }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = query.trim() ? '#3f3f46' : '#27272a';
-            e.currentTarget.style.borderColor = '#52525b';
+            e.currentTarget.style.backgroundColor = query.trim() ? 'var(--background-modifier-border)' : 'var(--background-secondary)';
+            e.currentTarget.style.borderColor = 'var(--interactive-normal)';
           }}
         >
           <ArrowDown size={14} />
@@ -352,10 +352,10 @@ export function SearchReplacePanel({
           style={{
             flex: 1,
             padding: '6px 12px',
-            backgroundColor: query.trim() ? '#3f3f46' : '#27272a',
-            border: '1px solid #52525b',
+            backgroundColor: query.trim() ? 'var(--background-modifier-border)' : 'var(--background-secondary)',
+            border: '1px solid var(--interactive-normal)',
             borderRadius: '2px',
-            color: '#a1a1aa',
+            color: 'var(--text-muted)',
             cursor: query.trim() ? 'pointer' : 'not-allowed',
             fontSize: '12px',
             display: 'flex',
@@ -365,13 +365,13 @@ export function SearchReplacePanel({
           }}
           onMouseEnter={(e) => {
             if (query.trim()) {
-              e.currentTarget.style.backgroundColor = '#52525b';
-              e.currentTarget.style.borderColor = '#71717a';
+              e.currentTarget.style.backgroundColor = 'var(--interactive-normal)';
+              e.currentTarget.style.borderColor = 'var(--text-faint)';
             }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = query.trim() ? '#3f3f46' : '#27272a';
-            e.currentTarget.style.borderColor = '#52525b';
+            e.currentTarget.style.backgroundColor = query.trim() ? 'var(--background-modifier-border)' : 'var(--background-secondary)';
+            e.currentTarget.style.borderColor = 'var(--interactive-normal)';
           }}
         >
           <Replace size={14} />
@@ -384,10 +384,10 @@ export function SearchReplacePanel({
           style={{
             flex: 1,
             padding: '6px 12px',
-            backgroundColor: query.trim() ? '#a78bfa' : '#27272a',
-            border: '1px solid #a78bfa',
+            backgroundColor: query.trim() ? 'var(--color-accent)' : 'var(--background-secondary)',
+            border: '1px solid var(--color-accent)',
             borderRadius: '2px',
-            color: query.trim() ? '#18181b' : '#52525b',
+            color: query.trim() ? 'var(--background-primary)' : 'var(--interactive-normal)',
             cursor: query.trim() ? 'pointer' : 'not-allowed',
             fontSize: '12px',
             display: 'flex',
@@ -397,11 +397,11 @@ export function SearchReplacePanel({
           }}
           onMouseEnter={(e) => {
             if (query.trim()) {
-              e.currentTarget.style.backgroundColor = '#8b5cf6';
+              e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)';
             }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = query.trim() ? '#a78bfa' : '#27272a';
+            e.currentTarget.style.backgroundColor = query.trim() ? 'var(--color-accent)' : 'var(--background-secondary)';
           }}
         >
           <ReplaceAll size={14} />

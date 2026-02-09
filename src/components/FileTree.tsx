@@ -20,16 +20,35 @@ const getRowStyle = (depth: number, isSelected: boolean, isDragOver: boolean) =>
   paddingBottom: '0.25rem',
   cursor: 'pointer',
   borderRadius: '0.25rem',
-  backgroundColor: isDragOver ? '#3f3f46' : (isSelected ? '#3f3f46' : 'transparent'),
-  color: isSelected ? '#a78bfa' : 'inherit',
-  border: isDragOver ? '1px dashed #7c3aed' : 'none',
+  backgroundColor: isDragOver ? 'var(--background-tertiary)' : (isSelected ? 'var(--background-tertiary)' : 'transparent'),
+  color: isSelected ? 'var(--color-accent)' : 'inherit',
+  border: isDragOver ? '1px dashed var(--color-accent)' : 'none',
 });
 
 const getRowHoverStyle = (isHovered: boolean, isSelected: boolean, isDragOver: boolean) => ({
-  backgroundColor: isDragOver ? '#3f3f46' : (isSelected ? '#3f3f46' : (isHovered ? '#27272a' : 'transparent')),
+  backgroundColor: isDragOver ? 'var(--background-tertiary)' : (isSelected ? 'var(--background-tertiary)' : (isHovered ? 'var(--background-modifier-hover)' : 'transparent')),
 });
 
+function collectDuplicateNames(entries: FileEntry[]): Set<string> {
+  const counts = new Map<string, number>();
+  function walk(items: FileEntry[]) {
+    for (const item of items) {
+      if (!item.is_dir) {
+        counts.set(item.name, (counts.get(item.name) || 0) + 1);
+      }
+      if (item.children) walk(item.children);
+    }
+  }
+  walk(entries);
+  const dupes = new Set<string>();
+  for (const [name, count] of counts) {
+    if (count > 1) dupes.add(name);
+  }
+  return dupes;
+}
+
 export function FileTree({ entries, selectedPath, onSelect, onContextMenu, onDrop }: FileTreeProps) {
+  const duplicateNames = collectDuplicateNames(entries);
   return (
     <div style={{ fontSize: '0.875rem' }}>
       {entries.map((entry) => (
@@ -41,6 +60,7 @@ export function FileTree({ entries, selectedPath, onSelect, onContextMenu, onDro
           onSelect={onSelect}
           onContextMenu={onContextMenu}
           onDrop={onDrop}
+          duplicateNames={duplicateNames}
         />
       ))}
     </div>
@@ -54,9 +74,10 @@ interface FileTreeItemProps {
   onSelect: (path: string, newTab?: boolean) => void;
   onContextMenu?: (path: string, isFolder: boolean, x: number, y: number) => void;
   onDrop?: (sourcePath: string, targetPath: string) => void;
+  duplicateNames: Set<string>;
 }
 
-function FileTreeItem({ entry, depth, selectedPath, onSelect, onContextMenu, onDrop }: FileTreeItemProps) {
+function FileTreeItem({ entry, depth, selectedPath, onSelect, onContextMenu, onDrop, duplicateNames }: FileTreeItemProps) {
   const [expanded, setExpanded] = useState(depth < 1);
   const [isHovered, setIsHovered] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -127,24 +148,35 @@ function FileTreeItem({ entry, depth, selectedPath, onSelect, onContextMenu, onD
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
+        data-file={entry.is_dir ? undefined : entry.name}
+        data-folder={entry.is_dir ? entry.name : undefined}
       >
         {entry.is_dir ? (
           <>
             {expanded ? (
-              <ChevronDown style={{ width: '1rem', height: '1rem', color: '#71717a', flexShrink: 0 }} />
+              <ChevronDown style={{ width: '1rem', height: '1rem', color: 'var(--text-faint)', flexShrink: 0 }} />
             ) : (
-              <ChevronRight style={{ width: '1rem', height: '1rem', color: '#71717a', flexShrink: 0 }} />
+              <ChevronRight style={{ width: '1rem', height: '1rem', color: 'var(--text-faint)', flexShrink: 0 }} />
             )}
-            <Folder style={{ width: '1rem', height: '1rem', color: '#a1a1aa', flexShrink: 0 }} />
+            <Folder style={{ width: '1rem', height: '1rem', color: 'var(--text-muted)', flexShrink: 0 }} />
           </>
         ) : (
           <>
             <span style={{ width: '1rem', flexShrink: 0 }} />
-            <File style={{ width: '1rem', height: '1rem', color: '#71717a', flexShrink: 0 }} />
+            <File style={{ width: '1rem', height: '1rem', color: 'var(--text-faint)', flexShrink: 0 }} />
           </>
         )}
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {entry.name.replace('.md', '')}
+          {!entry.is_dir && duplicateNames.has(entry.name) && (() => {
+            const segments = entry.path.split('/');
+            const parent = segments.length >= 2 ? segments[segments.length - 2] : null;
+            return parent ? (
+              <span style={{ color: 'var(--text-faint)', fontSize: '0.75rem', marginLeft: '0.35rem' }}>
+                {parent}/
+              </span>
+            ) : null;
+          })()}
         </span>
       </div>
 
@@ -159,6 +191,7 @@ function FileTreeItem({ entry, depth, selectedPath, onSelect, onContextMenu, onD
               onSelect={onSelect}
               onContextMenu={onContextMenu}
               onDrop={onDrop}
+              duplicateNames={duplicateNames}
             />
           ))}
         </div>

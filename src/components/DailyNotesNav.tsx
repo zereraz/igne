@@ -60,17 +60,17 @@ export function DailyNotesNav({ vaultPath, currentFilePath, onNoteOpen }: DailyN
         alignItems: 'center',
         gap: '8px',
         padding: '6px 12px',
-        backgroundColor: '#27272a',
-        borderBottom: '1px solid #3f3f46',
+        backgroundColor: 'var(--background-secondary)',
+        borderBottom: '1px solid var(--background-modifier-border)',
       }}
     >
-      <Calendar size={14} style={{ color: '#71717a', flexShrink: 0 }} />
+      <Calendar size={14} style={{ color: 'var(--text-faint)', flexShrink: 0 }} />
       <span
         style={{
           flex: 1,
           fontSize: '11px',
-          color: '#a1a1aa',
-          fontFamily: '"IBM Plex Mono", monospace',
+          color: 'var(--text-muted)',
+          fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
           textAlign: 'center',
         }}
       >
@@ -81,21 +81,21 @@ export function DailyNotesNav({ vaultPath, currentFilePath, onNoteOpen }: DailyN
         style={{
           padding: '4px',
           backgroundColor: 'transparent',
-          border: '1px solid #3f3f46',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '2px',
-          color: '#a1a1aa',
+          color: 'var(--text-muted)',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#3f3f46';
-          e.currentTarget.style.color = '#e4e4e7';
+          e.currentTarget.style.backgroundColor = 'var(--background-modifier-border)';
+          e.currentTarget.style.color = 'var(--text-normal)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = 'transparent';
-          e.currentTarget.style.color = '#a1a1aa';
+          e.currentTarget.style.color = 'var(--text-muted)';
         }}
         title="Previous day (Ctrl+Shift+Left)"
       >
@@ -106,21 +106,21 @@ export function DailyNotesNav({ vaultPath, currentFilePath, onNoteOpen }: DailyN
         style={{
           padding: '4px',
           backgroundColor: 'transparent',
-          border: '1px solid #3f3f46',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '2px',
-          color: '#a1a1aa',
+          color: 'var(--text-muted)',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#3f3f46';
-          e.currentTarget.style.color = '#e4e4e7';
+          e.currentTarget.style.backgroundColor = 'var(--background-modifier-border)';
+          e.currentTarget.style.color = 'var(--text-normal)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = 'transparent';
-          e.currentTarget.style.color = '#a1a1aa';
+          e.currentTarget.style.color = 'var(--text-muted)';
         }}
         title="Next day (Ctrl+Shift+Right)"
       >
