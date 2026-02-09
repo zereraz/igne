@@ -197,9 +197,6 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         const cursor = view.state.selection.main.head;
         const currentIdx = matches.findIndex(idx => idx >= cursor);
         setCurrentResultIndex(currentIdx >= 0 ? currentIdx + 1 : 1);
-
-        // Navigate to next match
-        findNext(view);
       } else {
         setCurrentResultIndex(undefined);
       }
@@ -208,6 +205,20 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       setSearchResultCount(0);
       setCurrentResultIndex(undefined);
     }
+  }, []);
+
+  // Navigate to next search match
+  const handleFindNext = useCallback(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    findNext(view);
+  }, []);
+
+  // Navigate to previous search match
+  const handleFindPrevious = useCallback(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    findPrevious(view);
   }, []);
 
   // Handle replace in search panel
@@ -1076,6 +1087,8 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       {showSearchPanel && (
         <SearchReplacePanel
           onFind={handleFind}
+          onFindNext={handleFindNext}
+          onFindPrevious={handleFindPrevious}
           onReplace={handleReplace}
           onReplaceAll={handleReplaceAll}
           onClose={() => {

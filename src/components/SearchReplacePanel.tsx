@@ -3,6 +3,8 @@ import { Search, X, ArrowDown, ReplaceAll, Replace } from 'lucide-react';
 
 interface SearchReplacePanelProps {
   onFind: (query: string, options: FindOptions) => void;
+  onFindNext: () => void;
+  onFindPrevious: () => void;
   onReplace: (query: string, replacement: string, options: FindOptions) => void;
   onReplaceAll: (query: string, replacement: string, options: FindOptions) => void;
   onClose: () => void;
@@ -18,6 +20,8 @@ export interface FindOptions {
 
 export function SearchReplacePanel({
   onFind,
+  onFindNext,
+  onFindPrevious,
   onReplace,
   onReplaceAll,
   onClose,
@@ -36,12 +40,6 @@ export function SearchReplacePanel({
     wholeWord,
   };
 
-  const handleFind = useCallback(() => {
-    if (query.trim()) {
-      onFind(query, findOptions);
-    }
-  }, [query, findOptions, onFind]);
-
   const handleReplace = useCallback(() => {
     if (query.trim()) {
       onReplace(query, replacement, findOptions);
@@ -57,32 +55,29 @@ export function SearchReplacePanel({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
+        e.preventDefault();
         if (e.shiftKey) {
-          e.preventDefault();
-          // Find previous
-          handleFind();
+          onFindPrevious();
         } else {
-          e.preventDefault();
-          // Find next
-          handleFind();
+          onFindNext();
         }
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       }
     },
-    [handleFind, onClose]
+    [onFindNext, onFindPrevious, onClose]
   );
 
-  // Auto-search when query changes
+  // Auto-search when query or options change (setup only, no navigation)
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query.trim()) {
-        handleFind();
+        onFind(query, { caseSensitive, regex, wholeWord });
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [query, caseSensitive, regex, wholeWord, handleFind]);
+  }, [query, caseSensitive, regex, wholeWord, onFind]);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -320,7 +315,7 @@ export function SearchReplacePanel({
         }}
       >
         <button
-          onClick={handleFind}
+          onClick={onFindNext}
           disabled={!query.trim()}
           style={{
             flex: 1,
