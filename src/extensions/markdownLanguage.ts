@@ -1,6 +1,7 @@
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
-import { Strikethrough, Highlight, Wikilink, Embed, BlockID, Tag, TaskMarker } from './markdownExtensions';
+import { Strikethrough as GFMStrikethrough, Table, TaskList } from '@lezer/markdown';
+import { Highlight, Wikilink, Embed, BlockID, Tag } from './markdownExtensions';
 
 export function createMarkdownLanguage() {
   return markdown({
@@ -11,9 +12,11 @@ export function createMarkdownLanguage() {
       Embed,
       BlockID,
       Tag,
-      TaskMarker,
-      Strikethrough,
-      Highlight,
+      // GFM extensions for better compatibility
+      Table,           // Built-in table support: | col | col |
+      TaskList,        // Built-in task list support: - [ ] and - [x]
+      GFMStrikethrough, // Built-in strikethrough: ~~text~~
+      Highlight,       // Our custom highlight: ==text==
     ],
   });
 }

@@ -79,7 +79,7 @@ const CONTAINER_NODES = [
 //   'TagMark', 'QuoteMark', 'ListMark', 'BlockIDMark',
 // ];
 
-// Helper to find code blocks
+// Helper to find code blocks (excludes mermaid blocks which are handled separately)
 function findCodeBlocks(state: EditorState): { from: number; to: number; language: string; code: string }[] {
   const blocks: ReturnType<typeof findCodeBlocks> = [];
   const doc = state.doc;
@@ -90,6 +90,20 @@ function findCodeBlocks(state: EditorState): { from: number; to: number; languag
 
     if (match) {
       const language = match[1] || 'text';
+
+      // Skip mermaid blocks - they're handled separately by findMermaidBlocks
+      if (language.toLowerCase() === 'mermaid') {
+        // Find closing ``` and skip past it
+        let endLine = i + 1;
+        while (endLine <= doc.lines) {
+          if (doc.line(endLine).text === '```') break;
+          endLine++;
+        }
+        if (endLine <= doc.lines) {
+          i = endLine;
+        }
+        continue;
+      }
       const startLine = i;
 
       // Find closing ```
@@ -253,6 +267,7 @@ function buildAllDecorations(
   const inlineDecorations: Range<Decoration>[] = [];
   const blockDecorations: Range<Decoration>[] = [];
   const blockRanges: { from: number; to: number }[] = []; // Track ranges for atomicRanges
+  const resolvedEmbeds = new Set<string>(); // Track resolved embeds to prevent circular references
   const { head: cursor } = view.state.selection.main;
   const cursorLine = view.state.doc.lineAt(cursor).number;
   const doc = view.state.doc;
@@ -335,28 +350,10 @@ function buildAllDecorations(
         return;
       }
 
-      // Fallback: detect strikethrough in Emphasis nodes
-      if (node.name === 'Emphasis') {
-        const text = doc.sliceString(node.from, node.to);
-        if (text.startsWith('~~') && text.endsWith('~~')) {
-          inlineDecorations.push(Decoration.mark({ class: 'cm-strikethrough' }).range(node.from, node.to));
-          return;
-        }
-      }
-
       // Highlight
       if (node.name === 'Highlight') {
         inlineDecorations.push(Decoration.mark({ class: 'cm-highlight' }).range(node.from, node.to));
         return;
-      }
-
-      // Fallback: detect highlight in Emphasis nodes
-      if (node.name === 'Emphasis' || node.name === 'StrongEmphasis') {
-        const text = doc.sliceString(node.from, node.to);
-        if (text.startsWith('==') && text.endsWith('==')) {
-          inlineDecorations.push(Decoration.mark({ class: 'cm-highlight' }).range(node.from, node.to));
-          return;
-        }
       }
 
       // === WIDGETS ===
@@ -477,12 +474,18 @@ function buildAllDecorations(
               }).range(node.from, node.to)
             );
           } else {
-            // Default note embed
+            // Default note embed — guard against circular references
+            let content = resolved?.content ?? null;
+            if (resolvedEmbeds.has(path)) {
+              content = null; // Break circular reference
+            } else {
+              resolvedEmbeds.add(path);
+            }
             blockDecorations.push(
               Decoration.replace({
                 widget: new EmbedWidget(
                   target,
-                  resolved?.content ?? null,
+                  content,
                   fullConfig.onWikilinkClick
                 ),
                 block: true,
@@ -543,12 +546,18 @@ function buildAllDecorations(
             );
             return;
           } else {
-            // Default note embed
+            // Default note embed — guard against circular references
+            let content = resolved?.content ?? null;
+            if (resolvedEmbeds.has(path)) {
+              content = null;
+            } else {
+              resolvedEmbeds.add(path);
+            }
             blockDecorations.push(
               Decoration.replace({
                 widget: new EmbedWidget(
                   target,
-                  resolved?.content ?? null,
+                  content,
                   fullConfig.onWikilinkClick
                 ),
                 block: true,
@@ -615,13 +624,15 @@ function buildAllDecorations(
   // Code blocks (hide ticks, show rendered code)
   const codeBlocks = findCodeBlocks(view.state);
   for (const block of codeBlocks) {
-    const line = doc.lineAt(block.from);
-    if (line.number !== cursorLine && cursor >= block.from && cursor <= block.to) {
-      // Cursor inside code block, show raw
-      continue;
-    }
-    if (cursor < block.from || cursor > block.to) {
-      // Track range for atomicRanges (only when decorated)
+    const startLine = doc.lineAt(block.from);
+    const endLine = doc.lineAt(block.to);
+
+    // Only show raw (skip widget) if cursor is ON a line within the block
+    // This allows arrow keys to skip over the widget when cursor is outside
+    const cursorInsideBlock = cursorLine >= startLine.number && cursorLine <= endLine.number;
+
+    if (!cursorInsideBlock) {
+      // Cursor is not on any line of the block, show widget
       blockRanges.push({ from: block.from, to: block.to });
       blockDecorations.push(
         Decoration.replace({
@@ -630,43 +641,56 @@ function buildAllDecorations(
         }).range(block.from, block.to)
       );
     }
+    // If cursor IS on a line within the block, don't add widget (show raw for editing)
   }
 
   // Math blocks
   const mathBlocks = findMathBlocks(view.state);
   for (const block of mathBlocks) {
-    if (cursor >= block.from && cursor <= block.to) continue; // Cursor inside, show raw
     if (block.display) {
-      // Display math is block-level - track range for atomicRanges
-      blockRanges.push({ from: block.from, to: block.to });
-      blockDecorations.push(
-        Decoration.replace({
-          widget: new MathWidget(block.latex, block.display),
-          block: true,
-        }).range(block.from, block.to)
-      );
+      // Display math is block-level - use line-based cursor detection
+      const startLine = doc.lineAt(block.from);
+      const endLine = doc.lineAt(block.to);
+      const cursorInsideBlock = cursorLine >= startLine.number && cursorLine <= endLine.number;
+
+      if (!cursorInsideBlock) {
+        blockRanges.push({ from: block.from, to: block.to });
+        blockDecorations.push(
+          Decoration.replace({
+            widget: new MathWidget(block.latex, block.display),
+            block: true,
+          }).range(block.from, block.to)
+        );
+      }
     } else {
-      // Inline math is inline-level
-      inlineDecorations.push(
-        Decoration.replace({
-          widget: new MathWidget(block.latex, block.display),
-        }).range(block.from, block.to)
-      );
+      // Inline math - use position-based detection (cursor touching the range)
+      const cursorInRange = cursor >= block.from && cursor <= block.to;
+      if (!cursorInRange) {
+        inlineDecorations.push(
+          Decoration.replace({
+            widget: new MathWidget(block.latex, block.display),
+          }).range(block.from, block.to)
+        );
+      }
     }
   }
 
   // Mermaid diagrams
   const mermaidBlocks = findMermaidBlocks(view.state);
   for (const block of mermaidBlocks) {
-    if (cursor >= block.from && cursor <= block.to) continue; // Cursor inside, show raw
-    // Track range for atomicRanges
-    blockRanges.push({ from: block.from, to: block.to });
-    blockDecorations.push(
-      Decoration.replace({
-        widget: new MermaidWidget(block.code),
-        block: true,
-      }).range(block.from, block.to)
-    );
+    const startLine = doc.lineAt(block.from);
+    const endLine = doc.lineAt(block.to);
+    const cursorInsideBlock = cursorLine >= startLine.number && cursorLine <= endLine.number;
+
+    if (!cursorInsideBlock) {
+      blockRanges.push({ from: block.from, to: block.to });
+      blockDecorations.push(
+        Decoration.replace({
+          widget: new MermaidWidget(block.code),
+          block: true,
+        }).range(block.from, block.to)
+      );
+    }
   }
 
   // Callouts

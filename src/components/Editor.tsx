@@ -24,7 +24,7 @@ interface EditorProps {
   onChange: EditorChangeHandler;
   onWikilinkClick?: WikilinkClickHandler;
   onWikilinkCmdClick?: WikilinkClickHandler;
-  onCursorPositionChange?: (line: number) => void;
+  onCursorPositionChange?: (line: number, column: number) => void;
   onScrollToPosition?: (position: number) => void;
   vaultPath?: string | null;
   currentFilePath?: string | null;
@@ -168,6 +168,13 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
 
       if (options.regex) {
         pattern = new RegExp(searchTerm, flags);
+        // Safety check: test against a short string to catch catastrophic backtracking
+        const testStart = performance.now();
+        pattern.test('a'.repeat(25));
+        if (performance.now() - testStart > 100) {
+          throw new Error('Regex too slow — possible catastrophic backtracking');
+        }
+        pattern.lastIndex = 0;
       } else if (options.wholeWord) {
         pattern = new RegExp(`\\b${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, flags);
       } else {
@@ -176,8 +183,11 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
 
       const matches: number[] = [];
       let match;
+      const MAX_MATCHES = 10000;
       while ((match = pattern.exec(doc)) !== null) {
         matches.push(match.index);
+        if (match[0].length === 0) pattern.lastIndex++; // prevent infinite loop on zero-width match
+        if (matches.length >= MAX_MATCHES) break;
       }
 
       setSearchResultCount(matches.length);
@@ -256,6 +266,7 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
 
       let match;
       const changes: { from: number; to: number; insert: string }[] = [];
+      const MAX_MATCHES = 10000;
 
       // Find all matches and create replacement changes
       pattern.lastIndex = 0;
@@ -265,6 +276,8 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           to: match.index + match[0].length,
           insert: replacement,
         });
+        if (match[0].length === 0) pattern.lastIndex++;
+        if (changes.length >= MAX_MATCHES) break;
       }
 
       if (changes.length > 0) {
@@ -433,7 +446,8 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         if (update.selectionSet) {
           const cursorPos = update.state.selection.main.head;
           const line = update.state.doc.lineAt(cursorPos);
-          onCursorPositionChange?.(line.number);
+          const column = cursorPos - line.from + 1; // 1-indexed column
+          onCursorPositionChange?.(line.number, column);
         }
       }),
       EditorView.theme({

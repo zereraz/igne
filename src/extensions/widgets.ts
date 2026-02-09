@@ -59,7 +59,14 @@ export class EmbedWidget extends WidgetType {
 
     const header = document.createElement('div');
     header.className = 'cm-embed-header';
-    header.innerHTML = `<span class="cm-embed-icon">📄</span><span class="cm-embed-title">${this.target}</span>`;
+    const icon = document.createElement('span');
+    icon.className = 'cm-embed-icon';
+    icon.textContent = '📄';
+    const title = document.createElement('span');
+    title.className = 'cm-embed-title';
+    title.textContent = this.target;
+    header.appendChild(icon);
+    header.appendChild(title);
     header.addEventListener('click', () => this.onOpen(this.target));
 
     const body = document.createElement('div');
@@ -68,7 +75,10 @@ export class EmbedWidget extends WidgetType {
     if (this.content) {
       body.textContent = this.content;
     } else {
-      body.innerHTML = '<span class="cm-embed-missing">Note not found</span>';
+      const missing = document.createElement('span');
+      missing.className = 'cm-embed-missing';
+      missing.textContent = 'Note not found';
+      body.appendChild(missing);
     }
 
     container.appendChild(header);
@@ -180,7 +190,10 @@ export class ImageWidget extends WidgetType {
     }
 
     img.onerror = () => {
-      container.innerHTML = `<span class="cm-image-error">Image not found: ${this.alt || this.title || this.src}</span>`;
+      const errorSpan = document.createElement('span');
+      errorSpan.className = 'cm-image-error';
+      errorSpan.textContent = `Image not found: ${this.alt || this.title || this.src}`;
+      container.replaceChildren(errorSpan);
     };
 
     container.appendChild(img);
@@ -281,11 +294,18 @@ export class CalloutWidget extends WidgetType {
 
     const header = document.createElement('div');
     header.className = 'cm-callout-header';
-    header.innerHTML = `
-      <span class="cm-callout-icon">${this.getIcon()}</span>
-      <span class="cm-callout-title">${this.title || this.type}</span>
-      <span class="cm-callout-fold">${this.folded ? '▶' : '▼'}</span>
-    `;
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'cm-callout-icon';
+    iconSpan.textContent = this.getIcon();
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'cm-callout-title';
+    titleSpan.textContent = this.title || this.type;
+    const foldSpan = document.createElement('span');
+    foldSpan.className = 'cm-callout-fold';
+    foldSpan.textContent = this.folded ? '▶' : '▼';
+    header.appendChild(iconSpan);
+    header.appendChild(titleSpan);
+    header.appendChild(foldSpan);
     header.addEventListener('click', this.onToggle);
 
     const body = document.createElement('div');
@@ -338,10 +358,16 @@ export class MermaidWidget extends WidgetType {
           container.innerHTML = svg;
         })
         .catch(() => {
-          container.innerHTML = `<pre class="cm-mermaid-error">${this.code}</pre>`;
+          const pre = document.createElement('pre');
+          pre.className = 'cm-mermaid-error';
+          pre.textContent = this.code;
+          container.replaceChildren(pre);
         });
     } else {
-      container.innerHTML = `<pre class="cm-mermaid-error">${this.code}</pre>`;
+      const pre = document.createElement('pre');
+      pre.className = 'cm-mermaid-error';
+      pre.textContent = this.code;
+      container.replaceChildren(pre);
     }
 
     return container;
@@ -396,7 +422,10 @@ export class VideoWidget extends WidgetType {
     if (this.controls !== false) video.controls = true; // Default to showing controls
 
     video.onerror = () => {
-      container.innerHTML = `<span class="cm-video-error">Video not found: ${this.src}</span>`;
+      const errorSpan = document.createElement('span');
+      errorSpan.className = 'cm-video-error';
+      errorSpan.textContent = `Video not found: ${this.src}`;
+      container.replaceChildren(errorSpan);
     };
 
     container.appendChild(video);
@@ -477,7 +506,10 @@ export class PdfWidget extends WidgetType {
     iframe.style.borderRadius = '0.5rem';
 
     iframe.onerror = () => {
-      container.innerHTML = `<span class="cm-pdf-error">PDF not found: ${this.src}</span>`;
+      const errorSpan = document.createElement('span');
+      errorSpan.className = 'cm-pdf-error';
+      errorSpan.textContent = `PDF not found: ${this.src}`;
+      container.replaceChildren(errorSpan);
     };
 
     container.appendChild(iframe);
