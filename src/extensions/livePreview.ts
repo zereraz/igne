@@ -256,12 +256,30 @@ function findMermaidBlocks(state: EditorState): { from: number; to: number; code
 // Simple marker decoration for atomic ranges
 const atomicMarker = Decoration.mark({});
 
+// Cached block-level scan results — recomputed only on docChanged
+interface BlockScanCache {
+  codeBlocks: ReturnType<typeof findCodeBlocks>;
+  mathBlocks: ReturnType<typeof findMathBlocks>;
+  mermaidBlocks: ReturnType<typeof findMermaidBlocks>;
+  callouts: ReturnType<typeof findCallouts>;
+}
+
+function computeBlockScans(state: EditorState): BlockScanCache {
+  return {
+    codeBlocks: findCodeBlocks(state),
+    mathBlocks: findMathBlocks(state),
+    mermaidBlocks: findMermaidBlocks(state),
+    callouts: findCallouts(state),
+  };
+}
+
 // Build decorations separated into inline and block categories
 // Block decorations cannot be provided via ViewPlugin, they must use StateField
 // Also returns blockRanges for atomicRanges facet
 function buildAllDecorations(
   view: EditorView,
-  config: LivePreviewConfig
+  config: LivePreviewConfig,
+  cachedBlockScans?: BlockScanCache
 ): { inline: DecorationSet; block: DecorationSet; blockRanges: { from: number; to: number }[] } {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
   const inlineDecorations: Range<Decoration>[] = [];
@@ -620,10 +638,11 @@ function buildAllDecorations(
   });
 
   // === BLOCK-LEVEL RENDERING ===
+  // Use cached scans when available (selectionSet-only updates), otherwise compute fresh
+  const blockScans = cachedBlockScans ?? computeBlockScans(view.state);
 
   // Code blocks (hide ticks, show rendered code)
-  const codeBlocks = findCodeBlocks(view.state);
-  for (const block of codeBlocks) {
+  for (const block of blockScans.codeBlocks) {
     const startLine = doc.lineAt(block.from);
     const endLine = doc.lineAt(block.to);
 
@@ -645,8 +664,7 @@ function buildAllDecorations(
   }
 
   // Math blocks
-  const mathBlocks = findMathBlocks(view.state);
-  for (const block of mathBlocks) {
+  for (const block of blockScans.mathBlocks) {
     if (block.display) {
       // Display math is block-level - use line-based cursor detection
       const startLine = doc.lineAt(block.from);
@@ -676,8 +694,7 @@ function buildAllDecorations(
   }
 
   // Mermaid diagrams
-  const mermaidBlocks = findMermaidBlocks(view.state);
-  for (const block of mermaidBlocks) {
+  for (const block of blockScans.mermaidBlocks) {
     const startLine = doc.lineAt(block.from);
     const endLine = doc.lineAt(block.to);
     const cursorInsideBlock = cursorLine >= startLine.number && cursorLine <= endLine.number;
@@ -694,8 +711,7 @@ function buildAllDecorations(
   }
 
   // Callouts
-  const callouts = findCallouts(view.state);
-  for (const callout of callouts) {
+  for (const callout of blockScans.callouts) {
     const startLine = doc.lineAt(callout.from);
     const endLine = doc.lineAt(callout.to);
     if (cursorLine >= startLine.number && cursorLine <= endLine.number) {
@@ -789,9 +805,12 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
       pendingBlockUpdate: DecorationSet | null = null;
       pendingAtomicRanges: RangeSet<Decoration> | null = null;
       destroyed = false;
+      blockScanCache: BlockScanCache | null = null;
 
       constructor(view: EditorView) {
-        const result = buildAllDecorations(view, resolvedConfig);
+        // Initial build: compute everything fresh, cache block scans
+        this.blockScanCache = computeBlockScans(view.state);
+        const result = buildAllDecorations(view, resolvedConfig, this.blockScanCache);
         this.decorations = result.inline;
         // Schedule block decorations and atomic ranges update for next frame
         this.pendingBlockUpdate = result.block;
@@ -834,8 +853,20 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
         const currentTrigger = refreshTrigger?.current ?? 0;
         const triggerChanged = currentTrigger !== lastRefreshTrigger;
 
-        if (update.docChanged || update.selectionSet || update.viewportChanged || triggerChanged) {
-          const result = buildAllDecorations(update.view, resolvedConfig);
+        // Determine if content actually changed (vs just cursor/selection)
+        const contentChanged = update.docChanged ||
+          update.viewportChanged ||
+          triggerChanged ||
+          syntaxTree(update.startState) !== syntaxTree(update.state);
+
+        if (contentChanged || update.selectionSet) {
+          // Invalidate block scan cache only when content changes
+          if (contentChanged) {
+            this.blockScanCache = computeBlockScans(update.view.state);
+          }
+
+          // Rebuild decorations using cached block scans for selection-only updates
+          const result = buildAllDecorations(update.view, resolvedConfig, this.blockScanCache ?? undefined);
           this.decorations = result.inline;
           // Schedule block decorations and atomic ranges update for next frame to avoid recursive dispatch
           this.pendingBlockUpdate = result.block;
@@ -866,6 +897,7 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
         this.destroyed = true;
         this.pendingBlockUpdate = null;
         this.pendingAtomicRanges = null;
+        this.blockScanCache = null;
       }
     },
     {

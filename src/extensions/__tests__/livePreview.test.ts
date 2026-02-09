@@ -393,6 +393,193 @@ describe('livePreview - tag behavior', () => {
   });
 });
 
+describe('livePreview - cursor movement update behavior', () => {
+  // These tests verify that moving the cursor (selectionSet only, no docChanged)
+  // produces correct decorations — the core contract for incremental updates.
+
+  describe('mark hiding updates on cursor movement', () => {
+    it('hides header mark when cursor moves away from heading line', () => {
+      const view = createEditor('# Heading\nsome text', 5); // cursor on heading line
+      expect(getHiddenRanges(view)).toHaveLength(0); // # visible
+
+      // Move cursor to second line (selection-only change, no doc change)
+      view.dispatch({ selection: { anchor: 15 } });
+
+      expect(getHiddenRanges(view)).toContainEqual([0, 1]); // # now hidden
+    });
+
+    it('shows header mark when cursor moves onto heading line', () => {
+      const view = createEditor('# Heading\nsome text', 15); // cursor on second line
+      expect(getHiddenRanges(view)).toContainEqual([0, 1]); // # hidden
+
+      // Move cursor to heading line
+      view.dispatch({ selection: { anchor: 5 } });
+
+      expect(getHiddenRanges(view)).not.toContainEqual([0, 1]); // # now visible
+    });
+
+    it('updates bold marks when cursor moves in and out', () => {
+      const view = createEditor('text **bold** end', 2); // cursor outside bold
+      expect(getHiddenRanges(view)).toContainEqual([5, 7]); // opening ** hidden
+      expect(getHiddenRanges(view)).toContainEqual([11, 13]); // closing ** hidden
+
+      // Move cursor inside bold
+      view.dispatch({ selection: { anchor: 9 } });
+
+      expect(getHiddenRanges(view)).not.toContainEqual([5, 7]); // opening ** visible
+      expect(getHiddenRanges(view)).not.toContainEqual([11, 13]); // closing ** visible
+
+      // Move cursor back outside
+      view.dispatch({ selection: { anchor: 15 } });
+
+      expect(getHiddenRanges(view)).toContainEqual([5, 7]); // opening ** hidden again
+      expect(getHiddenRanges(view)).toContainEqual([11, 13]); // closing ** hidden again
+    });
+
+    it('toggles italic marks on rapid cursor movements', () => {
+      const view = createEditor('a *italic* z', 0);
+      expect(getHiddenRanges(view)).toContainEqual([2, 3]);
+      expect(getHiddenRanges(view)).toContainEqual([9, 10]);
+
+      // Rapid movement: outside → inside → outside
+      view.dispatch({ selection: { anchor: 6 } }); // inside
+      expect(getHiddenRanges(view)).not.toContainEqual([2, 3]);
+
+      view.dispatch({ selection: { anchor: 12 } }); // outside again
+      expect(getHiddenRanges(view)).toContainEqual([2, 3]);
+      expect(getHiddenRanges(view)).toContainEqual([9, 10]);
+    });
+  });
+
+  describe('wikilink widget toggling on cursor movement', () => {
+    it('switches from widget to raw when cursor enters wikilink', () => {
+      const doc = 'See [[my-note]] more';
+      const view = createEditor(doc, 0); // cursor away
+      expect(hasWikilinkWidget(view, 4, 15)).toBe(true);
+
+      // Move cursor into wikilink
+      view.dispatch({ selection: { anchor: 8 } });
+      expect(hasWikilinkWidget(view, 4, 15)).toBe(false);
+    });
+
+    it('switches from raw to widget when cursor leaves wikilink', () => {
+      const doc = 'See [[my-note]] more';
+      const view = createEditor(doc, 8); // cursor inside
+      expect(hasWikilinkWidget(view, 4, 15)).toBe(false);
+
+      // Move cursor away
+      view.dispatch({ selection: { anchor: 18 } });
+      expect(hasWikilinkWidget(view, 4, 15)).toBe(true);
+    });
+
+    it('correctly toggles between multiple wikilinks', () => {
+      const doc = '[[first]] and [[second]] end';
+      const view = createEditor(doc, 3); // cursor in first
+      expect(hasWikilinkWidget(view, 0, 9)).toBe(false); // first: raw
+      expect(hasWikilinkWidget(view, 14, 24)).toBe(true); // second: widget
+
+      // Move to second
+      view.dispatch({ selection: { anchor: 18 } });
+      expect(hasWikilinkWidget(view, 0, 9)).toBe(true); // first: widget
+      expect(hasWikilinkWidget(view, 14, 24)).toBe(false); // second: raw
+
+      // Move between them
+      view.dispatch({ selection: { anchor: 11 } });
+      expect(hasWikilinkWidget(view, 0, 9)).toBe(true); // first: widget
+      expect(hasWikilinkWidget(view, 14, 24)).toBe(true); // second: widget
+    });
+  });
+
+  describe('tag widget toggling on cursor movement', () => {
+    it('switches from widget to raw when cursor enters tag', () => {
+      const doc = '#tag1 text';
+      const view = createEditor(doc, 10); // cursor after tag
+      const positions = getTagPositions(view);
+      expect(positions.length).toBe(1);
+      expect(hasTagWidget(view, positions[0].from, positions[0].to)).toBe(true);
+
+      // Move cursor into tag
+      view.dispatch({ selection: { anchor: 2 } });
+      const posAfter = getTagPositions(view);
+      expect(hasTagWidget(view, posAfter[0].from, posAfter[0].to)).toBe(false);
+    });
+
+    it('switches from raw to widget when cursor leaves tag', () => {
+      const doc = '#tag1 text';
+      const view = createEditor(doc, 2); // cursor inside tag
+      const positions = getTagPositions(view);
+      expect(hasTagWidget(view, positions[0].from, positions[0].to)).toBe(false);
+
+      // Move cursor away
+      view.dispatch({ selection: { anchor: 8 } });
+      const posAfter = getTagPositions(view);
+      expect(hasTagWidget(view, posAfter[0].from, posAfter[0].to)).toBe(true);
+    });
+  });
+
+  describe('multi-line cursor movement', () => {
+    it('handles cursor moving between lines with different formatting', () => {
+      const doc = '# Heading\n**bold text**\nnormal';
+      // cursor on heading line
+      const view = createEditor(doc, 5);
+      expect(getHiddenRanges(view)).not.toContainEqual([0, 1]); // # visible (cursor on heading)
+      expect(getHiddenRanges(view)).toContainEqual([10, 12]); // ** hidden (cursor not on bold)
+
+      // Move cursor to bold line
+      view.dispatch({ selection: { anchor: 15 } });
+      expect(getHiddenRanges(view)).toContainEqual([0, 1]); // # hidden (cursor away)
+      expect(getHiddenRanges(view)).not.toContainEqual([10, 12]); // ** visible (cursor on bold)
+
+      // Move cursor to normal line
+      view.dispatch({ selection: { anchor: 26 } });
+      expect(getHiddenRanges(view)).toContainEqual([0, 1]); // # hidden
+      expect(getHiddenRanges(view)).toContainEqual([10, 12]); // ** hidden
+    });
+
+    it('handles document with heading, bold, and italic', () => {
+      const doc = '# Title\n*em* and **bold** end';
+      // Positions: # Title\n = 8 chars
+      // *em* at 8-12, **bold** at 17-25
+
+      // Cursor on title
+      const view = createEditor(doc, 3);
+
+      // Move cursor to end (everything should be hidden)
+      view.dispatch({ selection: { anchor: doc.length } });
+      expect(getHiddenRanges(view)).toContainEqual([0, 1]); // # hidden
+
+      // The emphasis marks should be hidden
+      expect(getHiddenRanges(view)).toContainEqual([8, 9]); // opening *
+      expect(getHiddenRanges(view)).toContainEqual([11, 12]); // closing *
+
+      // Bold marks hidden
+      expect(getHiddenRanges(view)).toContainEqual([17, 19]); // opening **
+      expect(getHiddenRanges(view)).toContainEqual([23, 25]); // closing **
+    });
+  });
+
+  describe('combined doc change + selection change', () => {
+    it('handles typing then cursor movement correctly', () => {
+      const view = createEditor('# Heading\ntext', 12);
+      expect(getHiddenRanges(view)).toContainEqual([0, 1]); // # hidden
+
+      // Type on second line (doc change + selection at end of insert)
+      view.dispatch({
+        changes: { from: 14, insert: ' **bold**' },
+      });
+
+      // Now move cursor to heading line
+      view.dispatch({ selection: { anchor: 5 } });
+
+      // # should be visible (cursor on heading line)
+      expect(getHiddenRanges(view)).not.toContainEqual([0, 1]);
+      // ** should be hidden (cursor not on bold)
+      expect(getHiddenRanges(view)).toContainEqual([15, 17]); // opening **
+      expect(getHiddenRanges(view)).toContainEqual([21, 23]); // closing **
+    });
+  });
+});
+
 describe.skip('getMediaType - media type detection', () => {
   // TODO: Implement getMediaType function and enable these tests
   // This is part of the embed features work (audio/video embeds)
