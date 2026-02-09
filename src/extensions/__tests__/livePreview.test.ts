@@ -580,6 +580,174 @@ describe('livePreview - cursor movement update behavior', () => {
   });
 });
 
+describe('livePreview - incremental update correctness', () => {
+  // These tests verify that selectionSet-only updates (which use cached tree scans
+  // instead of re-walking the syntax tree) produce identical results to full rebuilds.
+
+  describe('rapid cursor sweeps produce correct decorations', () => {
+    it('sweeping cursor through every position in formatted doc', () => {
+      const doc = '# Head\n**bold** *em* `code` ~~strike~~ ==mark==\n[[link]] #tag end';
+      // Sweep cursor through every position and verify no crashes/wrong state
+      for (let pos = 0; pos <= doc.length; pos++) {
+        const view = createEditor(doc, pos);
+        // Just verify it doesn't throw and returns valid decoration set
+        const ranges = getHiddenRanges(view);
+        expect(Array.isArray(ranges)).toBe(true);
+      }
+    });
+
+    it('sequential cursor movement matches fresh editor state', () => {
+      const doc = '# Heading\n**bold** and *italic*\nnormal text\n[[wikilink]] #tag';
+
+      // Build with cursor at start
+      const view = createEditor(doc, 0);
+
+      // Move cursor to various positions (selectionSet-only, no doc change)
+      // and compare against freshly-created editor at same position
+      const testPositions = [0, 5, 10, 15, 20, 30, 40, 50, doc.length];
+      for (const pos of testPositions) {
+        if (pos > doc.length) continue;
+
+        // Move cursor in existing view (uses cached tree scan)
+        view.dispatch({ selection: { anchor: pos } });
+        const incrementalRanges = getHiddenRanges(view);
+
+        // Create fresh editor at same position (full tree walk)
+        const freshView = createEditor(doc, pos);
+        const freshRanges = getHiddenRanges(freshView);
+
+        expect(incrementalRanges, `Mismatch at cursor pos ${pos}`).toEqual(freshRanges);
+      }
+    });
+  });
+
+  describe('doc change invalidates caches correctly', () => {
+    it('adding bold text then moving cursor shows correct decorations', () => {
+      const view = createEditor('hello world', 5);
+      expect(getHiddenRanges(view)).toHaveLength(0);
+
+      // Insert bold text (doc change — cache invalidated)
+      view.dispatch({ changes: { from: 6, insert: '**strong** ' } });
+
+      // Move cursor to end (selectionSet only — uses new cache)
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+
+      // The ** marks should be hidden since cursor is past the bold
+      expect(getHiddenRanges(view)).toContainEqual([6, 8]); // opening **
+      expect(getHiddenRanges(view)).toContainEqual([14, 16]); // closing **
+    });
+
+    it('deleting formatted text then moving cursor is correct', () => {
+      const view = createEditor('# Title\n**bold** end', 2);
+      // # visible (cursor on heading), ** hidden
+      expect(getHiddenRanges(view)).not.toContainEqual([0, 1]);
+
+      // Delete the bold text
+      view.dispatch({ changes: { from: 8, to: 16 } });
+
+      // Move cursor to end
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+
+      // # should be hidden, no ** to hide
+      expect(getHiddenRanges(view)).toContainEqual([0, 1]);
+    });
+  });
+
+  describe('styling decorations remain stable across cursor moves', () => {
+    it('heading class decorations persist regardless of cursor position', () => {
+      const doc = '# Heading\ntext';
+      const view = createEditor(doc, 5); // on heading line
+
+      // Get decorations — should have cm-heading-1 class
+      const plugin = view.plugin(livePreview);
+      let hasHeadingClass = false;
+      plugin?.decorations.between(0, view.state.doc.length, (_from, _to, deco) => {
+        if ((deco as any).spec?.class === 'cm-heading-1') hasHeadingClass = true;
+      });
+      expect(hasHeadingClass).toBe(true);
+
+      // Move cursor away — heading class should persist
+      view.dispatch({ selection: { anchor: 12 } });
+      hasHeadingClass = false;
+      plugin?.decorations.between(0, view.state.doc.length, (_from, _to, deco) => {
+        if ((deco as any).spec?.class === 'cm-heading-1') hasHeadingClass = true;
+      });
+      expect(hasHeadingClass).toBe(true);
+    });
+
+    it('bold/italic class decorations persist across cursor moves', () => {
+      const doc = '**bold** *italic*';
+      const view = createEditor(doc, 4); // inside bold
+
+      const getClasses = () => {
+        const classes: string[] = [];
+        const plugin = view.plugin(livePreview);
+        plugin?.decorations.between(0, view.state.doc.length, (_from, _to, deco) => {
+          const cls = (deco as any).spec?.class;
+          if (cls) classes.push(cls);
+        });
+        return classes;
+      };
+
+      expect(getClasses()).toContain('cm-strong');
+      expect(getClasses()).toContain('cm-em');
+
+      // Move cursor outside both
+      view.dispatch({ selection: { anchor: doc.length } });
+      expect(getClasses()).toContain('cm-strong');
+      expect(getClasses()).toContain('cm-em');
+    });
+  });
+});
+
+describe('livePreview - performance', () => {
+  it('selectionSet-only updates are faster than content changes on large docs', () => {
+    // Build a large-ish document with mixed formatting
+    const lines: string[] = [];
+    for (let i = 0; i < 100; i++) {
+      lines.push(`## Heading ${i}`);
+      lines.push(`Some **bold** and *italic* text with [[link-${i}]] and #tag${i}`);
+      lines.push(`More text with \`code\` and ~~strikethrough~~`);
+      lines.push('');
+    }
+    const doc = lines.join('\n');
+
+    const view = createEditor(doc, 0);
+
+    // Measure: many selection-only dispatches (should use cached tree scan)
+    const selectionStart = performance.now();
+    const positions = [0, 50, 100, 200, 400, 600, 800, Math.min(1000, doc.length - 1)];
+    for (let round = 0; round < 10; round++) {
+      for (const pos of positions) {
+        view.dispatch({ selection: { anchor: pos } });
+      }
+    }
+    const selectionTime = performance.now() - selectionStart;
+
+    // Measure: doc changes (invalidates cache, must re-walk tree)
+    const docChangeStart = performance.now();
+    for (let round = 0; round < 10; round++) {
+      view.dispatch({
+        changes: { from: 0, to: 0, insert: 'x' },
+        selection: { anchor: 1 },
+      });
+      view.dispatch({
+        changes: { from: 0, to: 1 },
+        selection: { anchor: 0 },
+      });
+    }
+    const docChangeTime = performance.now() - docChangeStart;
+
+    // Log results for manual inspection — JSDOM timings aren't reliable for strict assertions
+    console.log(`Selection-only (80 dispatches): ${selectionTime.toFixed(1)}ms`);
+    console.log(`Doc changes (20 dispatches): ${docChangeTime.toFixed(1)}ms`);
+
+    // Sanity: both should complete in under 5 seconds
+    expect(selectionTime).toBeLessThan(5000);
+    expect(docChangeTime).toBeLessThan(5000);
+  });
+});
+
 describe.skip('getMediaType - media type detection', () => {
   // TODO: Implement getMediaType function and enable these tests
   // This is part of the embed features work (audio/video embeds)

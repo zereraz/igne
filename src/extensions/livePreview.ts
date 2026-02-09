@@ -273,357 +273,96 @@ function computeBlockScans(state: EditorState): BlockScanCache {
   };
 }
 
-// Build decorations separated into inline and block categories
-// Block decorations cannot be provided via ViewPlugin, they must use StateField
-// Also returns blockRanges for atomicRanges facet
-function buildAllDecorations(
-  view: EditorView,
-  config: LivePreviewConfig,
-  cachedBlockScans?: BlockScanCache
-): { inline: DecorationSet; block: DecorationSet; blockRanges: { from: number; to: number }[] } {
-  const fullConfig = { ...DEFAULT_CONFIG, ...config };
-  const inlineDecorations: Range<Decoration>[] = [];
-  const blockDecorations: Range<Decoration>[] = [];
-  const blockRanges: { from: number; to: number }[] = []; // Track ranges for atomicRanges
-  const resolvedEmbeds = new Set<string>(); // Track resolved embeds to prevent circular references
-  const { head: cursor } = view.state.selection.main;
-  const cursorLine = view.state.doc.lineAt(cursor).number;
-  const doc = view.state.doc;
+// === TREE SCAN CACHE ===
+// Stores syntax tree node positions so we can skip re-walking the tree on cursor-only updates.
+// Each entry records the node's name, range, and its innermost container parent range.
 
-  let parentStack: { name: string; from: number; to: number }[] = [];
+// Nodes whose decorations depend on cursor position
+const CURSOR_SENSITIVE_MARKS = new Set([
+  'HeaderMark', 'EmphasisMark', 'CodeMark', 'LinkMark',
+  'StrikethroughMark', 'HighlightMark', 'URL',
+]);
 
-  // === SYNTAX TREE ITERATION ===
-  syntaxTree(view.state).iterate({
+const CURSOR_SENSITIVE_WIDGETS = new Set([
+  'Wikilink', 'Embed', 'Tag', 'Image',
+]);
+
+// Styling-only nodes (cursor-independent)
+const STYLE_NODES: Record<string, string> = {
+  'StrongEmphasis': 'cm-strong',
+  'Emphasis': 'cm-em',
+  'InlineCode': 'cm-inline-code',
+  'Strikethrough': 'cm-strikethrough',
+  'Highlight': 'cm-highlight',
+};
+
+interface CachedTreeNode {
+  name: string;
+  from: number;
+  to: number;
+  // Innermost container parent (for cursor-in-parent checks)
+  parentName: string | null;
+  parentFrom: number;
+  parentTo: number;
+}
+
+interface TreeScanCache {
+  nodes: CachedTreeNode[];
+  // Pre-computed cursor-independent decorations (styling marks, checkboxes)
+  // These never change on selectionSet-only updates
+  stableInlineDecos: Range<Decoration>[];
+}
+
+function buildTreeScanCache(state: EditorState, config: Required<LivePreviewConfig>): TreeScanCache {
+  const nodes: CachedTreeNode[] = [];
+  const stableInlineDecos: Range<Decoration>[] = [];
+  const parentStack: { name: string; from: number; to: number }[] = [];
+  const doc = state.doc;
+
+  syntaxTree(state).iterate({
     enter(node) {
-      // Track container nodes
       if (CONTAINER_NODES.includes(node.name)) {
         parentStack.push({ name: node.name, from: node.from, to: node.to });
       }
 
-      const parent = parentStack[parentStack.length - 1];
-      const cursorInParent = parent && cursor >= parent.from && cursor <= parent.to;
-      const cursorOnLine = view.state.doc.lineAt(node.from).number === cursorLine;
+      const parent = parentStack[parentStack.length - 1] ?? null;
 
-      // === MARK HIDING ===
-
-      // Line-based hiding (headers)
-      if (node.name === 'HeaderMark') {
-        if (!cursorOnLine) {
-          inlineDecorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
-        }
+      // Cursor-independent styling decorations
+      const styleClass = STYLE_NODES[node.name];
+      if (styleClass) {
+        stableInlineDecos.push(Decoration.mark({ class: styleClass }).range(node.from, node.to));
         return;
       }
 
-      // Parent-based hiding (inline marks)
-      // Skip CodeMark hiding for FencedCode (code blocks are handled separately)
-      if (['EmphasisMark', 'CodeMark', 'LinkMark', 'StrikethroughMark', 'HighlightMark'].includes(node.name)) {
-        // Don't hide CodeMark when parent is FencedCode
-        if (node.name === 'CodeMark' && parent?.name === 'FencedCode') {
-          return;
-        }
-        if (!cursorInParent) {
-          inlineDecorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
-        }
-        return;
-      }
-
-      // URL and link marks hide when cursor outside link
-      if (node.name === 'URL' || node.name === 'LinkMark') {
-        if (!cursorInParent) {
-          inlineDecorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
-        }
-        return;
-      }
-
-      // === STYLING ===
-
-      // Headings
-      if (node.name.startsWith('ATXHeading')) {
+      // Heading styling (also cursor-independent)
+      if (node.name.startsWith('ATXHeading') && !node.name.endsWith('Mark')) {
         const level = parseInt(node.name.slice(-1)) || 1;
-        inlineDecorations.push(Decoration.mark({ class: `cm-heading-${level}` }).range(node.from, node.to));
+        stableInlineDecos.push(Decoration.mark({ class: `cm-heading-${level}` }).range(node.from, node.to));
         return;
       }
 
-      // Bold
-      if (node.name === 'StrongEmphasis') {
-        inlineDecorations.push(Decoration.mark({ class: 'cm-strong' }).range(node.from, node.to));
-        return;
-      }
-
-      // Italic
-      if (node.name === 'Emphasis') {
-        inlineDecorations.push(Decoration.mark({ class: 'cm-em' }).range(node.from, node.to));
-        return;
-      }
-
-      // Inline code
-      if (node.name === 'InlineCode') {
-        inlineDecorations.push(Decoration.mark({ class: 'cm-inline-code' }).range(node.from, node.to));
-        return;
-      }
-
-      // Strikethrough
-      if (node.name === 'Strikethrough') {
-        inlineDecorations.push(Decoration.mark({ class: 'cm-strikethrough' }).range(node.from, node.to));
-        return;
-      }
-
-      // Highlight
-      if (node.name === 'Highlight') {
-        inlineDecorations.push(Decoration.mark({ class: 'cm-highlight' }).range(node.from, node.to));
-        return;
-      }
-
-      // === WIDGETS ===
-
-      // Wikilinks - render as pills when cursor is NOT inside
-      // When cursor touches the wikilink, show raw [[link]] for editing
-      if (node.name === 'Wikilink' && !cursorInParent) {
-        const text = doc.sliceString(node.from, node.to);
-        const match = text.match(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/);
-        if (match) {
-          const target = match[1];
-          const display = match[2] || target;
-          const resolved = fullConfig.resolveWikilink(target);
-
-          inlineDecorations.push(
-            Decoration.replace({
-              widget: new WikilinkWidget(
-                target,
-                display,
-                resolved?.exists ?? false,
-                fullConfig.onWikilinkClick,
-                fullConfig.onWikilinkCmdClick
-              ),
-            }).range(node.from, node.to)
-          );
-        }
-        return;
-      }
-
-      // Handle Link nodes that are actually wikilinks (parsed as links by standard parser)
-      // Only render as widget when cursor is NOT inside
-      if ((node.name === 'Link' || node.name === 'URL') && !cursorInParent) {
-        const text = doc.sliceString(node.from, node.to);
-        // Check if this looks like a wikilink [[...]]
-        const wikilinkMatch = text.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
-        if (wikilinkMatch) {
-          const target = wikilinkMatch[1];
-          const display = wikilinkMatch[2] || target;
-          const resolved = fullConfig.resolveWikilink(target);
-
-          inlineDecorations.push(
-            Decoration.replace({
-              widget: new WikilinkWidget(
-                target,
-                display,
-                resolved?.exists ?? false,
-                fullConfig.onWikilinkClick,
-                fullConfig.onWikilinkCmdClick
-              ),
-            }).range(node.from, node.to)
-          );
-          return;
-        }
-      }
-
-      // Embeds - render content inline when cursor outside
-      // NOTE: Embeds are block-level decorations
-      if (node.name === 'Embed' && !cursorInParent) {
-        const text = doc.sliceString(node.from, node.to);
-        const match = text.match(/!\[\[([^\]]+)\]\]/);
-        if (match) {
-          const target = match[1];
-          const { path, params } = parseEmbedTarget(target);
-          const resolved = fullConfig.resolveWikilink(path);
-
-          // Determine embed type based on file extension
-          // Track all block ranges for atomicRanges facet
-          blockRanges.push({ from: node.from, to: node.to });
-
-          if (isImageFile(path)) {
-            // Image embed with parameters
-            const imageSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
-            blockDecorations.push(
-              Decoration.replace({
-                widget: new ImageWidget(
-                  imageSrc,
-                  params.alt || path,
-                  params.width,
-                  params.height,
-                  params.title,
-                  params.align
-                ),
-                block: true,
-              }).range(node.from, node.to)
-            );
-          } else if (isVideoFile(path)) {
-            // Video embed with parameters
-            const videoSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
-            blockDecorations.push(
-              Decoration.replace({
-                widget: new VideoWidget(
-                  videoSrc,
-                  params.width,
-                  params.height,
-                  params.autoplay,
-                  params.loop,
-                  params.muted,
-                  params.controls,
-                  params.align
-                ),
-                block: true,
-              }).range(node.from, node.to)
-            );
-          } else if (isPdfFile(path)) {
-            // PDF embed with parameters
-            const pdfSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
-            blockDecorations.push(
-              Decoration.replace({
-                widget: new PdfWidget(
-                  pdfSrc,
-                  params.page,
-                  params.width,
-                  params.height,
-                  params.toolbar,
-                  params.align
-                ),
-                block: true,
-              }).range(node.from, node.to)
-            );
-          } else {
-            // Default note embed — guard against circular references
-            let content = resolved?.content ?? null;
-            if (resolvedEmbeds.has(path)) {
-              content = null; // Break circular reference
-            } else {
-              resolvedEmbeds.add(path);
-            }
-            blockDecorations.push(
-              Decoration.replace({
-                widget: new EmbedWidget(
-                  target,
-                  content,
-                  fullConfig.onWikilinkClick
-                ),
-                block: true,
-              }).range(node.from, node.to)
-            );
-          }
-        }
-        return;
-      }
-
-      // Handle Image nodes that are actually embeds (parsed as images by standard parser)
-      // NOTE: Embeds are block-level decorations
-      if (node.name === 'Image' && !cursorInParent) {
-        const text = doc.sliceString(node.from, node.to);
-        const embedMatch = text.match(/^!\[\[([^\]]+)\]\]$/);
-        if (embedMatch) {
-          const target = embedMatch[1];
-          const { path, params } = parseEmbedTarget(target);
-          const resolved = fullConfig.resolveWikilink(path);
-
-          // Track block range for atomicRanges facet
-          blockRanges.push({ from: node.from, to: node.to });
-
-          // Determine embed type based on file extension
-          if (isImageFile(path)) {
-            // Image embed with parameters
-            const imageSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
-            blockDecorations.push(
-              Decoration.replace({
-                widget: new ImageWidget(
-                  imageSrc,
-                  params.alt || path,
-                  params.width,
-                  params.height,
-                  params.title,
-                  params.align
-                ),
-                block: true,
-              }).range(node.from, node.to)
-            );
-          } else if (isVideoFile(path)) {
-            // Video embed with parameters
-            const videoSrc = fullConfig.resolveImage ? fullConfig.resolveImage(path) : path;
-            blockDecorations.push(
-              Decoration.replace({
-                widget: new VideoWidget(
-                  videoSrc,
-                  params.width,
-                  params.height,
-                  params.autoplay,
-                  params.loop,
-                  params.muted,
-                  params.controls,
-                  params.align
-                ),
-                block: true,
-              }).range(node.from, node.to)
-            );
-            return;
-          } else {
-            // Default note embed — guard against circular references
-            let content = resolved?.content ?? null;
-            if (resolvedEmbeds.has(path)) {
-              content = null;
-            } else {
-              resolvedEmbeds.add(path);
-            }
-            blockDecorations.push(
-              Decoration.replace({
-                widget: new EmbedWidget(
-                  target,
-                  content,
-                  fullConfig.onWikilinkClick
-                ),
-                block: true,
-              }).range(node.from, node.to)
-            );
-          }
-          return;
-        }
-      }
-
-      // Tags - render as pills when cursor outside
-      if (node.name === 'Tag' && !cursorInParent) {
-        const tag = doc.sliceString(node.from + 1, node.to); // skip #
-        inlineDecorations.push(
-          Decoration.replace({
-            widget: new TagWidget(tag, fullConfig.onTagClick),
-          }).range(node.from, node.to)
-        );
-        return;
-      }
-
-      // Task checkboxes
+      // Task checkboxes (cursor-independent)
       if (node.name === 'TaskMarker') {
         const text = doc.sliceString(node.from, node.to);
         const checked = text.includes('x') || text.includes('X');
-        inlineDecorations.push(
+        stableInlineDecos.push(
           Decoration.replace({
-            widget: new CheckboxWidget(checked, node.from, fullConfig.onCheckboxToggle),
+            widget: new CheckboxWidget(checked, node.from, config.onCheckboxToggle),
           }).range(node.from, node.to)
         );
         return;
       }
 
-      // Images (standard markdown images are block-level)
-      if (node.name === 'Image' && !cursorInParent) {
-        const text = doc.sliceString(node.from, node.to);
-        const match = text.match(/!\[([^\]]*)\]\(([^)]+)\)/);
-        if (match) {
-          const alt = match[1];
-          const src = fullConfig.resolveImage(match[2]);
-          blockDecorations.push(
-            Decoration.replace({
-              widget: new ImageWidget(src, alt),
-              block: true,
-            }).range(node.from, node.to)
-          );
-        }
-        return;
+      // Cache cursor-sensitive nodes for fast replay
+      if (CURSOR_SENSITIVE_MARKS.has(node.name) || CURSOR_SENSITIVE_WIDGETS.has(node.name)) {
+        nodes.push({
+          name: node.name,
+          from: node.from,
+          to: node.to,
+          parentName: parent?.name ?? null,
+          parentFrom: parent?.from ?? 0,
+          parentTo: parent?.to ?? 0,
+        });
       }
     },
     leave(node) {
@@ -637,6 +376,177 @@ function buildAllDecorations(
     },
   });
 
+  return { nodes, stableInlineDecos };
+}
+
+// Replay cursor-sensitive decorations using cached node positions.
+// This is an O(k) array loop (k = cursor-sensitive nodes) instead of an O(n) tree walk.
+function buildCursorSensitiveDecorations(
+  cache: TreeScanCache,
+  state: EditorState,
+  config: Required<LivePreviewConfig>,
+): { inlineDecorations: Range<Decoration>[]; blockDecorations: Range<Decoration>[]; blockRanges: { from: number; to: number }[] } {
+  const inlineDecorations: Range<Decoration>[] = [...cache.stableInlineDecos];
+  const blockDecorations: Range<Decoration>[] = [];
+  const blockRanges: { from: number; to: number }[] = [];
+  const resolvedEmbeds = new Set<string>();
+  const { head: cursor } = state.selection.main;
+  const cursorLine = state.doc.lineAt(cursor).number;
+  const doc = state.doc;
+
+  for (const node of cache.nodes) {
+    const cursorInParent = node.parentName !== null && cursor >= node.parentFrom && cursor <= node.parentTo;
+    const cursorOnLine = doc.lineAt(node.from).number === cursorLine;
+
+    // === MARK HIDING ===
+    if (node.name === 'HeaderMark') {
+      if (!cursorOnLine) {
+        inlineDecorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
+      }
+      continue;
+    }
+
+    if (node.name === 'EmphasisMark' || node.name === 'CodeMark' || node.name === 'LinkMark' ||
+        node.name === 'StrikethroughMark' || node.name === 'HighlightMark') {
+      if (node.name === 'CodeMark' && node.parentName === 'FencedCode') continue;
+      if (!cursorInParent) {
+        inlineDecorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
+      }
+      continue;
+    }
+
+    if (node.name === 'URL' || node.name === 'LinkMark') {
+      if (!cursorInParent) {
+        inlineDecorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
+      }
+      continue;
+    }
+
+    // === WIDGETS ===
+    if (node.name === 'Wikilink' && !cursorInParent) {
+      const text = doc.sliceString(node.from, node.to);
+      const match = text.match(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/);
+      if (match) {
+        const target = match[1];
+        const display = match[2] || target;
+        const resolved = config.resolveWikilink(target);
+        inlineDecorations.push(
+          Decoration.replace({
+            widget: new WikilinkWidget(target, display, resolved?.exists ?? false, config.onWikilinkClick, config.onWikilinkCmdClick),
+          }).range(node.from, node.to)
+        );
+      }
+      continue;
+    }
+
+    // Link/URL that might be a wikilink
+    if ((node.name === 'Link' || node.name === 'URL') && !cursorInParent) {
+      const text = doc.sliceString(node.from, node.to);
+      const wikilinkMatch = text.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
+      if (wikilinkMatch) {
+        const target = wikilinkMatch[1];
+        const display = wikilinkMatch[2] || target;
+        const resolved = config.resolveWikilink(target);
+        inlineDecorations.push(
+          Decoration.replace({
+            widget: new WikilinkWidget(target, display, resolved?.exists ?? false, config.onWikilinkClick, config.onWikilinkCmdClick),
+          }).range(node.from, node.to)
+        );
+      }
+      continue;
+    }
+
+    // Embeds (block-level)
+    if (node.name === 'Embed' && !cursorInParent) {
+      const text = doc.sliceString(node.from, node.to);
+      const match = text.match(/!\[\[([^\]]+)\]\]/);
+      if (match) {
+        const target = match[1];
+        const { path, params } = parseEmbedTarget(target);
+        const resolved = config.resolveWikilink(path);
+        blockRanges.push({ from: node.from, to: node.to });
+
+        if (isImageFile(path)) {
+          const imageSrc = config.resolveImage ? config.resolveImage(path) : path;
+          blockDecorations.push(Decoration.replace({ widget: new ImageWidget(imageSrc, params.alt || path, params.width, params.height, params.title, params.align), block: true }).range(node.from, node.to));
+        } else if (isVideoFile(path)) {
+          const videoSrc = config.resolveImage ? config.resolveImage(path) : path;
+          blockDecorations.push(Decoration.replace({ widget: new VideoWidget(videoSrc, params.width, params.height, params.autoplay, params.loop, params.muted, params.controls, params.align), block: true }).range(node.from, node.to));
+        } else if (isPdfFile(path)) {
+          const pdfSrc = config.resolveImage ? config.resolveImage(path) : path;
+          blockDecorations.push(Decoration.replace({ widget: new PdfWidget(pdfSrc, params.page, params.width, params.height, params.toolbar, params.align), block: true }).range(node.from, node.to));
+        } else {
+          let content = resolved?.content ?? null;
+          if (resolvedEmbeds.has(path)) { content = null; } else { resolvedEmbeds.add(path); }
+          blockDecorations.push(Decoration.replace({ widget: new EmbedWidget(target, content, config.onWikilinkClick), block: true }).range(node.from, node.to));
+        }
+      }
+      continue;
+    }
+
+    // Image nodes that are embeds (block-level)
+    if (node.name === 'Image' && !cursorInParent) {
+      const text = doc.sliceString(node.from, node.to);
+      const embedMatch = text.match(/^!\[\[([^\]]+)\]\]$/);
+      if (embedMatch) {
+        const target = embedMatch[1];
+        const { path, params } = parseEmbedTarget(target);
+        const resolved = config.resolveWikilink(path);
+        blockRanges.push({ from: node.from, to: node.to });
+
+        if (isImageFile(path)) {
+          const imageSrc = config.resolveImage ? config.resolveImage(path) : path;
+          blockDecorations.push(Decoration.replace({ widget: new ImageWidget(imageSrc, params.alt || path, params.width, params.height, params.title, params.align), block: true }).range(node.from, node.to));
+        } else if (isVideoFile(path)) {
+          const videoSrc = config.resolveImage ? config.resolveImage(path) : path;
+          blockDecorations.push(Decoration.replace({ widget: new VideoWidget(videoSrc, params.width, params.height, params.autoplay, params.loop, params.muted, params.controls, params.align), block: true }).range(node.from, node.to));
+        } else {
+          let content = resolved?.content ?? null;
+          if (resolvedEmbeds.has(path)) { content = null; } else { resolvedEmbeds.add(path); }
+          blockDecorations.push(Decoration.replace({ widget: new EmbedWidget(target, content, config.onWikilinkClick), block: true }).range(node.from, node.to));
+        }
+        continue;
+      }
+
+      // Standard markdown image (also block-level)
+      const match = text.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+      if (match) {
+        const alt = match[1];
+        const src = config.resolveImage(match[2]);
+        blockDecorations.push(Decoration.replace({ widget: new ImageWidget(src, alt), block: true }).range(node.from, node.to));
+      }
+      continue;
+    }
+
+    // Tags
+    if (node.name === 'Tag' && !cursorInParent) {
+      const tag = doc.sliceString(node.from + 1, node.to);
+      inlineDecorations.push(Decoration.replace({ widget: new TagWidget(tag, config.onTagClick) }).range(node.from, node.to));
+      continue;
+    }
+  }
+
+  return { inlineDecorations, blockDecorations, blockRanges };
+}
+
+// Build decorations separated into inline and block categories
+// Block decorations cannot be provided via ViewPlugin, they must use StateField
+// Also returns blockRanges for atomicRanges facet
+function buildAllDecorations(
+  view: EditorView,
+  config: LivePreviewConfig,
+  cachedBlockScans?: BlockScanCache,
+  cachedTreeScan?: TreeScanCache,
+): { inline: DecorationSet; block: DecorationSet; blockRanges: { from: number; to: number }[] } {
+  const fullConfig = { ...DEFAULT_CONFIG, ...config };
+  const { head: cursor } = view.state.selection.main;
+  const cursorLine = view.state.doc.lineAt(cursor).number;
+  const doc = view.state.doc;
+
+  // Use cached tree scan if available (selectionSet-only updates)
+  const treeScan = cachedTreeScan ?? buildTreeScanCache(view.state, fullConfig);
+  const { inlineDecorations, blockDecorations, blockRanges } = buildCursorSensitiveDecorations(treeScan, view.state, fullConfig);
+
   // === BLOCK-LEVEL RENDERING ===
   // Use cached scans when available (selectionSet-only updates), otherwise compute fresh
   const blockScans = cachedBlockScans ?? computeBlockScans(view.state);
@@ -645,13 +555,9 @@ function buildAllDecorations(
   for (const block of blockScans.codeBlocks) {
     const startLine = doc.lineAt(block.from);
     const endLine = doc.lineAt(block.to);
-
-    // Only show raw (skip widget) if cursor is ON a line within the block
-    // This allows arrow keys to skip over the widget when cursor is outside
     const cursorInsideBlock = cursorLine >= startLine.number && cursorLine <= endLine.number;
 
     if (!cursorInsideBlock) {
-      // Cursor is not on any line of the block, show widget
       blockRanges.push({ from: block.from, to: block.to });
       blockDecorations.push(
         Decoration.replace({
@@ -660,13 +566,11 @@ function buildAllDecorations(
         }).range(block.from, block.to)
       );
     }
-    // If cursor IS on a line within the block, don't add widget (show raw for editing)
   }
 
   // Math blocks
   for (const block of blockScans.mathBlocks) {
     if (block.display) {
-      // Display math is block-level - use line-based cursor detection
       const startLine = doc.lineAt(block.from);
       const endLine = doc.lineAt(block.to);
       const cursorInsideBlock = cursorLine >= startLine.number && cursorLine <= endLine.number;
@@ -681,7 +585,6 @@ function buildAllDecorations(
         );
       }
     } else {
-      // Inline math - use position-based detection (cursor touching the range)
       const cursorInRange = cursor >= block.from && cursor <= block.to;
       if (!cursorInRange) {
         inlineDecorations.push(
@@ -715,10 +618,8 @@ function buildAllDecorations(
     const startLine = doc.lineAt(callout.from);
     const endLine = doc.lineAt(callout.to);
     if (cursorLine >= startLine.number && cursorLine <= endLine.number) {
-      // Cursor inside callout, show raw
       continue;
     }
-    // Track range for atomicRanges
     blockRanges.push({ from: callout.from, to: callout.to });
     blockDecorations.push(
       Decoration.replace({
@@ -804,45 +705,29 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
       decorations: DecorationSet;
       pendingBlockUpdate: DecorationSet | null = null;
       pendingAtomicRanges: RangeSet<Decoration> | null = null;
-      destroyed = false;
       blockScanCache: BlockScanCache | null = null;
+      treeScanCache: TreeScanCache | null = null;
 
       constructor(view: EditorView) {
-        // Initial build: compute everything fresh, cache block scans
+        // Initial build: compute everything fresh, cache both scans
         this.blockScanCache = computeBlockScans(view.state);
-        const result = buildAllDecorations(view, resolvedConfig, this.blockScanCache);
+        this.treeScanCache = buildTreeScanCache(view.state, resolvedConfig);
+        const result = buildAllDecorations(view, resolvedConfig, this.blockScanCache, this.treeScanCache);
         this.decorations = result.inline;
-        // Schedule block decorations and atomic ranges update for next frame
+        // Store pending block updates — dispatched by the updateListener (not rAF)
         this.pendingBlockUpdate = result.block;
         this.pendingAtomicRanges = this.buildAtomicRanges(result.blockRanges);
-        requestAnimationFrame(() => {
-          if (!this.destroyed) {
-            const effects: StateEffect<any>[] = [];
-            if (this.pendingBlockUpdate) {
-              effects.push(setBlockDecorations.of(this.pendingBlockUpdate));
-              this.pendingBlockUpdate = null;
-            }
-            if (this.pendingAtomicRanges) {
-              effects.push(setAtomicRanges.of(this.pendingAtomicRanges));
-              this.pendingAtomicRanges = null;
-            }
-            if (effects.length > 0) {
-              view.dispatch({ effects });
-            }
-          }
-        });
       }
 
       buildAtomicRanges(ranges: { from: number; to: number }[]): RangeSet<Decoration> {
         if (ranges.length === 0) return RangeSet.empty;
-        // Sort ranges by position (required for RangeSet)
         const sorted = [...ranges].sort((a, b) => a.from - b.from);
         const markers: Range<Decoration>[] = sorted.map((r) => atomicMarker.range(r.from, r.to));
         return RangeSet.of(markers);
       }
 
       update(update: ViewUpdate) {
-        // Skip if this update was caused by our own dispatch
+        // Skip if this update was caused by our own block-decoration dispatch
         const isOwnUpdate = update.transactions.some((tr) =>
           tr.effects.some((e) => e.is(setBlockDecorations) || e.is(setAtomicRanges))
         );
@@ -860,33 +745,23 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
           syntaxTree(update.startState) !== syntaxTree(update.state);
 
         if (contentChanged || update.selectionSet) {
-          // Invalidate block scan cache only when content changes
+          // Invalidate caches only when content changes
           if (contentChanged) {
             this.blockScanCache = computeBlockScans(update.view.state);
+            this.treeScanCache = buildTreeScanCache(update.view.state, resolvedConfig);
           }
+          // On selectionSet-only: reuse cached tree + block scans (O(k) replay, no tree walk)
 
-          // Rebuild decorations using cached block scans for selection-only updates
-          const result = buildAllDecorations(update.view, resolvedConfig, this.blockScanCache ?? undefined);
+          const result = buildAllDecorations(
+            update.view, resolvedConfig,
+            this.blockScanCache ?? undefined,
+            this.treeScanCache ?? undefined,
+          );
           this.decorations = result.inline;
-          // Schedule block decorations and atomic ranges update for next frame to avoid recursive dispatch
+          // Store pending block updates — dispatched by the updateListener
           this.pendingBlockUpdate = result.block;
           this.pendingAtomicRanges = this.buildAtomicRanges(result.blockRanges);
-          requestAnimationFrame(() => {
-            if (!this.destroyed) {
-              const effects: StateEffect<any>[] = [];
-              if (this.pendingBlockUpdate) {
-                effects.push(setBlockDecorations.of(this.pendingBlockUpdate));
-                this.pendingBlockUpdate = null;
-              }
-              if (this.pendingAtomicRanges) {
-                effects.push(setAtomicRanges.of(this.pendingAtomicRanges));
-                this.pendingAtomicRanges = null;
-              }
-              if (effects.length > 0) {
-                update.view.dispatch({ effects });
-              }
-            }
-          });
+
           if (triggerChanged) {
             lastRefreshTrigger = currentTrigger;
           }
@@ -894,10 +769,10 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
       }
 
       destroy() {
-        this.destroyed = true;
         this.pendingBlockUpdate = null;
         this.pendingAtomicRanges = null;
         this.blockScanCache = null;
+        this.treeScanCache = null;
       }
     },
     {
@@ -905,7 +780,34 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
     }
   );
 
-  return [blockDecorationsField, atomicRangesField, livePreviewPlugin];
+  // updateListener fires AFTER the ViewPlugin.update() cycle completes,
+  // so it's safe to dispatch here. This eliminates the rAF double-render:
+  // block decorations are now delivered in the same update round.
+  const blockDecorationDispatcher = EditorView.updateListener.of((update) => {
+    // Skip our own dispatches to avoid infinite loops
+    const isOwnUpdate = update.transactions.some((tr) =>
+      tr.effects.some((e) => e.is(setBlockDecorations) || e.is(setAtomicRanges))
+    );
+    if (isOwnUpdate) return;
+
+    const plugin = update.view.plugin(livePreviewPlugin);
+    if (!plugin) return;
+
+    const effects: StateEffect<any>[] = [];
+    if (plugin.pendingBlockUpdate) {
+      effects.push(setBlockDecorations.of(plugin.pendingBlockUpdate));
+      plugin.pendingBlockUpdate = null;
+    }
+    if (plugin.pendingAtomicRanges) {
+      effects.push(setAtomicRanges.of(plugin.pendingAtomicRanges));
+      plugin.pendingAtomicRanges = null;
+    }
+    if (effects.length > 0) {
+      update.view.dispatch({ effects });
+    }
+  });
+
+  return [blockDecorationsField, atomicRangesField, livePreviewPlugin, blockDecorationDispatcher];
 }
 
 // Static version for tests (no config) - returns just inline decorations to avoid the error

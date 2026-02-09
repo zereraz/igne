@@ -71,10 +71,13 @@ When implementing features using:
 - `syntaxTree(state).iterate({ from, to })` — scope tree walk to visible ranges
 
 ### Current Architecture (livePreview.ts)
-- `buildAllDecorations()` walks full syntax tree + runs 4 regex scans (code blocks, math, mermaid, callouts)
-- ViewPlugin handles inline decorations, dispatches block decorations to StateField via `requestAnimationFrame` + `StateEffect`
-- The rAF dispatch causes double-render per update (first frame: stale block decos, second frame: correct)
-- Block scans (`findCodeBlocks`, `findMathBlocks`, etc.) use line-by-line or full-doc regex — should be cached and invalidated only on `docChanged`
+- **Three-layer caching** on content changes (`docChanged`/`viewportChanged`/`syntaxTree` change):
+  1. `TreeScanCache` — walks syntax tree once, stores node positions + pre-computed cursor-independent styling decorations
+  2. `BlockScanCache` — runs 4 regex scans (code blocks, math, mermaid, callouts)
+  3. On `selectionSet`-only (cursor move): replays cursor-sensitive decorations from cached node list (O(k) array loop) instead of O(n) tree walk
+- **Block decoration dispatch**: ViewPlugin stores pending block decorations, `EditorView.updateListener` dispatches them synchronously after the update cycle (no `requestAnimationFrame`, no double-render)
+- `buildCursorSensitiveDecorations()` — fast replay of mark-hiding + widget-toggling using cached `CachedTreeNode[]`
+- `buildTreeScanCache()` — full tree walk, separates stable (styling) from cursor-sensitive (marks, widgets) decorations
 
 ### Widget Reuse
 All widgets implement `eq()` — CM6 compares old vs new widgets and reuses DOM when they match. This is correct and important for avoiding DOM thrash.
@@ -93,4 +96,4 @@ All widgets implement `eq()` — CM6 compares old vs new widgets and reuses DOM 
 - `getHiddenRanges(view)` extracts replace decorations with `isHidden: true`
 - `hasWikilinkWidget(view, from, to)` / `hasTagWidget(view, from, to)` check for widget decorations at positions
 - Static `livePreview` export (no config) is used by tests — only returns inline decorations
-- 621 tests pass, 46 skipped (media type detection not yet implemented)
+- 640 tests pass, 46 skipped (media type detection not yet implemented)
