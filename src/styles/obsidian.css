@@ -107,16 +107,16 @@
    BACKGROUND COLORS - Dark theme (default)
    ============================================================================= */
 .theme-dark {
-  /* Primary backgrounds */
-  --background-primary: var(--color-base-00);
-  --background-primary-alt: var(--color-base-10);
-  --background-secondary: var(--color-base-10);
-  --background-secondary-alt: var(--color-base-20);
-  --background-tertiary: var(--color-base-20);
+  /* Primary backgrounds - using zinc palette for dark theme */
+  --background-primary: #18181b;
+  --background-primary-alt: #1f1f23;
+  --background-secondary: #27272a;
+  --background-secondary-alt: #2d2d30;
+  --background-tertiary: #3f3f46;
   --background-modifier-hover: rgba(255, 255, 255, 0.08);
   --background-modifier-active-hover: rgba(255, 255, 255, 0.12);
-  --background-modifier-border: var(--color-base-30);
-  --background-modifier-border-hover: var(--color-base-35);
+  --background-modifier-border: #3f3f46;
+  --background-modifier-border-hover: #52525b;
   --background-modifier-border-focus: var(--color-accent);
   --background-modifier-error: rgba(251, 70, 76, 0.15);
   --background-modifier-error-hover: rgba(251, 70, 76, 0.2);
@@ -125,13 +125,18 @@
   --background-modifier-message: rgba(251, 159, 72, 0.1);
 
   /* Header backgrounds */
-  --background-header: var(--color-base-10);
-  --background-table-odd: var(--color-base-05);
-  --background-table-even: var(--color-base-10);
+  --background-header: #27272a;
+  --background-table-odd: #1f1f23;
+  --background-table-even: #27272a;
 
   /* Special backgrounds */
-  --background-divider: var(--color-base-30);
+  --background-divider: #3f3f46;
   --background-toggle-handle: #ffffff;
+
+  /* Interactive states for dark theme */
+  --interactive-normal: var(--background-secondary);
+  --interactive-hover: var(--background-modifier-hover);
+  --interactive-active: var(--background-modifier-active-hover);
 }
 
 /* =============================================================================
@@ -150,8 +155,8 @@
   --background-secondary: #f5f6f8;
   --background-secondary-alt: #e6e8eb;
   --background-tertiary: #e6e8eb;
-  --background-modifier-hover: rgba(0, 0, 0, 0.05);
-  --background-modifier-active-hover: rgba(0, 0, 0, 0.08);
+  --background-modifier-hover: rgba(0, 0, 0, 0.08);
+  --background-modifier-active-hover: rgba(0, 0, 0, 0.12);
   --background-modifier-border: #e6e8eb;
   --background-modifier-border-hover: #d1d5db;
   --background-modifier-border-focus: var(--color-accent);
@@ -169,15 +174,21 @@
   /* Special backgrounds */
   --background-divider: #e6e8eb;
   --background-toggle-handle: #ffffff;
+
+  /* Interactive states for light theme */
+  --interactive-normal: #e6e8eb;
+  --interactive-hover: rgba(0, 0, 0, 0.08);
+  --interactive-active: rgba(0, 0, 0, 0.12);
 }
 
 /* =============================================================================
    TEXT COLORS - Dark theme (default)
    ============================================================================= */
 .theme-dark {
-  --text-normal: var(--color-base-100);
-  --text-muted: var(--color-base-70);
-  --text-faint: var(--color-base-50);
+  /* Dark theme needs LIGHT text colors */
+  --text-normal: #e4e4e7;
+  --text-muted: #a1a1aa;
+  --text-faint: #71717a;
   --text-on-accent: #ffffff;
   --text-accent: var(--color-accent);
   --text-accent-hover: var(--color-accent-1);
@@ -193,7 +204,7 @@
   --text-highlight-text: var(--text-normal);
 
   /* Code block colors */
-  --code-background: var(--color-base-15);
+  --code-background: #27272a;
   --code-font: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 }
 
@@ -737,56 +748,56 @@ body {
 
 /* Command item layout */
 .command-item {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: var(--size-4-2) !important;
-  padding: var(--size-4-2) var(--size-4-3) !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+  padding: var(--size-4-2) var(--size-4-3);
 }
 
 /* Command icon */
 .command-icon {
-  flex-shrink: 0 !important;
-  width: 16px !important;
-  height: 16px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  margin-right: var(--size-4-2) !important;
-  font-size: var(--font-ui-medium) !important;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: var(--size-4-2);
+  font-size: var(--font-ui-medium);
 }
 
 /* Command name */
 .command-name {
-  flex: 1 !important;
-  font-size: var(--font-ui-medium) !important;
-  color: var(--text-normal) !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
+  flex: 1;
+  font-size: var(--font-ui-medium);
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Command hotkey */
 .command-hotkey {
-  flex-shrink: 0 !important;
-  font-size: var(--font-ui-small) !important;
-  color: var(--text-faint) !important;
-  font-family: var(--font-monospace) !important;
-  background: var(--background-secondary) !important;
-  padding: 2px 6px !important;
-  border-radius: var(--radius-s) !important;
-  border: 1px solid var(--background-modifier-border) !important;
-  margin-left: var(--size-4-2) !important;
+  flex-shrink: 0;
+  font-size: var(--font-ui-small);
+  color: var(--text-faint);
+  font-family: var(--font-monospace);
+  background: var(--background-secondary);
+  padding: 2px 6px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--background-modifier-border);
+  margin-left: var(--size-4-2);
 }
 
 /* Hover state for command items */
 .command-item:hover .command-hotkey {
-  background: var(--background-modifier-hover) !important;
-  border-color: var(--background-modifier-border-hover) !important;
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border-hover);
 }
 
 /* Selected state for command items */
 .suggestion-item.is-selected .command-hotkey {
-  background: var(--background-modifier-active-hover) !important;
-  border-color: var(--background-modifier-border) !important;
+  background: var(--background-modifier-active-hover);
+  border-color: var(--background-modifier-border);
 }

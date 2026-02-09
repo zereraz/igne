@@ -58,6 +58,9 @@ export function SettingsModal({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settings"
       style={{
         position: 'fixed',
         top: 0,

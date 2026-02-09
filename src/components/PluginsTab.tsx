@@ -201,7 +201,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
     }
   }
 
-  const fontFamily = '"IBM Plex Mono", monospace';
+  const fontFamily = 'var(--font-monospace-theme, var(--font-monospace))';
 
   return (
     <div
@@ -221,14 +221,14 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
             marginBottom: '8px',
           }}
         >
-          <Puzzle size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
+          <Puzzle size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
           <label
             style={{
               fontSize: '11px',
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
-              color: '#a1a1aa',
+              color: 'var(--text-muted)',
               fontFamily,
             }}
           >
@@ -238,7 +238,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
         <p
           style={{
             fontSize: '12px',
-            color: '#71717a',
+            color: 'var(--text-faint)',
             margin: 0,
             fontFamily,
             lineHeight: 1.5,
@@ -247,7 +247,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
           Manage your Obsidian community plugins. Place plugins in{' '}
           <code
             style={{
-              backgroundColor: '#27272a',
+              backgroundColor: 'var(--background-secondary)',
               padding: '2px 6px',
               borderRadius: '2px',
               fontSize: '11px',
@@ -263,11 +263,11 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
         <div
           style={{
             padding: '10px 12px',
-            backgroundColor: status === 'error' ? '#450a0a' : '#27272a',
-            border: `1px solid ${status === 'error' ? '#dc2626' : '#3f3f46'}`,
+            backgroundColor: status === 'error' ? 'rgba(var(--color-red-rgb, 220, 38, 38), 0.15)' : 'var(--background-secondary)',
+            border: `1px solid ${status === 'error' ? 'var(--color-red)' : 'var(--background-modifier-border)'}`,
             borderRadius: '2px',
             fontSize: '12px',
-            color: status === 'error' ? '#fca5a5' : '#a1a1aa',
+            color: status === 'error' ? 'var(--color-red)' : 'var(--text-muted)',
             fontFamily,
             display: 'flex',
             alignItems: 'center',
@@ -277,7 +277,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
           {status === 'error' ? (
             <AlertCircle size={14} style={{ flexShrink: 0 }} />
           ) : (
-            <Check size={14} style={{ flexShrink: 0, color: '#22c55e' }} />
+            <Check size={14} style={{ flexShrink: 0, color: 'var(--color-green)' }} />
           )}
           {statusMessage}
         </div>
@@ -288,7 +288,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
         <div
           style={{
             fontSize: '12px',
-            color: '#71717a',
+            color: 'var(--text-faint)',
             fontFamily,
             padding: '24px',
             textAlign: 'center',
@@ -303,17 +303,17 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
         <div
           style={{
             padding: '48px 24px',
-            backgroundColor: '#27272a',
-            border: '1px dashed #3f3f46',
+            backgroundColor: 'var(--background-secondary)',
+            border: '1px dashed var(--background-modifier-border)',
             borderRadius: '4px',
             textAlign: 'center',
           }}
         >
-          <Puzzle size={32} style={{ color: '#3f3f46', marginBottom: '12px' }} />
+          <Puzzle size={32} style={{ color: 'var(--background-modifier-border)', marginBottom: '12px' }} />
           <p
             style={{
               fontSize: '13px',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               margin: '0 0 8px 0',
               fontFamily,
             }}
@@ -323,7 +323,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
           <p
             style={{
               fontSize: '11px',
-              color: '#52525b',
+              color: 'var(--interactive-normal)',
               margin: 0,
               fontFamily,
             }}
@@ -347,23 +347,23 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
               key={plugin.id}
               style={{
                 padding: '16px',
-                backgroundColor: '#27272a',
+                backgroundColor: 'var(--background-secondary)',
                 border: plugin.error
-                  ? '1px solid #dc2626'
+                  ? '1px solid var(--color-red)'
                   : plugin.isEnabled
-                    ? '1px solid #7c3aed'
-                    : '1px solid #3f3f46',
+                    ? '1px solid var(--color-accent)'
+                    : '1px solid var(--background-modifier-border)',
                 borderRadius: '4px',
                 transition: 'border-color 100ms ease',
               }}
               onMouseEnter={(e) => {
                 if (!plugin.error && !plugin.isEnabled) {
-                  e.currentTarget.style.borderColor = '#52525b';
+                  e.currentTarget.style.borderColor = 'var(--interactive-normal)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (!plugin.error && !plugin.isEnabled) {
-                  e.currentTarget.style.borderColor = '#3f3f46';
+                  e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
                 }
               }}
             >
@@ -391,7 +391,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                       style={{
                         fontSize: '14px',
                         fontWeight: 600,
-                        color: plugin.error ? '#fca5a5' : '#e4e4e7',
+                        color: plugin.error ? 'var(--color-red)' : 'var(--text-normal)',
                         margin: 0,
                         fontFamily,
                       }}
@@ -401,8 +401,8 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                     <span
                       style={{
                         fontSize: '10px',
-                        color: '#71717a',
-                        backgroundColor: '#18181b',
+                        color: 'var(--text-faint)',
+                        backgroundColor: 'var(--background-primary)',
                         padding: '2px 6px',
                         borderRadius: '2px',
                         fontFamily,
@@ -414,11 +414,11 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                       <span
                         style={{
                           fontSize: '10px',
-                          color: '#a78bfa',
-                          backgroundColor: '#27272a',
+                          color: 'var(--color-accent)',
+                          backgroundColor: 'var(--background-secondary)',
                           padding: '2px 6px',
                           borderRadius: '2px',
-                          border: '1px solid #3f3f46',
+                          border: '1px solid var(--background-modifier-border)',
                           fontFamily,
                         }}
                       >
@@ -448,7 +448,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                   <p
                     style={{
                       fontSize: '12px',
-                      color: '#71717a',
+                      color: 'var(--text-faint)',
                       margin: '0 0 4px 0',
                       fontFamily,
                       lineHeight: 1.4,
@@ -459,7 +459,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                   <p
                     style={{
                       fontSize: '11px',
-                      color: '#52525b',
+                      color: 'var(--interactive-normal)',
                       margin: 0,
                       fontFamily,
                     }}
@@ -474,7 +474,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
-                            color: '#a78bfa',
+                            color: 'var(--color-accent)',
                             textDecoration: 'none',
                           }}
                           onMouseEnter={(e) => {
@@ -504,25 +504,25 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                     fontSize: '12px',
                     fontWeight: 500,
                     fontFamily,
-                    backgroundColor: plugin.isEnabled ? '#7c3aed' : '#18181b',
-                    border: plugin.isEnabled ? '1px solid #7c3aed' : '1px solid #3f3f46',
+                    backgroundColor: plugin.isEnabled ? 'var(--color-accent)' : 'var(--background-primary)',
+                    border: plugin.isEnabled ? '1px solid var(--color-accent)' : '1px solid var(--background-modifier-border)',
                     borderRadius: '2px',
                     cursor: plugin.error || (plugin.tierInfo?.blockedReasons.length ?? 0) > 0 ? 'not-allowed' : 'pointer',
-                    color: plugin.isEnabled ? 'white' : '#a1a1aa',
+                    color: plugin.isEnabled ? 'var(--text-on-accent)' : 'var(--text-muted)',
                     opacity: plugin.error || (plugin.tierInfo?.blockedReasons.length ?? 0) > 0 ? 0.5 : 1,
                     transition: 'all 100ms ease',
                     flexShrink: 0,
                   }}
                   onMouseEnter={(e) => {
                     if (!plugin.error && !(plugin.tierInfo?.blockedReasons.length ?? 0) && !plugin.isEnabled) {
-                      e.currentTarget.style.backgroundColor = '#27272a';
-                      e.currentTarget.style.borderColor = '#52525b';
+                      e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+                      e.currentTarget.style.borderColor = 'var(--interactive-normal)';
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!plugin.error && !(plugin.tierInfo?.blockedReasons.length ?? 0) && !plugin.isEnabled) {
-                      e.currentTarget.style.backgroundColor = '#18181b';
-                      e.currentTarget.style.borderColor = '#3f3f46';
+                      e.currentTarget.style.backgroundColor = 'var(--background-primary)';
+                      e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
                     }
                   }}
                 >
@@ -536,7 +536,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                 <div
                   style={{
                     paddingTop: '8px',
-                    borderTop: '1px solid #3f3f46',
+                    borderTop: '1px solid var(--background-modifier-border)',
                     marginTop: '8px',
                   }}
                 >
@@ -547,19 +547,19 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                         alignItems: 'flex-start',
                         gap: '8px',
                         padding: '8px',
-                        backgroundColor: '#450a0a',
-                        border: '1px solid #dc2626',
+                        backgroundColor: 'rgba(var(--color-red-rgb, 220, 38, 38), 0.15)',
+                        border: '1px solid var(--color-red)',
                         borderRadius: '2px',
                         marginBottom: plugin.tierInfo.permissions.length > 0 ? '8px' : 0,
                       }}
                     >
-                      <AlertTriangle size={14} style={{ color: '#fca5a5', flexShrink: 0, marginTop: '2px' }} />
+                      <AlertTriangle size={14} style={{ color: 'var(--color-red)', flexShrink: 0, marginTop: '2px' }} />
                       <div>
                         <p
                           style={{
                             fontSize: '11px',
                             fontWeight: 600,
-                            color: '#fca5a5',
+                            color: 'var(--color-red)',
                             margin: '0 0 4px 0',
                             fontFamily,
                           }}
@@ -571,7 +571,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                             key={i}
                             style={{
                               fontSize: '10px',
-                              color: '#fca5a5',
+                              color: 'var(--color-red)',
                               margin: i === 0 ? '0' : '4px 0 0 0',
                               fontFamily,
                               lineHeight: 1.4,
@@ -591,18 +591,18 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                         alignItems: 'flex-start',
                         gap: '8px',
                         padding: '8px',
-                        backgroundColor: '#451a03',
-                        border: '1px solid #f59e0b',
+                        backgroundColor: 'rgba(var(--color-yellow-rgb, 245, 158, 11), 0.15)',
+                        border: '1px solid var(--color-yellow)',
                         borderRadius: '2px',
                       }}
                     >
-                      <Info size={14} style={{ color: '#fcd34d', flexShrink: 0, marginTop: '2px' }} />
+                      <Info size={14} style={{ color: 'var(--color-yellow)', flexShrink: 0, marginTop: '2px' }} />
                       <div>
                         <p
                           style={{
                             fontSize: '11px',
                             fontWeight: 600,
-                            color: '#fcd34d',
+                            color: 'var(--color-yellow)',
                             margin: '0 0 4px 0',
                             fontFamily,
                           }}
@@ -612,7 +612,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                         <p
                           style={{
                             fontSize: '10px',
-                            color: '#fcd34d',
+                            color: 'var(--color-yellow)',
                             margin: '0 0 4px 0',
                             fontFamily,
                           }}
@@ -625,11 +625,11 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                             style={{
                               display: 'inline-block',
                               fontSize: '10px',
-                              color: '#fcd34d',
-                              backgroundColor: '#27272a',
+                              color: 'var(--color-yellow)',
+                              backgroundColor: 'var(--background-secondary)',
                               padding: '2px 6px',
                               borderRadius: '2px',
-                              border: '1px solid #3f3f46',
+                              border: '1px solid var(--background-modifier-border)',
                               fontFamily,
                               marginRight: '4px',
                               marginBottom: '4px',
@@ -649,7 +649,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                 <div
                   style={{
                     paddingTop: '8px',
-                    borderTop: '1px solid #3f3f46',
+                    borderTop: '1px solid var(--background-modifier-border)',
                     marginTop: '8px',
                   }}
                 >
@@ -663,21 +663,21 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                       fontWeight: 500,
                       fontFamily,
                       backgroundColor: 'transparent',
-                      border: '1px solid #3f3f46',
+                      border: '1px solid var(--background-modifier-border)',
                       borderRadius: '2px',
                       cursor: 'pointer',
-                      color: '#a1a1aa',
+                      color: 'var(--text-muted)',
                       transition: 'all 100ms ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#27272a';
-                      e.currentTarget.style.borderColor = '#52525b';
-                      e.currentTarget.style.color = '#e4e4e7';
+                      e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+                      e.currentTarget.style.borderColor = 'var(--interactive-normal)';
+                      e.currentTarget.style.color = 'var(--text-normal)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = '#3f3f46';
-                      e.currentTarget.style.color = '#a1a1aa';
+                      e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
+                      e.currentTarget.style.color = 'var(--text-muted)';
                     }}
                   >
                     <SettingsIcon size={12} />
@@ -686,7 +686,7 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                   <p
                     style={{
                       fontSize: '10px',
-                      color: '#52525b',
+                      color: 'var(--interactive-normal)',
                       margin: '4px 0 0 0',
                       fontFamily,
                     }}

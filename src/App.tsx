@@ -40,6 +40,8 @@ import { GraphView } from './components/GraphView';
 import { LocalGraphView } from './components/LocalGraphView';
 import { ContextMenu } from './components/ContextMenu';
 import { RenameDialog } from './components/RenameDialog';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import { PromptDialog } from './components/PromptDialog';
 import { TemplateInsertModal } from './components/TemplateInsertModal';
 import { DailyNotesNav } from './components/DailyNotesNav';
 import { StarredFilesPanel } from './components/StarredFilesPanel';
@@ -314,6 +316,42 @@ function App() {
   const [focusMode, setFocusMode] = useState(false);
   const switchingVaultRef = useRef(false);
 
+  // Dialog state for replacing native confirm/alert/prompt
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    alertOnly?: boolean;
+    destructive?: boolean;
+    resolve: (confirmed: boolean) => void;
+  } | null>(null);
+  const [promptDialog, setPromptDialog] = useState<{
+    title: string;
+    message?: string;
+    placeholder?: string;
+    defaultValue?: string;
+    submitLabel?: string;
+    resolve: (value: string | null) => void;
+  } | null>(null);
+
+  const showConfirm = useCallback((opts: { title: string; message: string; confirmLabel?: string; destructive?: boolean }) => {
+    return new Promise<boolean>((resolve) => {
+      setConfirmDialog({ ...opts, resolve });
+    });
+  }, []);
+
+  const showAlert = useCallback((title: string, message: string) => {
+    return new Promise<boolean>((resolve) => {
+      setConfirmDialog({ title, message, alertOnly: true, resolve });
+    });
+  }, []);
+
+  const showPrompt = useCallback((opts: { title: string; message?: string; placeholder?: string; defaultValue?: string; submitLabel?: string }) => {
+    return new Promise<string | null>((resolve) => {
+      setPromptDialog({ ...opts, resolve });
+    });
+  }, []);
+
   // Ref to trigger editor decoration rebuilds when files change
   // Used by livePreview extension to refresh wikilink colors
   const editorRefreshTrigger = useRef(0);
@@ -456,7 +494,7 @@ function App() {
       setShowVaultPicker(false);
     } catch (e) {
       console.error('[App] Failed to open vault:', e);
-      alert('Failed to open vault: ' + (e as Error).message);
+      showAlert('Error', 'Failed to open vault: ' + (e as Error).message);
     } finally {
       switchingVaultRef.current = false;
     }
@@ -989,9 +1027,11 @@ function App() {
 
       // Show confirmation if there are incoming links
       if (linkUpdateCount > 0) {
-        const confirmed = window.confirm(
-          `This will update ${linkUpdateCount} incoming link${linkUpdateCount > 1 ? 's' : ''} in other files. Continue?`
-        );
+        const confirmed = await showConfirm({
+          title: 'Update Links',
+          message: `This will update ${linkUpdateCount} incoming link${linkUpdateCount > 1 ? 's' : ''} in other files. Continue?`,
+          confirmLabel: 'Update',
+        });
         if (!confirmed) return;
       }
 
@@ -1013,9 +1053,9 @@ function App() {
       }
     } catch (error) {
       console.error('Failed to rename:', error);
-      alert('Failed to rename file: ' + (error as Error).message);
+      showAlert('Error', 'Failed to rename file: ' + (error as Error).message);
     }
-  }, [getActiveTab, renameTab, vaultPath]);
+  }, [getActiveTab, renameTab, vaultPath, showConfirm, showAlert]);
 
   // Daily Notes handlers
   const handleOpenDailyNote = useCallback(async () => {
@@ -1110,9 +1150,11 @@ function App() {
 
         // Show confirmation if there are incoming links
         if (linkUpdateCount > 0) {
-          const confirmed = window.confirm(
-            `This will update ${linkUpdateCount} incoming link${linkUpdateCount > 1 ? 's' : ''} in other files. Continue?`
-          );
+          const confirmed = await showConfirm({
+            title: 'Update Links',
+            message: `This will update ${linkUpdateCount} incoming link${linkUpdateCount > 1 ? 's' : ''} in other files. Continue?`,
+            confirmLabel: 'Update',
+          });
           if (!confirmed) return;
         }
 
@@ -1148,7 +1190,7 @@ function App() {
     }
 
     setRenameTarget(null);
-  }, [renameTarget, renameTab, vaultPath]);
+  }, [renameTarget, renameTab, vaultPath, showConfirm]);
 
   const handleDelete = useCallback(async () => {
     if (!contextMenu) return;
@@ -1188,7 +1230,11 @@ function App() {
   const handleNewFolder = useCallback(async () => {
     if (!contextMenu) return;
 
-    const folderName = prompt('Enter folder name:');
+    const folderName = await showPrompt({
+      title: 'New Folder',
+      placeholder: 'Folder name',
+      submitLabel: 'Create',
+    });
     if (!folderName) return;
 
     const newPath = `${contextMenu.path}/${folderName}`;
@@ -1207,7 +1253,7 @@ function App() {
     }
 
     setContextMenu(null);
-  }, [contextMenu, vaultPath]);
+  }, [contextMenu, vaultPath, showPrompt]);
 
   // Template handlers
   const handleInsertTemplate = useCallback(async (templatePath: string, fileName?: string) => {
@@ -1243,7 +1289,7 @@ function App() {
         // Insert template into current file
         const currentActiveTab = getActiveTab();
         if (!currentActiveTab) {
-          alert('Please open a file first to insert a template');
+          showAlert('No File Open', 'Please open a file first to insert a template');
           setIsTemplateModalOpen(false);
           return;
         }
@@ -1267,9 +1313,9 @@ function App() {
       setIsTemplateModalOpen(false);
     } catch (error) {
       console.error('Failed to insert template:', error);
-      alert('Failed to insert template: ' + (error as Error).message);
+      showAlert('Error', 'Failed to insert template: ' + (error as Error).message);
     }
-  }, [vaultPath, getActiveTab, openTab, setActive, syncContent, updateContent, tabStateRef]);
+  }, [vaultPath, getActiveTab, openTab, setActive, syncContent, updateContent, tabStateRef, showAlert]);
 
   const handleOpenTemplateModal = useCallback(async () => {
     if (!vaultPath) return;
@@ -2247,7 +2293,7 @@ function App() {
           content={activeTab.content}
           cursorLine={currentLine}
           cursorColumn={currentColumn}
-          backlinksCount={0} // TODO: Wire up actual backlinks count
+          backlinksCount={activeTab.path ? searchStore.findBacklinks(activeTab.path).length : 0}
         />
       )}
 
@@ -2283,6 +2329,24 @@ function App() {
           onClose={() => setRenameTarget(null)}
           onRename={handleRenameConfirm}
           isFolder={renameTarget.isFolder}
+          existingNames={(() => {
+            const parentDir = renameTarget.path.split(/[/\\]/).slice(0, -1).join('/');
+            function findSiblings(entries: FileEntry[], targetParent: string): string[] {
+              for (const entry of entries) {
+                if (entry.is_dir && entry.path === targetParent && entry.children) {
+                  return entry.children.map(c => c.name);
+                }
+                if (entry.is_dir && entry.children) {
+                  const found = findSiblings(entry.children, targetParent);
+                  if (found.length > 0) return found;
+                }
+              }
+              return [];
+            }
+            // If parent is vault root, siblings are top-level entries
+            if (parentDir === vaultPath) return files.map(f => f.name);
+            return findSiblings(files, parentDir);
+          })()}
           data-testid="rename-dialog"
         />
       )}
@@ -2309,6 +2373,44 @@ function App() {
           onLineWrappingChange={handleLineWrappingChange}
           readableLineLength={readableLineLength}
           onReadableLineLengthChange={(enabled: boolean) => setReadableLineLength(enabled)}
+        />
+      )}
+
+      {/* Confirm/Alert Dialog */}
+      {confirmDialog && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          alertOnly={confirmDialog.alertOnly}
+          destructive={confirmDialog.destructive}
+          onConfirm={() => {
+            confirmDialog.resolve(true);
+            setConfirmDialog(null);
+          }}
+          onCancel={() => {
+            confirmDialog.resolve(false);
+            setConfirmDialog(null);
+          }}
+        />
+      )}
+
+      {/* Prompt Dialog */}
+      {promptDialog && (
+        <PromptDialog
+          title={promptDialog.title}
+          message={promptDialog.message}
+          placeholder={promptDialog.placeholder}
+          defaultValue={promptDialog.defaultValue}
+          submitLabel={promptDialog.submitLabel}
+          onSubmit={(value) => {
+            promptDialog.resolve(value);
+            setPromptDialog(null);
+          }}
+          onCancel={() => {
+            promptDialog.resolve(null);
+            setPromptDialog(null);
+          }}
         />
       )}
     </div>

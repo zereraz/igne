@@ -4,6 +4,7 @@ import { FolderOpen, Plus } from 'lucide-react';
 import { vaultsStore } from '../stores/VaultsStore';
 import type { VaultEntry } from '../types';
 import { CreateVaultDialog } from './CreateVaultDialog';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface VaultPickerProps {
   onOpen: (path: string) => void;
@@ -12,6 +13,7 @@ interface VaultPickerProps {
 export function VaultPicker({ onOpen }: VaultPickerProps) {
   const [recentVaults, setRecentVaults] = useState<VaultEntry[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [removeConfirm, setRemoveConfirm] = useState<string | null>(null);
 
   useEffect(() => {
     // Load recent vaults from store
@@ -36,14 +38,17 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
     }
   };
 
-  const handleRemoveVault = async (path: string, e: React.MouseEvent) => {
+  const handleRemoveVault = (path: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const confirmed = confirm('Remove this vault from the list?');
-    if (confirmed) {
-      await vaultsStore.removeVault(path);
-      // Refresh the list
+    setRemoveConfirm(path);
+  };
+
+  const confirmRemoveVault = async () => {
+    if (removeConfirm) {
+      await vaultsStore.removeVault(removeConfirm);
       setRecentVaults(vaultsStore.getVaults());
     }
+    setRemoveConfirm(null);
   };
 
   return (
@@ -53,8 +58,8 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#18181b',
-        fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+        backgroundColor: 'var(--background-primary)',
+        fontFamily: 'var(--font-interface)',
       }}
     >
       <div
@@ -75,7 +80,7 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
             style={{
               fontSize: '48px',
               fontWeight: 600,
-              color: '#fafafa',
+              color: 'var(--text-normal)',
               marginBottom: '12px',
               letterSpacing: '-0.02em',
             }}
@@ -85,7 +90,7 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
           <p
             style={{
               fontSize: '14px',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
             }}
@@ -104,7 +109,7 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
             <h2
               style={{
                 fontSize: '12px',
-                color: '#a1a1aa',
+                color: 'var(--text-muted)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
                 marginBottom: '16px',
@@ -151,20 +156,20 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
               width: '100%',
               padding: '14px',
               fontSize: '14px',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              fontFamily: 'var(--font-interface)',
               fontWeight: 500,
-              backgroundColor: '#7c3aed',
-              color: 'white',
+              backgroundColor: 'var(--color-accent)',
+              color: 'var(--text-on-accent)',
               border: 'none',
               borderRadius: '2px',
               cursor: 'pointer',
               transition: 'background-color 100ms ease',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#6d28d9';
+              e.currentTarget.style.backgroundColor = 'var(--color-accent-2)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#7c3aed';
+              e.currentTarget.style.backgroundColor = 'var(--color-accent)';
             }}
           >
             <FolderOpen size={16} />
@@ -190,20 +195,20 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
               width: '100%',
               padding: '12px',
               fontSize: '13px',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              fontFamily: 'var(--font-interface)',
               fontWeight: 500,
-              backgroundColor: '#3f3f46',
-              color: 'white',
+              backgroundColor: 'var(--background-tertiary)',
+              color: 'var(--text-normal)',
               border: 'none',
               borderRadius: '2px',
               cursor: 'pointer',
               transition: 'background-color 100ms ease',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#52525b';
+              e.currentTarget.style.backgroundColor = 'var(--background-modifier-border-hover)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#3f3f46';
+              e.currentTarget.style.backgroundColor = 'var(--background-tertiary)';
             }}
           >
             <Plus size={16} />
@@ -213,7 +218,7 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
           {/* Hint for file opening */}
           <p style={{
             fontSize: '11px',
-            color: '#52525b',
+            color: 'var(--text-faint)',
             textAlign: 'center',
             marginTop: '8px',
           }}>
@@ -226,6 +231,17 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
         <CreateVaultDialog
           onClose={() => setIsCreateDialogOpen(false)}
           onVaultCreated={handleCreateVault}
+        />
+      )}
+
+      {removeConfirm && (
+        <ConfirmDialog
+          title="Remove Vault"
+          message="Remove this vault from the list? The files will not be deleted."
+          confirmLabel="Remove"
+          destructive
+          onConfirm={confirmRemoveVault}
+          onCancel={() => setRemoveConfirm(null)}
         />
       )}
     </div>
@@ -259,19 +275,19 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
         alignItems: 'center',
         gap: '12px',
         padding: '12px',
-        backgroundColor: '#27272a',
-        border: '1px solid #3f3f46',
+        backgroundColor: 'var(--background-secondary)',
+        border: '1px solid var(--background-modifier-border)',
         borderRadius: '2px',
         cursor: 'pointer',
         transition: 'all 100ms ease',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = '#3f3f46';
-        e.currentTarget.style.borderColor = '#52525b';
+        e.currentTarget.style.backgroundColor = 'var(--background-tertiary)';
+        e.currentTarget.style.borderColor = 'var(--background-modifier-border-hover)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = '#27272a';
-        e.currentTarget.style.borderColor = '#3f3f46';
+        e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+        e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
       }}
     >
       {/* Icon */}
@@ -282,12 +298,12 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
           justifyContent: 'center',
           width: '32px',
           height: '32px',
-          backgroundColor: '#3f3f46',
+          backgroundColor: 'var(--background-tertiary)',
           borderRadius: '2px',
           flexShrink: 0,
         }}
       >
-        <FolderOpen size={16} style={{ color: '#a1a1aa' }} />
+        <FolderOpen size={16} style={{ color: 'var(--text-muted)' }} />
       </div>
 
       {/* Info */}
@@ -301,7 +317,7 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
           style={{
             fontSize: '13px',
             fontWeight: 500,
-            color: '#fafafa',
+            color: 'var(--text-normal)',
             marginBottom: '2px',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -313,7 +329,7 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
         <div
           style={{
             fontSize: '11px',
-            color: '#71717a',
+            color: 'var(--text-faint)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
@@ -336,7 +352,7 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
           <span
             style={{
               fontSize: '11px',
-              color: '#71717a',
+              color: 'var(--text-faint)',
             }}
           >
             {vault.noteCount} notes
@@ -345,7 +361,7 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
         <span
           style={{
             fontSize: '11px',
-            color: '#71717a',
+            color: 'var(--text-faint)',
           }}
         >
           {formatRelativeTime(vault.lastOpened)}
@@ -366,16 +382,16 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
           border: 'none',
           borderRadius: '2px',
           cursor: 'pointer',
-          color: '#71717a',
+          color: 'var(--text-faint)',
           transition: 'all 100ms ease',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#52525b';
-          e.currentTarget.style.color = '#fafafa';
+          e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+          e.currentTarget.style.color = 'var(--text-normal)';
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = 'transparent';
-          e.currentTarget.style.color = '#71717a';
+          e.currentTarget.style.color = 'var(--text-faint)';
         }}
       >
         ×

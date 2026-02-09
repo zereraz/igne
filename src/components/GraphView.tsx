@@ -19,6 +19,16 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
+    // Read CSS custom properties from computed styles for D3 SVG attributes
+    const styles = getComputedStyle(svgRef.current);
+    const getVar = (name: string, fallback: string) =>
+      styles.getPropertyValue(name).trim() || fallback;
+
+    const colorBorder = getVar('--background-modifier-border', '#3f3f46');
+    const colorAccent = getVar('--color-accent', '#a78bfa');
+    const colorTextMuted = getVar('--text-muted', '#a1a1aa');
+    const colorInteractive = getVar('--interactive-normal', '#52525b');
+
     const width = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
 
@@ -50,7 +60,7 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
       .selectAll<SVGLineElement, GraphLink>('line')
       .data(links)
       .join('line')
-      .attr('stroke', '#3f3f46')
+      .attr('stroke', colorBorder)
       .attr('stroke-opacity', 0.6)
       .attr('stroke-width', 1);
 
@@ -84,14 +94,16 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
     node
       .append('circle')
       .attr('r', (d) => (d.id.startsWith('tag:') ? 5 : 8))
-      .attr('fill', (d) => (d.id.startsWith('tag:') ? '#a78bfa' : '#3f3f46'))
-      .attr('stroke', (d) => (d.id.startsWith('tag:') ? '#a78bfa' : '#a78bfa'))
+      .attr('fill', (d) => (d.id.startsWith('tag:') ? colorAccent : colorBorder))
+      .attr('stroke', colorAccent)
       .attr('stroke-width', 2)
       .on('mouseover', function () {
-        d3.select(this).attr('stroke-width', 4).attr('fill', '#52525b');
+        d3.select(this).attr('stroke-width', 4).attr('fill', colorInteractive);
       })
-      .on('mouseout', function () {
-        d3.select(this).attr('stroke-width', 2);
+      .on('mouseout', function (this: SVGCircleElement, _event, d) {
+        d3.select(this)
+          .attr('stroke-width', 2)
+          .attr('fill', d.id.startsWith('tag:') ? colorAccent : colorBorder);
       })
       .on('click', function (_event, d) {
         if (!d.id.startsWith('tag:')) {
@@ -105,7 +117,7 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
       .text((d) => d.name)
       .attr('x', 12)
       .attr('y', 4)
-      .attr('fill', '#a1a1aa')
+      .attr('fill', colorTextMuted)
       .attr('font-size', '10px')
       .attr('font-family', 'monospace')
       .attr('pointer-events', 'none');
@@ -158,7 +170,7 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
 
   if (nodes.length === 0) {
     return (
-      <div style={{ padding: '1rem', color: '#71717a', textAlign: 'center' }}>
+      <div style={{ padding: '1rem', color: 'var(--text-faint)', textAlign: 'center' }}>
         <p>No graph data</p>
         <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
           Create notes with links to generate graph
@@ -174,7 +186,7 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
         style={{
           width: '100%',
           height: '100%',
-          backgroundColor: '#18181b',
+          backgroundColor: 'var(--background-primary)',
           borderRadius: '4px',
         }}
       />
@@ -191,20 +203,20 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
           onClick={handleZoomIn}
           style={{
             padding: '4px 8px',
-            backgroundColor: '#27272a',
-            border: '1px solid #3f3f46',
-            color: '#a1a1aa',
+            backgroundColor: 'var(--background-secondary)',
+            border: '1px solid var(--background-modifier-border)',
+            color: 'var(--text-muted)',
             borderRadius: '2px',
             cursor: 'pointer',
             fontSize: '12px',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#3f3f46';
-            e.currentTarget.style.color = '#e4e4e7';
+            e.currentTarget.style.backgroundColor = 'var(--background-modifier-border)';
+            e.currentTarget.style.color = 'var(--text-normal)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#27272a';
-            e.currentTarget.style.color = '#a1a1aa';
+            e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+            e.currentTarget.style.color = 'var(--text-muted)';
           }}
         >
           +
@@ -213,20 +225,20 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
           onClick={handleZoomOut}
           style={{
             padding: '4px 8px',
-            backgroundColor: '#27272a',
-            border: '1px solid #3f3f46',
-            color: '#a1a1aa',
+            backgroundColor: 'var(--background-secondary)',
+            border: '1px solid var(--background-modifier-border)',
+            color: 'var(--text-muted)',
             borderRadius: '2px',
             cursor: 'pointer',
             fontSize: '12px',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#3f3f46';
-            e.currentTarget.style.color = '#e4e4e7';
+            e.currentTarget.style.backgroundColor = 'var(--background-modifier-border)';
+            e.currentTarget.style.color = 'var(--text-normal)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#27272a';
-            e.currentTarget.style.color = '#a1a1aa';
+            e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+            e.currentTarget.style.color = 'var(--text-muted)';
           }}
         >
           -
@@ -235,20 +247,20 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
           onClick={handleResetZoom}
           style={{
             padding: '4px 8px',
-            backgroundColor: '#27272a',
-            border: '1px solid #3f3f46',
-            color: '#a1a1aa',
+            backgroundColor: 'var(--background-secondary)',
+            border: '1px solid var(--background-modifier-border)',
+            color: 'var(--text-muted)',
             borderRadius: '2px',
             cursor: 'pointer',
             fontSize: '12px',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#3f3f46';
-            e.currentTarget.style.color = '#e4e4e7';
+            e.currentTarget.style.backgroundColor = 'var(--background-modifier-border)';
+            e.currentTarget.style.color = 'var(--text-normal)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#27272a';
-            e.currentTarget.style.color = '#a1a1aa';
+            e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+            e.currentTarget.style.color = 'var(--text-muted)';
           }}
         >
           <Maximize2 size={12} />

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { FileText, X } from 'lucide-react';
+import { safeArrayIndex } from '../utils/clamp';
 
 interface Template {
   name: string;
@@ -48,7 +49,8 @@ export function TemplateInsertModal({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (filteredTemplates.length > 0) {
-        handleSelectTemplate(filteredTemplates[selectedIndex]);
+        const idx = safeArrayIndex(selectedIndex, filteredTemplates.length);
+        handleSelectTemplate(filteredTemplates[idx]);
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -69,6 +71,9 @@ export function TemplateInsertModal({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Insert Template"
       style={{
         position: 'fixed',
         top: 0,
@@ -86,8 +91,8 @@ export function TemplateInsertModal({
     >
       <div
         style={{
-          backgroundColor: '#27272a',
-          border: '1px solid #3f3f46',
+          backgroundColor: 'var(--background-secondary)',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '8px',
           width: '500px',
           maxWidth: '90vw',
@@ -105,7 +110,7 @@ export function TemplateInsertModal({
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '16px 20px',
-            borderBottom: '1px solid #3f3f46',
+            borderBottom: '1px solid var(--background-modifier-border)',
           }}
         >
           <h2
@@ -113,7 +118,7 @@ export function TemplateInsertModal({
               margin: 0,
               fontSize: '18px',
               fontWeight: 600,
-              color: '#e4e4e7',
+              color: 'var(--text-normal)',
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
@@ -127,7 +132,7 @@ export function TemplateInsertModal({
             style={{
               background: 'none',
               border: 'none',
-              color: '#a1a1aa',
+              color: 'var(--text-muted)',
               cursor: 'pointer',
               padding: '4px',
               display: 'flex',
@@ -136,7 +141,7 @@ export function TemplateInsertModal({
               borderRadius: '4px',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
@@ -165,18 +170,18 @@ export function TemplateInsertModal({
               style={{
                 width: '100%',
                 padding: '10px 12px',
-                backgroundColor: '#18181b',
-                border: '1px solid #3f3f46',
+                backgroundColor: 'var(--background-primary)',
+                border: '1px solid var(--background-modifier-border)',
                 borderRadius: '4px',
-                color: '#e4e4e7',
+                color: 'var(--text-normal)',
                 fontSize: '14px',
                 outline: 'none',
               }}
               onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#a78bfa';
+                e.currentTarget.style.borderColor = 'var(--color-accent)';
               }}
               onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#3f3f46';
+                e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
               }}
             />
           </div>
@@ -189,7 +194,7 @@ export function TemplateInsertModal({
                 alignItems: 'center',
                 gap: '8px',
                 fontSize: '14px',
-                color: '#a1a1aa',
+                color: 'var(--text-muted)',
                 cursor: 'pointer',
                 userSelect: 'none',
               }}
@@ -202,7 +207,7 @@ export function TemplateInsertModal({
                   width: '16px',
                   height: '16px',
                   cursor: 'pointer',
-                  accentColor: '#a78bfa',
+                  accentColor: 'var(--color-accent)',
                 }}
               />
               Create new file from template
@@ -221,18 +226,18 @@ export function TemplateInsertModal({
                 style={{
                   width: '100%',
                   padding: '10px 12px',
-                  backgroundColor: '#18181b',
-                  border: '1px solid #3f3f46',
+                  backgroundColor: 'var(--background-primary)',
+                  border: '1px solid var(--background-modifier-border)',
                   borderRadius: '4px',
-                  color: '#e4e4e7',
+                  color: 'var(--text-normal)',
                   fontSize: '14px',
                   outline: 'none',
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#a78bfa';
+                  e.currentTarget.style.borderColor = 'var(--color-accent)';
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#3f3f46';
+                  e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -247,7 +252,7 @@ export function TemplateInsertModal({
                 style={{
                   margin: '4px 0 0 0',
                   fontSize: '12px',
-                  color: '#71717a',
+                  color: 'var(--text-faint)',
                 }}
               >
                 File will be created with .md extension
@@ -258,7 +263,7 @@ export function TemplateInsertModal({
           {/* Template List */}
           <div
             style={{
-              border: '1px solid #3f3f46',
+              border: '1px solid var(--background-modifier-border)',
               borderRadius: '4px',
               maxHeight: '300px',
               overflowY: 'auto',
@@ -269,7 +274,7 @@ export function TemplateInsertModal({
                 style={{
                   padding: '32px',
                   textAlign: 'center',
-                  color: '#71717a',
+                  color: 'var(--text-faint)',
                 }}
               >
                 <FileText size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
@@ -288,7 +293,7 @@ export function TemplateInsertModal({
                   onMouseEnter={(e) => {
                     setSelectedIndex(index);
                     if (index !== selectedIndex) {
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -299,9 +304,9 @@ export function TemplateInsertModal({
                   style={{
                     padding: '10px 12px',
                     cursor: 'pointer',
-                    backgroundColor: index === selectedIndex ? 'rgba(167, 139, 250, 0.15)' : 'transparent',
-                    borderLeft: index === selectedIndex ? '3px solid #a78bfa' : '3px solid transparent',
-                    color: index === selectedIndex ? '#e4e4e7' : '#a1a1aa',
+                    backgroundColor: index === selectedIndex ? 'rgba(var(--color-accent-rgb), 0.15)' : 'transparent',
+                    borderLeft: index === selectedIndex ? '3px solid var(--color-accent)' : '3px solid transparent',
+                    color: index === selectedIndex ? 'var(--text-normal)' : 'var(--text-muted)',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
@@ -329,9 +334,9 @@ export function TemplateInsertModal({
         <div
           style={{
             padding: '12px 20px',
-            borderTop: '1px solid #3f3f46',
+            borderTop: '1px solid var(--background-modifier-border)',
             fontSize: '12px',
-            color: '#71717a',
+            color: 'var(--text-faint)',
             display: 'flex',
             gap: '16px',
           }}

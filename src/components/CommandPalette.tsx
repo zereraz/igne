@@ -194,6 +194,9 @@ export function CommandPalette({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command Palette"
       style={{
         position: 'fixed',
         top: 0,

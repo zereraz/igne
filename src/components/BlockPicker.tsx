@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Hash, FileText } from 'lucide-react';
 import { getBlockList, type BlockType } from '../utils/blockFinder';
+import { safeArrayIndex } from '../utils/clamp';
 
 export interface BlockItem {
   id: string;
@@ -47,7 +48,8 @@ export function BlockPicker({
         setSelectedIndex((i) => Math.max(i - 1, 0));
       } else if (e.key === 'Enter' && blocks.length > 0) {
         e.preventDefault();
-        onSelectBlock(blocks[selectedIndex].id);
+        const idx = safeArrayIndex(selectedIndex, blocks.length);
+        onSelectBlock(blocks[idx].id);
         onClose();
       } else if (e.key === 'Escape') {
         onClose();
@@ -78,6 +80,9 @@ export function BlockPicker({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Block Picker"
       style={{
         position: 'fixed',
         top: 0,

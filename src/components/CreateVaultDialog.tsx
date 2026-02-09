@@ -210,6 +210,9 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Create Vault"
       style={{
         position: 'fixed',
         top: 0,
@@ -221,14 +224,14 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1000,
-        fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+        fontFamily: "var(--font-monospace-theme, var(--font-monospace))",
       }}
       onClick={handleCancel}
     >
       <div
         style={{
-          backgroundColor: '#27272a',
-          border: '1px solid #3f3f46',
+          backgroundColor: 'var(--background-secondary)',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '4px',
           width: '100%',
           maxWidth: '480px',
@@ -250,7 +253,7 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
             style={{
               fontSize: '16px',
               fontWeight: 600,
-              color: '#fafafa',
+              color: 'var(--text-normal)',
               margin: 0,
             }}
           >
@@ -270,18 +273,18 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
               border: 'none',
               borderRadius: '2px',
               cursor: isCreating ? 'not-allowed' : 'pointer',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               transition: 'all 100ms ease',
             }}
             onMouseEnter={(e) => {
               if (!isCreating) {
-                e.currentTarget.style.backgroundColor = '#3f3f46';
-                e.currentTarget.style.color = '#fafafa';
+                e.currentTarget.style.backgroundColor = 'var(--background-modifier-border)';
+                e.currentTarget.style.color = 'var(--text-normal)';
               }
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#71717a';
+              e.currentTarget.style.color = 'var(--text-faint)';
             }}
           >
             <X size={16} />
@@ -303,7 +306,7 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
                 display: 'block',
                 fontSize: '12px',
                 fontWeight: 500,
-                color: '#a1a1aa',
+                color: 'var(--text-muted)',
                 marginBottom: '6px',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
@@ -327,20 +330,20 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
                 width: '100%',
                 padding: '8px 12px',
                 fontSize: '13px',
-                fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
-                backgroundColor: '#18181b',
-                border: '1px solid #3f3f46',
+                fontFamily: "var(--font-monospace-theme, var(--font-monospace))",
+                backgroundColor: 'var(--background-primary)',
+                border: '1px solid var(--background-modifier-border)',
                 borderRadius: '2px',
-                color: '#fafafa',
+                color: 'var(--text-normal)',
                 outline: 'none',
                 transition: 'border-color 100ms ease',
                 cursor: isCreating ? 'not-allowed' : 'text',
               }}
               onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#7c3aed';
+                e.currentTarget.style.borderColor = 'var(--color-accent)';
               }}
               onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#3f3f46';
+                e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
               }}
             />
           </div>
@@ -352,7 +355,7 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
                 display: 'block',
                 fontSize: '12px',
                 fontWeight: 500,
-                color: '#a1a1aa',
+                color: 'var(--text-muted)',
                 marginBottom: '6px',
                 textTransform: 'uppercase',
                 letterSpacing: '0.05em',
@@ -376,20 +379,20 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
                   flex: 1,
                   padding: '8px 12px',
                   fontSize: '13px',
-                  fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
-                  backgroundColor: '#18181b',
-                  border: '1px solid #3f3f46',
+                  fontFamily: "var(--font-monospace-theme, var(--font-monospace))",
+                  backgroundColor: 'var(--background-primary)',
+                  border: '1px solid var(--background-modifier-border)',
                   borderRadius: '2px',
-                  color: '#fafafa',
+                  color: 'var(--text-normal)',
                   outline: 'none',
                   transition: 'border-color 100ms ease',
                   cursor: isCreating ? 'not-allowed' : 'text',
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#7c3aed';
+                  e.currentTarget.style.borderColor = 'var(--color-accent)';
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#3f3f46';
+                  e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
                 }}
               />
               <button
@@ -402,25 +405,25 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
                   gap: '6px',
                   padding: '8px 12px',
                   fontSize: '12px',
-                  fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+                  fontFamily: "var(--font-monospace-theme, var(--font-monospace))",
                   fontWeight: 500,
-                  backgroundColor: '#3f3f46',
-                  border: '1px solid #52525b',
+                  backgroundColor: 'var(--background-modifier-border)',
+                  border: '1px solid var(--interactive-normal)',
                   borderRadius: '2px',
                   cursor: isCreating ? 'not-allowed' : 'pointer',
-                  color: '#e4e4e7',
+                  color: 'var(--text-normal)',
                   transition: 'all 100ms ease',
                   whiteSpace: 'nowrap',
                 }}
                 onMouseEnter={(e) => {
                   if (!isCreating) {
-                    e.currentTarget.style.backgroundColor = '#52525b';
-                    e.currentTarget.style.borderColor = '#71717a';
+                    e.currentTarget.style.backgroundColor = 'var(--interactive-normal)';
+                    e.currentTarget.style.borderColor = 'var(--text-faint)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#3f3f46';
-                  e.currentTarget.style.borderColor = '#52525b';
+                  e.currentTarget.style.backgroundColor = 'var(--background-modifier-border)';
+                  e.currentTarget.style.borderColor = 'var(--interactive-normal)';
                 }}
               >
                 <FolderOpen size={14} />
@@ -431,11 +434,11 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
               <div
                 style={{
                   fontSize: '11px',
-                  color: '#71717a',
+                  color: 'var(--text-faint)',
                   marginTop: '4px',
                 }}
               >
-                Vault will be created at: <code style={{ color: '#a1a1aa' }}>{vaultLocation}/{vaultName.trim() || 'vault-name'}</code>
+                Vault will be created at: <code style={{ color: 'var(--text-muted)' }}>{vaultLocation}/{vaultName.trim() || 'vault-name'}</code>
               </div>
             )}
           </div>
@@ -445,9 +448,9 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
             <div
               style={{
                 fontSize: '12px',
-                color: '#ef4444',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid #ef4444',
+                color: 'var(--color-red)',
+                backgroundColor: 'rgba(var(--color-red-rgb, 248, 113, 113), 0.1)',
+                border: '1px solid var(--color-red)',
                 borderRadius: '2px',
                 padding: '8px 12px',
               }}
@@ -471,22 +474,22 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
                 flex: 1,
                 padding: '10px 16px',
                 fontSize: '13px',
-                fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+                fontFamily: "var(--font-monospace-theme, var(--font-monospace))",
                 fontWeight: 500,
-                backgroundColor: '#3f3f46',
+                backgroundColor: 'var(--background-modifier-border)',
                 border: 'none',
                 borderRadius: '2px',
                 cursor: isCreating ? 'not-allowed' : 'pointer',
-                color: '#e4e4e7',
+                color: 'var(--text-normal)',
                 transition: 'background-color 100ms ease',
               }}
               onMouseEnter={(e) => {
                 if (!isCreating) {
-                  e.currentTarget.style.backgroundColor = '#52525b';
+                  e.currentTarget.style.backgroundColor = 'var(--interactive-normal)';
                 }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#3f3f46';
+                e.currentTarget.style.backgroundColor = 'var(--background-modifier-border)';
               }}
             >
               Cancel
@@ -498,9 +501,9 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
                 flex: 1,
                 padding: '10px 16px',
                 fontSize: '13px',
-                fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+                fontFamily: "var(--font-monospace-theme, var(--font-monospace))",
                 fontWeight: 500,
-                backgroundColor: '#7c3aed',
+                backgroundColor: 'var(--color-accent)',
                 border: 'none',
                 borderRadius: '2px',
                 cursor: isCreating ? 'not-allowed' : 'pointer',
@@ -510,11 +513,11 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
               }}
               onMouseEnter={(e) => {
                 if (!isCreating) {
-                  e.currentTarget.style.backgroundColor = '#6d28d9';
+                  e.currentTarget.style.backgroundColor = 'var(--color-accent-hover, var(--color-accent))';
                 }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#7c3aed';
+                e.currentTarget.style.backgroundColor = 'var(--color-accent)';
               }}
             >
               {isCreating ? 'Creating...' : 'Create Vault'}

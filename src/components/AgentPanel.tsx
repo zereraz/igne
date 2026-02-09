@@ -59,11 +59,11 @@ function StatusIcon({ status }: { status: ProposedStep['status'] }) {
   const size = 14;
   switch (status) {
     case 'pending':
-      return <Clock size={size} style={{ color: '#9ca3af' }} />;
+      return <Clock size={size} style={{ color: 'var(--text-faint)' }} />;
     case 'approved':
       return <CheckCircle2 size={size} style={{ color: '#3b82f6' }} />;
     case 'rejected':
-      return <XCircle size={size} style={{ color: '#ef4444' }} />;
+      return <XCircle size={size} style={{ color: 'var(--color-red)' }} />;
     case 'running':
       return (
         <div style={{
@@ -76,9 +76,9 @@ function StatusIcon({ status }: { status: ProposedStep['status'] }) {
         }} />
       );
     case 'completed':
-      return <CheckCircle2 size={size} style={{ color: '#22c55e' }} />;
+      return <CheckCircle2 size={size} style={{ color: 'var(--color-green)' }} />;
     case 'failed':
-      return <AlertCircle size={size} style={{ color: '#ef4444' }} />;
+      return <AlertCircle size={size} style={{ color: 'var(--color-red)' }} />;
   }
 }
 
@@ -103,9 +103,9 @@ function StepItem({
   const buttonStyle = {
     padding: '4px 8px',
     fontSize: '11px',
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+    fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
     fontWeight: 500,
-    backgroundColor: '#3f3f46',
+    backgroundColor: 'var(--background-modifier-border)',
     border: 'none',
     borderRadius: '2px',
     cursor: 'pointer',
@@ -121,20 +121,20 @@ function StepItem({
 
   const approveStyle = {
     ...buttonStyle,
-    backgroundColor: '#22c55e',
+    backgroundColor: 'var(--color-green)',
   };
 
   const rejectStyle = {
     ...buttonStyle,
-    backgroundColor: '#ef4444',
+    backgroundColor: 'var(--color-red)',
   };
 
   return (
     <div style={{
-      border: '1px solid #3f3f46',
+      border: '1px solid var(--background-modifier-border)',
       borderRadius: '4px',
       padding: '12px',
-      backgroundColor: '#18181b',
+      backgroundColor: 'var(--background-primary)',
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
         <StatusIcon status={step.status} />
@@ -142,25 +142,25 @@ function StepItem({
           <div style={{
             fontSize: '12px',
             fontWeight: 500,
-            color: '#e4e4e7',
-            fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+            color: 'var(--text-normal)',
+            fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
           }}>
             {step.description}
           </div>
           <div style={{
             fontSize: '11px',
-            color: '#71717a',
+            color: 'var(--text-faint)',
             marginTop: '4px',
-            fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+            fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
           }}>
             {step.toolId} {step.duration && `(${step.duration}ms)`}
           </div>
           {step.error && (
             <div style={{
               fontSize: '11px',
-              color: '#ef4444',
+              color: 'var(--color-red)',
               marginTop: '4px',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             }}>
               {step.error}
             </div>
@@ -180,7 +180,7 @@ function StepItem({
                 }}
                 onMouseLeave={(e) => {
                   if (canApprove) {
-                    e.currentTarget.style.backgroundColor = '#22c55e';
+                    e.currentTarget.style.backgroundColor = 'var(--color-green)';
                   }
                 }}
               >
@@ -197,7 +197,7 @@ function StepItem({
                 }}
                 onMouseLeave={(e) => {
                   if (canReject) {
-                    e.currentTarget.style.backgroundColor = '#ef4444';
+                    e.currentTarget.style.backgroundColor = 'var(--color-red)';
                   }
                 }}
               >
@@ -209,11 +209,11 @@ function StepItem({
             <span style={{
               padding: '4px 8px',
               fontSize: '11px',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
               fontWeight: 500,
-              backgroundColor: '#3f3f46',
+              backgroundColor: 'var(--background-modifier-border)',
               borderRadius: '2px',
-              color: '#a1a1aa',
+              color: 'var(--text-muted)',
             }}>
               Read-only
             </span>
@@ -231,17 +231,17 @@ function StepItem({
               alignItems: 'center',
               gap: '4px',
               fontSize: '11px',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               backgroundColor: 'transparent',
               border: 'none',
               cursor: 'pointer',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.color = '#e4e4e7';
+              e.currentTarget.style.color = 'var(--text-normal)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.color = '#71717a';
+              e.currentTarget.style.color = 'var(--text-faint)';
             }}
           >
             {showDiff ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -251,12 +251,12 @@ function StepItem({
             <pre style={{
               marginTop: '8px',
               padding: '8px',
-              backgroundColor: '#27272a',
+              backgroundColor: 'var(--background-secondary)',
               borderRadius: '2px',
               fontSize: '11px',
               overflowX: 'auto',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
-              color: '#a1a1aa',
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
+              color: 'var(--text-muted)',
             }}>
               {step.expectedDiff}
             </pre>
@@ -353,8 +353,8 @@ export function AgentPanel({ activePlan, onApproveStep, onRejectStep, onApproveA
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#71717a',
-        fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+        color: 'var(--text-faint)',
+        fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
       }}>
         <p>No active plan. Start a conversation to create a plan.</p>
       </div>
@@ -367,9 +367,9 @@ export function AgentPanel({ activePlan, onApproveStep, onRejectStep, onApproveA
   const buttonStyle = {
     padding: '8px 16px',
     fontSize: '12px',
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+    fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
     fontWeight: 500,
-    backgroundColor: '#3f3f46',
+    backgroundColor: 'var(--background-modifier-border)',
     border: 'none',
     borderRadius: '2px',
     cursor: 'pointer',
@@ -383,7 +383,7 @@ export function AgentPanel({ activePlan, onApproveStep, onRejectStep, onApproveA
 
   const successButtonStyle = {
     ...buttonStyle,
-    backgroundColor: '#22c55e',
+    backgroundColor: 'var(--color-green)',
   };
 
   const disabledButtonStyle = {
@@ -397,24 +397,24 @@ export function AgentPanel({ activePlan, onApproveStep, onRejectStep, onApproveA
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: '#18181b',
+      backgroundColor: 'var(--background-primary)',
     }}>
       {/* Header */}
       <div style={{
         padding: '16px',
-        borderBottom: '1px solid #3f3f46',
+        borderBottom: '1px solid var(--background-modifier-border)',
       }}>
         <h2 style={{
           fontSize: '16px',
           fontWeight: 600,
-          color: '#e4e4e7',
-          fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+          color: 'var(--text-normal)',
+          fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
         }}>Agent Plan</h2>
         <p style={{
           fontSize: '12px',
-          color: '#a1a1aa',
+          color: 'var(--text-muted)',
           marginTop: '4px',
-          fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+          fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
         }}>{activePlan.description}</p>
         <div style={{
           marginTop: '8px',
@@ -426,16 +426,16 @@ export function AgentPanel({ activePlan, onApproveStep, onRejectStep, onApproveA
             fontSize: '11px',
             padding: '4px 8px',
             borderRadius: '2px',
-            backgroundColor: '#27272a',
-            color: '#a1a1aa',
-            fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+            backgroundColor: 'var(--background-secondary)',
+            color: 'var(--text-muted)',
+            fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
           }}>
             {activePlan.status}
           </span>
           <span style={{
             fontSize: '11px',
-            color: '#71717a',
-            fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+            color: 'var(--text-faint)',
+            fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
           }}>
             {activePlan.steps.filter(s => s.status === 'completed').length} / {activePlan.steps.length} steps
           </span>
@@ -446,7 +446,7 @@ export function AgentPanel({ activePlan, onApproveStep, onRejectStep, onApproveA
       {(activePlan.status === 'pending' || activePlan.status === 'approved') && (
         <div style={{
           padding: '16px',
-          borderBottom: '1px solid #3f3f46',
+          borderBottom: '1px solid var(--background-modifier-border)',
           display: 'flex',
           gap: '8px',
         }}>
@@ -478,7 +478,7 @@ export function AgentPanel({ activePlan, onApproveStep, onRejectStep, onApproveA
             }}
             onMouseLeave={(e) => {
               if (canExecute) {
-                e.currentTarget.style.backgroundColor = '#22c55e';
+                e.currentTarget.style.backgroundColor = 'var(--color-green)';
               }
             }}
           >
@@ -518,15 +518,15 @@ export function AgentPanel({ activePlan, onApproveStep, onRejectStep, onApproveA
       {/* Execution Log */}
       {executionLog.length > 0 && (
         <div style={{
-          borderTop: '1px solid #3f3f46',
+          borderTop: '1px solid var(--background-modifier-border)',
           padding: '16px',
         }}>
           <h3 style={{
             fontSize: '12px',
             fontWeight: 600,
-            color: '#e4e4e7',
+            color: 'var(--text-normal)',
             marginBottom: '8px',
-            fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+            fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
           }}>Execution Log</h3>
           <div style={{
             maxHeight: '160px',
@@ -540,14 +540,14 @@ export function AgentPanel({ activePlan, onApproveStep, onRejectStep, onApproveA
                 fontSize: '11px',
                 display: 'flex',
                 gap: '8px',
-                fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+                fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
               }}>
-                <span style={{ color: '#71717a' }}>
+                <span style={{ color: 'var(--text-faint)' }}>
                   {new Date(log.time).toLocaleTimeString()}
                 </span>
-                <span style={{ color: '#a1a1aa' }}>{log.step.description}</span>
-                <span style={{ color: '#71717a' }}>→</span>
-                <span style={{ color: log.result.startsWith('Failed') ? '#ef4444' : '#22c55e' }}>
+                <span style={{ color: 'var(--text-muted)' }}>{log.step.description}</span>
+                <span style={{ color: 'var(--text-faint)' }}>→</span>
+                <span style={{ color: log.result.startsWith('Failed') ? 'var(--color-red)' : 'var(--color-green)' }}>
                   {log.result}
                 </span>
               </div>
