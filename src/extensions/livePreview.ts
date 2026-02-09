@@ -284,7 +284,7 @@ const CURSOR_SENSITIVE_MARKS = new Set([
 ]);
 
 const CURSOR_SENSITIVE_WIDGETS = new Set([
-  'Wikilink', 'Embed', 'Tag', 'Image',
+  'Wikilink', 'Embed', 'Tag', 'Image', 'Link',
 ]);
 
 // Styling-only nodes (cursor-independent)
@@ -415,7 +415,7 @@ function buildCursorSensitiveDecorations(
       continue;
     }
 
-    if (node.name === 'URL' || node.name === 'LinkMark') {
+    if (node.name === 'URL') {
       if (!cursorInParent) {
         inlineDecorations.push(Decoration.replace({ isHidden: true }).range(node.from, node.to));
       }
@@ -814,16 +814,23 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
 export const livePreview = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
+    treeScanCache: TreeScanCache | null = null;
+    blockScanCache: BlockScanCache | null = null;
 
     constructor(view: EditorView) {
-      // Only use inline decorations for the static version
-      const result = buildAllDecorations(view, DEFAULT_CONFIG);
+      this.treeScanCache = buildTreeScanCache(view.state, DEFAULT_CONFIG);
+      this.blockScanCache = computeBlockScans(view.state);
+      const result = buildAllDecorations(view, DEFAULT_CONFIG, this.blockScanCache, this.treeScanCache);
       this.decorations = result.inline;
     }
 
     update(update: ViewUpdate) {
       if (update.docChanged || update.selectionSet) {
-        const result = buildAllDecorations(update.view, DEFAULT_CONFIG);
+        if (update.docChanged) {
+          this.treeScanCache = buildTreeScanCache(update.view.state, DEFAULT_CONFIG);
+          this.blockScanCache = computeBlockScans(update.view.state);
+        }
+        const result = buildAllDecorations(update.view, DEFAULT_CONFIG, this.blockScanCache ?? undefined, this.treeScanCache ?? undefined);
         this.decorations = result.inline;
       }
     }
