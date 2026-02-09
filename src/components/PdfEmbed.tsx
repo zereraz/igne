@@ -28,8 +28,8 @@ export function PdfEmbed({ path, page, onOpen }: PdfEmbedProps) {
       style={{
         marginTop: '16px',
         marginBottom: '16px',
-        backgroundColor: '#27272a',
-        border: '1px solid #3f3f46',
+        backgroundColor: 'var(--background-secondary)',
+        border: '1px solid var(--background-modifier-border)',
         borderRadius: '2px',
         overflow: 'hidden',
       }}
@@ -41,19 +41,19 @@ export function PdfEmbed({ path, page, onOpen }: PdfEmbedProps) {
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '10px 12px',
-          backgroundColor: '#1f1f23',
-          borderBottom: '1px solid #3f3f46',
-          borderLeft: '2px solid #f59e0b',
+          backgroundColor: 'var(--background-secondary-alt, var(--background-secondary))',
+          borderBottom: '1px solid var(--background-modifier-border)',
+          borderLeft: '2px solid var(--color-yellow)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <FileText size={14} style={{ color: '#f59e0b' }} />
+          <FileText size={14} style={{ color: 'var(--color-yellow)' }} />
           <span
             style={{
               fontSize: '12px',
               fontWeight: 500,
-              color: '#e4e4e7',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              color: 'var(--text-normal)',
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             }}
           >
             {filename}
@@ -62,10 +62,10 @@ export function PdfEmbed({ path, page, onOpen }: PdfEmbedProps) {
             <span
               style={{
                 fontSize: '11px',
-                color: '#71717a',
-                fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+                color: 'var(--text-faint)',
+                fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
                 padding: '2px 6px',
-                backgroundColor: '#3f3f46',
+                backgroundColor: 'var(--background-modifier-border)',
                 borderRadius: '2px',
               }}
             >
@@ -82,20 +82,20 @@ export function PdfEmbed({ path, page, onOpen }: PdfEmbedProps) {
             padding: '4px 8px',
             fontSize: '11px',
             backgroundColor: 'transparent',
-            border: '1px solid #3f3f46',
+            border: '1px solid var(--background-modifier-border)',
             borderRadius: '2px',
-            color: '#a1a1aa',
+            color: 'var(--text-muted)',
             cursor: 'pointer',
-            fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+            fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             transition: 'border-color 100ms ease, color 100ms ease',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = '#f59e0b';
-            e.currentTarget.style.color = '#f59e0b';
+            e.currentTarget.style.borderColor = 'var(--color-yellow)';
+            e.currentTarget.style.color = 'var(--color-yellow)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = '#3f3f46';
-            e.currentTarget.style.color = '#a1a1aa';
+            e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
+            e.currentTarget.style.color = 'var(--text-muted)';
           }}
         >
           <ExternalLink size={12} />
@@ -108,7 +108,7 @@ export function PdfEmbed({ path, page, onOpen }: PdfEmbedProps) {
         style={{
           position: 'relative',
           height: '400px',
-          backgroundColor: '#18181b',
+          backgroundColor: 'var(--background-primary)',
         }}
       >
         {isLoading && (
@@ -119,9 +119,9 @@ export function PdfEmbed({ path, page, onOpen }: PdfEmbedProps) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               fontSize: '13px',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             }}
           >
             Loading PDF...
@@ -138,19 +138,19 @@ export function PdfEmbed({ path, page, onOpen }: PdfEmbedProps) {
               alignItems: 'center',
               justifyContent: 'center',
               gap: '12px',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               fontSize: '13px',
-              fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
               padding: '20px',
               textAlign: 'center',
             }}
           >
-            <FileText size={32} style={{ color: '#52525b' }} />
+            <FileText size={32} style={{ color: 'var(--interactive-normal)' }} />
             <div>
-              <div style={{ marginBottom: '4px', color: '#ef4444' }}>
+              <div style={{ marginBottom: '4px', color: 'var(--color-red)' }}>
                 Failed to load PDF
               </div>
-              <div style={{ fontSize: '12px', color: '#52525b' }}>
+              <div style={{ fontSize: '12px', color: 'var(--interactive-normal)' }}>
                 {path}
               </div>
             </div>

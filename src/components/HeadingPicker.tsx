@@ -65,7 +65,7 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
             alignItems: 'center',
             gap: '6px',
             fontSize: '13px',
-            color: '#e4e4e7',
+            color: 'var(--text-normal)',
             fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
             transition: 'background-color 100ms ease',
           }}
@@ -73,8 +73,8 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
           onMouseEnter={() => setHoveredHeading(node.text)}
           onMouseLeave={() => setHoveredHeading(null)}
         >
-          {depth > 0 && <ChevronRight size={12} style={{ color: '#71717a', minWidth: '12px' }} />}
-          <FileText size={14} style={{ color: '#a78bfa', minWidth: '14px' }} />
+          {depth > 0 && <ChevronRight size={12} style={{ color: 'var(--text-faint)', minWidth: '12px' }} />}
+          <FileText size={14} style={{ color: 'var(--color-accent)', minWidth: '14px' }} />
           <span style={{ flex: 1 }}>{node.text}</span>
         </div>
 
@@ -87,19 +87,19 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
               width: '300px',
               maxHeight: '400px',
               overflow: 'auto',
-              backgroundColor: '#27272a',
-              border: '1px solid #3f3f46',
+              backgroundColor: 'var(--background-secondary)',
+              border: '1px solid var(--background-modifier-border)',
               borderRadius: '4px',
               padding: '12px',
               fontSize: '12px',
-              color: '#a1a1aa',
+              color: 'var(--text-muted)',
               zIndex: 1000,
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
             }}
             onMouseEnter={() => setHoveredHeading(node.text)}
             onMouseLeave={() => setHoveredHeading(null)}
           >
-            <div style={{ fontWeight: 500, color: '#e4e4e7', marginBottom: '8px' }}>{node.text}</div>
+            <div style={{ fontWeight: 500, color: 'var(--text-normal)', marginBottom: '8px' }}>{node.text}</div>
             <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
               {getPreviewForHeading(node, noteContent || '')}
             </div>
@@ -126,8 +126,8 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
           width: '260px',
           maxHeight: '400px',
           overflow: 'auto',
-          backgroundColor: '#1f1f23',
-          border: '1px solid #3f3f46',
+          backgroundColor: 'var(--background-secondary-alt, var(--background-secondary))',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '4px',
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
           zIndex: 1000,
@@ -136,19 +136,19 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
         <div
           style={{
             padding: '12px',
-            borderBottom: '1px solid #3f3f46',
+            borderBottom: '1px solid var(--background-modifier-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <span style={{ fontSize: '12px', fontWeight: 500, color: '#e4e4e7' }}>Headings in {noteName}</span>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-normal)' }}>Headings in {noteName}</span>
           <button
             onClick={onClose}
             style={{
               background: 'none',
               border: 'none',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               cursor: 'pointer',
               fontSize: '16px',
               padding: '0',
@@ -158,7 +158,7 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
             ×
           </button>
         </div>
-        <div style={{ padding: '12px', color: '#71717a', fontSize: '13px' }}>
+        <div style={{ padding: '12px', color: 'var(--text-faint)', fontSize: '13px' }}>
           Note not found
         </div>
       </div>
@@ -176,8 +176,8 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
           width: '260px',
           maxHeight: '400px',
           overflow: 'auto',
-          backgroundColor: '#1f1f23',
-          border: '1px solid #3f3f46',
+          backgroundColor: 'var(--background-secondary-alt, var(--background-secondary))',
+          border: '1px solid var(--background-modifier-border)',
           borderRadius: '4px',
           boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
           zIndex: 1000,
@@ -186,19 +186,19 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
         <div
           style={{
             padding: '12px',
-            borderBottom: '1px solid #3f3f46',
+            borderBottom: '1px solid var(--background-modifier-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <span style={{ fontSize: '12px', fontWeight: 500, color: '#e4e4e7' }}>Headings in {noteName}</span>
+          <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-normal)' }}>Headings in {noteName}</span>
           <button
             onClick={onClose}
             style={{
               background: 'none',
               border: 'none',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               cursor: 'pointer',
               fontSize: '16px',
               padding: '0',
@@ -208,7 +208,7 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
             ×
           </button>
         </div>
-        <div style={{ padding: '12px', color: '#71717a', fontSize: '13px' }}>
+        <div style={{ padding: '12px', color: 'var(--text-faint)', fontSize: '13px' }}>
           No headings found
         </div>
       </div>
@@ -225,8 +225,8 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
         width: '260px',
         maxHeight: '400px',
         overflow: 'auto',
-        backgroundColor: '#1f1f23',
-        border: '1px solid #3f3f46',
+        backgroundColor: 'var(--background-secondary-alt, var(--background-secondary))',
+        border: '1px solid var(--background-modifier-border)',
         borderRadius: '4px',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
         zIndex: 1000,
@@ -235,19 +235,19 @@ export function HeadingPicker({ noteName, noteContent, onSelect, onClose, positi
       <div
         style={{
           padding: '12px',
-          borderBottom: '1px solid #3f3f46',
+          borderBottom: '1px solid var(--background-modifier-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}
       >
-        <span style={{ fontSize: '12px', fontWeight: 500, color: '#e4e4e7' }}>Headings in {noteName}</span>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-normal)' }}>Headings in {noteName}</span>
         <button
           onClick={onClose}
           style={{
             background: 'none',
             border: 'none',
-            color: '#71717a',
+            color: 'var(--text-faint)',
             cursor: 'pointer',
             fontSize: '16px',
             padding: '0',

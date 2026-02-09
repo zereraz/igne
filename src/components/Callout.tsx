@@ -99,7 +99,7 @@ export function Callout({ type, title, children, collapsed = false }: CalloutPro
           style={{
             fontSize: '14px',
             lineHeight: 1.6,
-            color: '#e4e4e7',
+            color: 'var(--text-normal)',
           }}
         >
           {children}

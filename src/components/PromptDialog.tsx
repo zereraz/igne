@@ -1,53 +1,44 @@
 import { useState, useEffect, useRef } from 'react';
 
-interface RenameDialogProps {
-  currentName: string;
-  onClose: () => void;
-  onRename: (newName: string) => void;
-  isFolder?: boolean;
-  existingNames?: string[];
+interface PromptDialogProps {
+  title: string;
+  message?: string;
+  placeholder?: string;
+  defaultValue?: string;
+  submitLabel?: string;
+  onSubmit: (value: string) => void;
+  onCancel: () => void;
 }
 
-export function RenameDialog({ currentName, onClose, onRename, isFolder = false, existingNames = [] }: RenameDialogProps) {
-  // Strip .md extension for display (markdown files only)
-  const isMarkdown = !isFolder && (currentName.endsWith('.md') || currentName.endsWith('.markdown'));
-  const displayName = isMarkdown ? currentName.replace(/\.(md|markdown)$/, '') : currentName;
-
-  const [name, setName] = useState(displayName);
+export function PromptDialog({
+  title,
+  message,
+  placeholder = '',
+  defaultValue = '',
+  submitLabel = 'Create',
+  onSubmit,
+  onCancel,
+}: PromptDialogProps) {
+  const [value, setValue] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Focus input and select text on mount
     if (inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
   }, []);
 
-  // Check for duplicate name
-  const getFinalName = (input: string) => {
-    const trimmed = input.trim();
-    if (isMarkdown && !trimmed.endsWith('.md') && !trimmed.endsWith('.markdown')) {
-      return `${trimmed}.md`;
-    }
-    return trimmed;
-  };
-
-  const finalName = name.trim() ? getFinalName(name) : '';
-  const isDuplicate = finalName && finalName !== currentName && existingNames.some(
-    n => n.toLowerCase() === finalName.toLowerCase()
-  );
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim() && !isDuplicate) {
-      onRename(getFinalName(name));
+    if (value.trim()) {
+      onSubmit(value.trim());
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
-      onClose();
+      onCancel();
     }
   };
 
@@ -55,7 +46,7 @@ export function RenameDialog({ currentName, onClose, onRename, isFolder = false,
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Rename"
+      aria-label={title}
       style={{
         position: 'fixed',
         top: 0,
@@ -68,7 +59,7 @@ export function RenameDialog({ currentName, onClose, onRename, isFolder = false,
         justifyContent: 'center',
         zIndex: 1000,
       }}
-      onClick={onClose}
+      onClick={onCancel}
     >
       <div
         style={{
@@ -86,18 +77,31 @@ export function RenameDialog({ currentName, onClose, onRename, isFolder = false,
             fontSize: '1.125rem',
             fontWeight: 600,
             color: 'var(--text-normal)',
-            marginBottom: '1rem',
+            marginBottom: message ? '0.5rem' : '1rem',
           }}
         >
-          Rename
+          {title}
         </h2>
+        {message && (
+          <p
+            style={{
+              fontSize: '0.875rem',
+              color: 'var(--text-muted)',
+              lineHeight: 1.5,
+              marginBottom: '1rem',
+            }}
+          >
+            {message}
+          </p>
+        )}
         <form onSubmit={handleSubmit}>
           <input
             ref={inputRef}
             type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            placeholder={placeholder}
             style={{
               width: '100%',
               padding: '0.5rem 0.75rem',
@@ -109,20 +113,7 @@ export function RenameDialog({ currentName, onClose, onRename, isFolder = false,
               outline: 'none',
               marginBottom: '1rem',
             }}
-            placeholder="Enter new name"
           />
-          {isDuplicate && (
-            <div
-              style={{
-                fontSize: '12px',
-                color: 'var(--color-red)',
-                marginBottom: '0.75rem',
-                marginTop: '-0.5rem',
-              }}
-            >
-              A {isFolder ? 'folder' : 'file'} with this name already exists
-            </div>
-          )}
           <div
             style={{
               display: 'flex',
@@ -132,7 +123,7 @@ export function RenameDialog({ currentName, onClose, onRename, isFolder = false,
           >
             <button
               type="button"
-              onClick={onClose}
+              onClick={onCancel}
               style={{
                 padding: '0.5rem 1rem',
                 backgroundColor: 'var(--background-tertiary)',
@@ -150,21 +141,21 @@ export function RenameDialog({ currentName, onClose, onRename, isFolder = false,
             </button>
             <button
               type="submit"
-              disabled={!!isDuplicate || !name.trim()}
+              disabled={!value.trim()}
               style={{
                 padding: '0.5rem 1rem',
-                backgroundColor: isDuplicate || !name.trim() ? 'var(--interactive-normal)' : 'var(--color-accent)',
+                backgroundColor: value.trim() ? 'var(--color-accent)' : 'var(--interactive-normal)',
                 border: 'none',
                 borderRadius: '0.375rem',
                 color: 'var(--text-on-accent)',
                 fontSize: '0.875rem',
-                cursor: 'pointer',
+                cursor: value.trim() ? 'pointer' : 'not-allowed',
                 transition: 'background-color 0.15s',
               }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent-2)'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-accent)'}
+              onMouseEnter={(e) => { if (value.trim()) e.currentTarget.style.backgroundColor = 'var(--color-accent-2)'; }}
+              onMouseLeave={(e) => { if (value.trim()) e.currentTarget.style.backgroundColor = 'var(--color-accent)'; }}
             >
-              Rename
+              {submitLabel}
             </button>
           </div>
         </form>

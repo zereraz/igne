@@ -54,6 +54,9 @@ export function QuickSwitcher({ isOpen, onClose, onSelectFile }: QuickSwitcherPr
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Quick Switcher"
       style={{
         position: 'fixed',
         top: 0,

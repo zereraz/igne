@@ -11,7 +11,7 @@ export function TagsPanel({ files, onTagClick }: TagsPanelProps) {
 
   if (tags.length === 0) {
     return (
-      <div className="tags-panel-empty" style={{ padding: '1rem', color: '#71717a', textAlign: 'center' }}>
+      <div className="tags-panel-empty" style={{ padding: '1rem', color: 'var(--text-faint)', textAlign: 'center' }}>
         <p>No tags found</p>
         <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
           Add #tags to your notes
@@ -26,12 +26,12 @@ export function TagsPanel({ files, onTagClick }: TagsPanelProps) {
         className="tags-panel-header"
         style={{
           padding: '0.75rem 1rem',
-          borderBottom: '1px solid #27272a',
+          borderBottom: '1px solid var(--background-modifier-border)',
           fontSize: '0.75rem',
           fontWeight: 600,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
-          color: '#a1a1aa',
+          color: 'var(--text-muted)',
         }}
       >
         Tags
@@ -58,19 +58,19 @@ export function TagsPanel({ files, onTagClick }: TagsPanelProps) {
                 paddingLeft: namespace ? `${0.5 + (parts.length - 1) * 0.75}rem` : '1rem',
                 cursor: 'pointer',
                 fontSize: '0.875rem',
-                color: '#a1a1aa',
+                color: 'var(--text-muted)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
                 transition: 'all 0.15s ease',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                e.currentTarget.style.color = '#e4e4e7';
+                e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+                e.currentTarget.style.color = 'var(--text-normal)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#a1a1aa';
+                e.currentTarget.style.color = 'var(--text-muted)';
               }}
             >
               <Tag size={12} style={{ flexShrink: 0, opacity: 0.5 }} />

@@ -4,6 +4,7 @@ import { Edit3, Eye, Save, FolderOpen, X } from 'lucide-react';
 import { MarkdownViewer } from './MarkdownViewer';
 import { Editor } from './Editor';
 import { OutlinePanel } from './OutlinePanel';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface StandaloneViewerProps {
   filePath: string;
@@ -16,7 +17,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100vh',
-    backgroundColor: '#18181b',
+    backgroundColor: 'var(--background-primary)',
   },
   header: {
     display: 'flex',
@@ -24,8 +25,8 @@ const styles = {
     justifyContent: 'space-between',
     padding: '8px 16px',
     paddingTop: '40px', // Account for traffic lights on macOS
-    backgroundColor: '#1f1f23',
-    borderBottom: '1px solid #3f3f46',
+    backgroundColor: 'var(--background-secondary)',
+    borderBottom: '1px solid var(--background-modifier-border)',
     WebkitAppRegion: 'drag' as const,
   },
   headerLeft: {
@@ -42,8 +43,8 @@ const styles = {
   },
   filePath: {
     fontSize: '12px',
-    color: '#a1a1aa',
-    fontFamily: "'IBM Plex Mono', monospace",
+    color: 'var(--text-muted)',
+    fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
     maxWidth: '400px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -52,8 +53,8 @@ const styles = {
   fileName: {
     fontSize: '14px',
     fontWeight: 600,
-    color: '#e4e4e7',
-    fontFamily: "'IBM Plex Mono', monospace",
+    color: 'var(--text-normal)',
+    fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
   },
   button: {
     display: 'flex',
@@ -61,18 +62,18 @@ const styles = {
     gap: '6px',
     padding: '6px 10px',
     fontSize: '11px',
-    fontFamily: "'IBM Plex Mono', monospace",
+    fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
     backgroundColor: 'transparent',
-    border: '1px solid #3f3f46',
+    border: '1px solid var(--background-modifier-border)',
     borderRadius: '4px',
     cursor: 'pointer',
-    color: '#a1a1aa',
+    color: 'var(--text-muted)',
     transition: 'all 100ms ease',
   },
   buttonActive: {
-    backgroundColor: '#a78bfa',
-    borderColor: '#a78bfa',
-    color: '#18181b',
+    backgroundColor: 'var(--color-accent)',
+    borderColor: 'var(--color-accent)',
+    color: 'var(--background-primary)',
   },
   buttonIcon: {
     display: 'flex',
@@ -80,10 +81,10 @@ const styles = {
     justifyContent: 'center',
     padding: '6px',
     backgroundColor: 'transparent',
-    border: '1px solid #3f3f46',
+    border: '1px solid var(--background-modifier-border)',
     borderRadius: '4px',
     cursor: 'pointer',
-    color: '#a1a1aa',
+    color: 'var(--text-muted)',
     transition: 'all 100ms ease',
   },
   mainContent: {
@@ -102,8 +103,8 @@ const styles = {
   },
   sidebar: {
     width: '240px',
-    backgroundColor: '#1f1f23',
-    borderLeft: '1px solid #3f3f46',
+    backgroundColor: 'var(--background-secondary)',
+    borderLeft: '1px solid var(--background-modifier-border)',
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column' as const,
@@ -112,7 +113,7 @@ const styles = {
     width: '8px',
     height: '8px',
     borderRadius: '50%',
-    backgroundColor: '#f59e0b',
+    backgroundColor: 'var(--color-yellow)',
   },
 };
 
@@ -125,6 +126,7 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
   const [currentLine, setCurrentLine] = useState<number | undefined>(undefined);
   const [scrollToPosition, setScrollToPosition] = useState<number | undefined>(undefined);
   const [scrollToHeading, setScrollToHeading] = useState<string | undefined>(undefined);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Extract file name from path
   const fileName = filePath.split(/[/\\]/).pop() || 'Untitled';
@@ -162,7 +164,7 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
       setIsDirty(false);
     } catch (err) {
       console.error('Failed to save:', err);
-      alert('Failed to save file: ' + String(err));
+      setSaveError('Failed to save file: ' + String(err));
     }
   }, [filePath, content]);
 
@@ -195,7 +197,7 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
           </div>
         </div>
         <div style={{ ...styles.mainContent, alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ color: '#71717a', fontFamily: "'IBM Plex Mono', monospace" }}>
+          <span style={{ color: 'var(--text-faint)', fontFamily: 'var(--font-monospace-theme, var(--font-monospace))' }}>
             Loading file...
           </span>
         </div>
@@ -209,7 +211,7 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
         <div style={styles.header}>
           <div style={styles.headerLeft}>
             <span style={styles.fileName}>{fileName}</span>
-            <span style={{ color: '#f87171', fontSize: '12px' }}>Error</span>
+            <span style={{ color: 'var(--color-red)', fontSize: '12px' }}>Error</span>
           </div>
           <div style={styles.headerRight}>
             <button
@@ -222,13 +224,13 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
           </div>
         </div>
         <div style={{ ...styles.mainContent, alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '16px' }}>
-          <span style={{ color: '#f87171', fontFamily: "'IBM Plex Mono', monospace", fontSize: '16px' }}>
+          <span style={{ color: 'var(--color-red)', fontFamily: 'var(--font-monospace-theme, var(--font-monospace))', fontSize: '16px' }}>
             Failed to load file
           </span>
-          <span style={{ color: '#a1a1aa', fontFamily: "'IBM Plex Mono', monospace", fontSize: '12px', maxWidth: '400px', textAlign: 'center' }}>
+          <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-monospace-theme, var(--font-monospace))', fontSize: '12px', maxWidth: '400px', textAlign: 'center' }}>
             {error}
           </span>
-          <span style={{ color: '#71717a', fontFamily: "'IBM Plex Mono', monospace", fontSize: '11px' }}>
+          <span style={{ color: 'var(--text-faint)', fontFamily: 'var(--font-monospace-theme, var(--font-monospace))', fontSize: '11px' }}>
             {filePath}
           </span>
         </div>
@@ -348,6 +350,16 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
           />
         </div>
       </div>
+
+      {saveError && (
+        <ConfirmDialog
+          title="Save Error"
+          message={saveError}
+          alertOnly
+          onConfirm={() => setSaveError(null)}
+          onCancel={() => setSaveError(null)}
+        />
+      )}
     </div>
   );
 }
