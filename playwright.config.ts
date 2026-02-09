@@ -1,55 +1,73 @@
 import { defineConfig, devices } from '@playwright/test';
 
+/**
+ * Tauri E2E Testing Configuration
+ *
+ * Three testing modes:
+ *
+ * 1. TAURI mode (Linux/Windows only):
+ *    - Full Tauri API testing via WebDriver
+ *    - Requires: tauri-driver, built app
+ *    - Run: npx playwright test --project=tauri
+ *
+ * 2. DEV mode (Any OS):
+ *    - Tests run against Vite dev server
+ *    - Tauri APIs mocked via @tauri-apps/api/mocks
+ *    - Run: npx playwright test --project=dev
+ *
+ * 3. DOCKER mode (Any OS, full testing):
+ *    - Runs Linux container with full Tauri support
+ *    - Run: ./scripts/run-e2e-tests.sh --docker
+ */
+
+const isDocker = process.env.DOCKER === 'true';
+const isCI = !!process.env.CI;
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  forbidOnly: isCI,
+  retries: isCI ? 2 : 0,
   workers: 1,
-  reporter: 'html',
+  reporter: isCI ? 'github' : 'html',
+  timeout: 60000,
+
   use: {
     baseURL: 'http://localhost:1420',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    video: isCI ? 'on-first-retry' : 'off',
   },
+
   projects: [
     {
       name: 'tauri',
       use: {
         ...devices['Desktop Chrome'],
-        // Tauri WebDriver connects to port 4444
-        wsEndpoint: 'http://localhost:4444',
+        // Tauri WebDriver connects via WebSocket
+        // The app window is controlled through tauri-driver
+        launchOptions: {
+          // Connect to tauri-driver WebSocket endpoint
+          args: ['--remote-debugging-port=9222'],
+        },
       },
+      // Only run on Linux/Windows where WebDriver works
+      testIgnore: process.platform === 'darwin' ? ['**/*'] : undefined,
     },
     {
       name: 'dev',
       use: {
         ...devices['Desktop Chrome'],
-        // Dev mode uses HTTP instead of WebDriver
+        // Dev mode uses regular browser against Vite server
       },
     },
   ],
+
+  // Web server configuration for dev mode
   webServer: {
-    command: 'cargo tauri build --quiet 2>/dev/null; tauri-driver --port 4444',
-    url: 'http://localhost:4444/status',
-    reuseExistingServer: !process.env.CI,
-    timeout: 180 * 1000,
+    command: 'npm run dev',
+    url: 'http://localhost:1420',
+    reuseExistingServer: !isCI,
+    timeout: 120 * 1000,
   },
 });
-
-/**
- * Tauri WebDriver Testing Setup
- *
- * Requirements:
- * 1. Linux or Windows (macOS not supported - no WKWebView driver)
- * 2. Install tauri-driver: cargo install tauri-driver --locked
- * 3. Build the app first: cargo tauri build
- *
- * For CI (GitHub Actions - Linux runners):
- * - Runs automatically on Linux
- * - Full Tauri API testing supported
- *
- * For macOS development:
- * - Use Vite dev server mode (limited Tauri API)
- * - Or run tests on Linux VM/container
- */
