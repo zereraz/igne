@@ -1,4 +1,4 @@
-import { Edit, Trash2, FilePlus, FolderPlus } from 'lucide-react';
+import { Edit, Trash2, FilePlus, FolderPlus, ExternalLink } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
 interface ContextMenuProps {
@@ -10,6 +10,7 @@ interface ContextMenuProps {
   onDelete: () => void;
   onNewNote?: () => void;
   onNewFolder?: () => void;
+  onOpenInNewTab?: () => void;
 }
 
 export function ContextMenu({
@@ -21,6 +22,7 @@ export function ContextMenu({
   onDelete,
   onNewNote,
   onNewFolder,
+  onOpenInNewTab,
 }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -52,14 +54,14 @@ export function ContextMenu({
     gap: '10px',
     padding: '8px 12px',
     fontSize: '12px',
-    color: '#e4e4e7',
+    color: 'var(--text-normal)',
     cursor: 'pointer',
     transition: 'background-color 100ms ease',
     backgroundColor: 'transparent',
     border: 'none',
     width: '100%',
     textAlign: 'left' as const,
-    fontFamily: "'IBM Plex Mono', 'SF Mono', 'Courier New', monospace",
+    fontFamily: 'var(--font-interface)',
   };
 
   return (
@@ -69,37 +71,51 @@ export function ContextMenu({
         position: 'fixed',
         left: x,
         top: y,
-        backgroundColor: '#27272a',
-        border: '1px solid #3f3f46',
+        backgroundColor: 'var(--background-secondary)',
+        border: '1px solid var(--background-modifier-border)',
         borderRadius: '2px',
-        boxShadow: '0 10px 15px rgba(0, 0, 0, 0.5)',
+        boxShadow: '0 10px 15px rgba(0, 0, 0, 0.3)',
         zIndex: 1000,
         minWidth: '160px',
         padding: '4px',
       }}
     >
+      {!isFolder && onOpenInNewTab && (
+        <button
+          style={menuItemStyle}
+          onClick={() => {
+            onOpenInNewTab();
+            onClose();
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+        >
+          <ExternalLink size={14} style={{ color: 'var(--text-muted)' }} />
+          Open in new tab
+        </button>
+      )}
       <button
         style={menuItemStyle}
         onClick={() => {
           onRename();
           onClose();
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#3f3f46')}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
       >
-        <Edit size={14} style={{ color: '#a1a1aa' }} />
+        <Edit size={14} style={{ color: 'var(--text-muted)' }} />
         Rename
       </button>
       <button
         style={{
           ...menuItemStyle,
-          color: '#ef4444',
+          color: 'var(--color-red)',
         }}
         onClick={() => {
           onDelete();
           onClose();
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)')}
+        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--background-modifier-error)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
       >
         <Trash2 size={14} />
@@ -107,7 +123,7 @@ export function ContextMenu({
       </button>
       {isFolder && (
         <>
-          <div style={{ height: '1px', backgroundColor: '#3f3f46', margin: '4px 8px' }} />
+          <div style={{ height: '1px', backgroundColor: 'var(--background-modifier-border)', margin: '4px 8px' }} />
           {onNewNote && (
             <button
               style={menuItemStyle}
@@ -115,10 +131,10 @@ export function ContextMenu({
                 onNewNote();
                 onClose();
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#3f3f46')}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)')}
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
-              <FilePlus size={14} style={{ color: '#a1a1aa' }} />
+              <FilePlus size={14} style={{ color: 'var(--text-muted)' }} />
               New Note
             </button>
           )}
@@ -129,10 +145,10 @@ export function ContextMenu({
                 onNewFolder();
                 onClose();
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#3f3f46')}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)')}
               onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
             >
-              <FolderPlus size={14} style={{ color: '#a1a1aa' }} />
+              <FolderPlus size={14} style={{ color: 'var(--text-muted)' }} />
               New Folder
             </button>
           )}

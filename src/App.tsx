@@ -7,6 +7,11 @@ import {
   FolderOpen,
   FileText,
   FilePlus,
+  Link2,
+  List,
+  Hash,
+  Network,
+  Star,
 } from 'lucide-react';
 import { useWorkspaceSync } from './hooks/useWorkspaceSync';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -25,11 +30,14 @@ async function fileExists(path: string): Promise<boolean> {
 import { FileTree } from './components/FileTree';
 import { Editor } from './components/Editor';
 import { TitleBar } from './components/TitleBar';
+import { StatusBar } from './components/StatusBar';
+import { Ribbon } from './components/Ribbon';
 import { QuickSwitcher } from './components/QuickSwitcher';
 import { BacklinksPanel } from './components/BacklinksPanel';
 import { OutlinePanel } from './components/OutlinePanel';
 import { TagsPanel } from './components/TagsPanel';
 import { GraphView } from './components/GraphView';
+import { LocalGraphView } from './components/LocalGraphView';
 import { ContextMenu } from './components/ContextMenu';
 import { RenameDialog } from './components/RenameDialog';
 import { TemplateInsertModal } from './components/TemplateInsertModal';
@@ -293,12 +301,17 @@ function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ path: string; isFolder: boolean } | null>(null);
   const [rightPanel, setRightPanel] = useState<'backlinks' | 'outline' | 'tags' | 'graph' | 'starred'>('backlinks');
-  const [currentLine, setCurrentLine] = useState<number | undefined>(undefined);
+  const [currentLine, setCurrentLine] = useState<number>(1);
+  const [currentColumn, setCurrentColumn] = useState<number>(1);
   const [scrollToPosition, setScrollToPosition] = useState<number | undefined>(undefined);
+  const [ribbonCollapsed, setRibbonCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [templates, setTemplates] = useState<Array<{ name: string; path: string }>>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [lineWrapping, setLineWrapping] = useState(true);
+  const [readableLineLength, setReadableLineLength] = useState(true);
+  const [focusMode, setFocusMode] = useState(false);
   const switchingVaultRef = useRef(false);
 
   // Ref to trigger editor decoration rebuilds when files change
@@ -1476,6 +1489,15 @@ function App() {
       callback: (...args: unknown[]) => handleToggleTheme(...(args as [])),
     });
 
+    CommandRegistry.register({
+      id: 'view.focusMode',
+      name: 'Toggle Focus Mode',
+      icon: 'Maximize',
+      category: 'view',
+      hotkeys: [{ key: 'f', modifiers: { meta: true, shift: true } }],
+      callback: () => setFocusMode((prev) => !prev),
+    });
+
     // Vault commands
     CommandRegistry.register({
       id: 'vault.open',
@@ -1785,45 +1807,102 @@ function App() {
     <div style={styles.app}>
       {dropOverlay}
       {/* Custom Title Bar with Tabs */}
-      <TitleBar
+      {!focusMode && <TitleBar
         openTabs={openTabs}
         activeTabPath={activeTabPath}
         onTabClick={setActive}
         onTabClose={closeTab}
         onFileNameChange={handleFileNameChange}
         onOpenSettings={() => setShowSettings(true)}
-      />
+      />}
 
       {/* Main Content */}
       <div style={styles.mainContent}>
-        {/* Sidebar */}
-        <aside style={styles.sidebar}>
+        {/* Ribbon - Left Icon Bar */}
+        {!focusMode && <Ribbon
+          onNewNote={handleNewFile}
+          onOpenGraph={() => setRightPanel('graph')}
+          onOpenCommandPalette={() => setIsQuickSwitcherOpen(true)}
+          onOpenSettings={() => setShowSettings(true)}
+          onSwitchVault={handleOpenVault}
+          collapsed={ribbonCollapsed}
+          onToggleCollapse={() => setRibbonCollapsed(!ribbonCollapsed)}
+        />}
+
+        {/* Sidebar - Collapsible */}
+        {!focusMode && (sidebarCollapsed ? (
+          <div
+            onClick={() => setSidebarCollapsed(false)}
+            style={{
+              width: '8px',
+              backgroundColor: 'var(--background-secondary)',
+              borderRight: '1px solid var(--background-modifier-border)',
+              cursor: 'pointer',
+              flexShrink: 0,
+              transition: 'background 100ms ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+            }}
+            title="Expand file tree"
+          />
+        ) : (
+        <aside style={{ ...styles.sidebar, position: 'relative' }}>
           {vaultPath ? (
             <div style={styles.sidebarContent}>
               <div style={styles.sidebarHeader}>
                 <div style={styles.vaultName}>{vaultName}</div>
-                <button
-                  type="button"
-                  data-testid="create-file-button"
-                  onClick={handleNewFile}
-                  style={{
-                    ...styles.newFileButton,
-                    padding: '4px',
-                    width: '24px',
-                    height: '24px',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--color-accent)';
-                    e.currentTarget.style.color = 'var(--text-normal)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
-                    e.currentTarget.style.color = 'var(--text-muted)';
-                  }}
-                  title="New File"
-                >
-                  <FilePlus size={12} />
-                </button>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarCollapsed(true)}
+                    style={{
+                      ...styles.newFileButton,
+                      padding: '4px',
+                      width: '24px',
+                      height: '24px',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--color-accent)';
+                      e.currentTarget.style.color = 'var(--text-normal)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
+                      e.currentTarget.style.color = 'var(--text-muted)';
+                    }}
+                    title="Collapse sidebar"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="11 17 6 12 11 7" />
+                      <polyline points="18 17 13 12 18 7" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="create-file-button"
+                    onClick={handleNewFile}
+                    style={{
+                      ...styles.newFileButton,
+                      padding: '4px',
+                      width: '24px',
+                      height: '24px',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--color-accent)';
+                      e.currentTarget.style.color = 'var(--text-normal)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
+                      e.currentTarget.style.color = 'var(--text-muted)';
+                    }}
+                    title="New File"
+                  >
+                    <FilePlus size={12} />
+                  </button>
+                </div>
               </div>
               {loading ? (
                 <div style={styles.loading}>Loading...</div>
@@ -1961,6 +2040,7 @@ function App() {
             </div>
           )}
         </aside>
+        ))}
 
         {/* Content Area */}
         <main style={styles.contentArea}>
@@ -1985,45 +2065,58 @@ function App() {
                   }}
                 />
                 <div style={styles.editorContainer}>
-                  <Editor
-                    content={activeTab.content}
-                    onChange={handleContentChange}
-                    onCursorPositionChange={(line) => setCurrentLine(line)}
-                    vaultPath={vaultPath}
-                    currentFilePath={activeTab.path}
-                    scrollPosition={scrollToPosition}
-                    refreshTrigger={editorRefreshTrigger}
-                    lineWrapping={lineWrapping}
-                    onWikilinkClick={(target) => {
-                      console.log('[App] onWikilinkClick called:', target);
-                      if (!isVaultReady) {
-                        console.log('[App] Vault not ready, queuing wikilink');
-                        // Queue the click for when vault is ready
-                        setWikilinkQueue(prev => [...prev, { target, newTab: false }]);
-                        return;
-                      }
-                      const path = searchStore.getFilePathByName(target);
-                      console.log('[App] searchStore.getFilePathByName returned:', path);
-                      if (path) {
-                        handleFileSelect(path); // Regular click: switch to existing tab or open in current tab
-                      } else {
-                        console.warn('[App] Wikilink target not found:', target);
-                      }
-                    }}
-                    onWikilinkCmdClick={(target) => {
-                      if (!isVaultReady) {
-                        // Queue the click for when vault is ready
-                        setWikilinkQueue(prev => [...prev, { target, newTab: true }]);
-                        return;
-                      }
-                      const path = searchStore.getFilePathByName(target);
-                      if (path) {
-                        handleFileSelect(path, true); // Cmd+Click: open in new tab
-                      }
-                    }}
-                  />
+                  {activeTab.path === '__graph__' ? (
+                    <GraphView
+                      files={openTabs.filter(t => t.path !== '__graph__')}
+                      onNodeClick={(path) => {
+                        handleFileSelect(path);
+                      }}
+                    />
+                  ) : (
+                    <Editor
+                      content={activeTab.content}
+                      onChange={handleContentChange}
+                      onCursorPositionChange={(line, column) => {
+                        setCurrentLine(line);
+                        setCurrentColumn(column);
+                      }}
+                      vaultPath={vaultPath}
+                      currentFilePath={activeTab.path}
+                      scrollPosition={scrollToPosition}
+                      refreshTrigger={editorRefreshTrigger}
+                      lineWrapping={lineWrapping}
+                      readableLineLength={readableLineLength}
+                      onWikilinkClick={(target) => {
+                        console.log('[App] onWikilinkClick called:', target);
+                        if (!isVaultReady) {
+                          console.log('[App] Vault not ready, queuing wikilink');
+                          // Queue the click for when vault is ready
+                          setWikilinkQueue(prev => [...prev, { target, newTab: false }]);
+                          return;
+                        }
+                        const path = searchStore.getFilePathByName(target);
+                        console.log('[App] searchStore.getFilePathByName returned:', path);
+                        if (path) {
+                          handleFileSelect(path); // Regular click: switch to existing tab or open in current tab
+                        } else {
+                          console.warn('[App] Wikilink target not found:', target);
+                        }
+                      }}
+                      onWikilinkCmdClick={(target) => {
+                        if (!isVaultReady) {
+                          // Queue the click for when vault is ready
+                          setWikilinkQueue(prev => [...prev, { target, newTab: true }]);
+                          return;
+                        }
+                        const path = searchStore.getFilePathByName(target);
+                        if (path) {
+                          handleFileSelect(path, true); // Cmd+Click: open in new tab
+                        }
+                      }}
+                    />
+                  )}
                 </div>
-                <div
+                {!focusMode && <div
                   style={{
                     width: '256px',
                     backgroundColor: 'var(--background-secondary)',
@@ -2033,98 +2126,56 @@ function App() {
                     overflow: 'hidden',
                   }}
                 >
-                  {/* Panel Toggle */}
+                  {/* Panel Toggle - Icon tabs */}
                   <div
                     style={{
                       display: 'flex',
+                      justifyContent: 'center',
+                      gap: '2px',
+                      padding: '6px 8px',
                       borderBottom: '1px solid var(--background-modifier-border)',
                     }}
                   >
-                    <button
-                      onClick={() => setRightPanel('backlinks')}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem',
-                        backgroundColor: rightPanel === 'backlinks' ? 'var(--background-tertiary)' : 'transparent',
-                        border: 'none',
-                        color: rightPanel === 'backlinks' ? 'var(--color-accent)' : 'var(--text-faint)',
-                        cursor: 'pointer',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      Backlinks
-                    </button>
-                    <button
-                      onClick={() => setRightPanel('outline')}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem',
-                        backgroundColor: rightPanel === 'outline' ? 'var(--background-tertiary)' : 'transparent',
-                        border: 'none',
-                        color: rightPanel === 'outline' ? 'var(--color-accent)' : 'var(--text-faint)',
-                        cursor: 'pointer',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      Outline
-                    </button>
-                    <button
-                      onClick={() => setRightPanel('tags')}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem',
-                        backgroundColor: rightPanel === 'tags' ? 'var(--background-tertiary)' : 'transparent',
-                        border: 'none',
-                        color: rightPanel === 'tags' ? 'var(--color-accent)' : 'var(--text-faint)',
-                        cursor: 'pointer',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      Tags
-                    </button>
-                    <button
-                      onClick={() => setRightPanel('graph')}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem',
-                        backgroundColor: rightPanel === 'graph' ? 'var(--background-tertiary)' : 'transparent',
-                        border: 'none',
-                        color: rightPanel === 'graph' ? 'var(--color-accent)' : 'var(--text-faint)',
-                        cursor: 'pointer',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      Graph
-                    </button>
-                    <button
-                      onClick={() => setRightPanel('starred')}
-                      style={{
-                        flex: 1,
-                        padding: '0.5rem',
-                        backgroundColor: rightPanel === 'starred' ? 'var(--background-tertiary)' : 'transparent',
-                        border: 'none',
-                        color: rightPanel === 'starred' ? 'var(--color-accent)' : 'var(--text-faint)',
-                        cursor: 'pointer',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      Starred
-                    </button>
+                    {[
+                      { id: 'backlinks' as const, label: 'Backlinks', icon: <Link2 size={14} /> },
+                      { id: 'outline' as const, label: 'Outline', icon: <List size={14} /> },
+                      { id: 'tags' as const, label: 'Tags', icon: <Hash size={14} /> },
+                      { id: 'graph' as const, label: 'Graph', icon: <Network size={14} /> },
+                      { id: 'starred' as const, label: 'Starred', icon: <Star size={14} /> },
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setRightPanel(tab.id)}
+                        title={tab.label}
+                        style={{
+                          width: '28px',
+                          height: '28px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: rightPanel === tab.id ? 'var(--background-modifier-hover)' : 'transparent',
+                          border: 'none',
+                          borderRadius: '4px',
+                          color: rightPanel === tab.id ? 'var(--color-accent)' : 'var(--text-faint)',
+                          cursor: 'pointer',
+                          transition: 'background 100ms ease, color 100ms ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          if (rightPanel !== tab.id) {
+                            e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+                            e.currentTarget.style.color = 'var(--text-muted)';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (rightPanel !== tab.id) {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.color = 'var(--text-faint)';
+                          }
+                        }}
+                      >
+                        {tab.icon}
+                      </button>
+                    ))}
                   </div>
                   {/* Panel Content */}
                   <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -2147,9 +2198,15 @@ function App() {
                         }}
                       />
                     ) : rightPanel === 'graph' ? (
-                      <GraphView
+                      <LocalGraphView
                         files={openTabs}
+                        currentFilePath={activeTab.path}
                         onNodeClick={handleFileSelect}
+                        onOpenFullGraph={() => {
+                          // Open full graph as a virtual tab
+                          openTab('__graph__', 'Graph', '', true);
+                        }}
+                        depth={2}
                       />
                     ) : rightPanel === 'starred' ? (
                       <StarredFilesPanel
@@ -2172,7 +2229,7 @@ function App() {
                       />
                     )}
                   </div>
-                </div>
+                </div>}
               </>
             ) : (
               <div style={styles.emptyContent}>
@@ -2183,6 +2240,16 @@ function App() {
           })()}
         </main>
       </div>
+
+      {/* Status Bar */}
+      {!focusMode && activeTab && (
+        <StatusBar
+          content={activeTab.content}
+          cursorLine={currentLine}
+          cursorColumn={currentColumn}
+          backlinksCount={0} // TODO: Wire up actual backlinks count
+        />
+      )}
 
       {/* Quick Switcher */}
       <QuickSwitcher
@@ -2202,6 +2269,10 @@ function App() {
           onDelete={handleDelete}
           onNewNote={handleNewFileInFolder}
           onNewFolder={handleNewFolder}
+          onOpenInNewTab={() => {
+            handleFileSelect(contextMenu.path, true);
+            setContextMenu(null);
+          }}
         />
       )}
 
@@ -2236,6 +2307,8 @@ function App() {
           vaultPath={vaultPath}
           lineWrapping={lineWrapping}
           onLineWrappingChange={handleLineWrappingChange}
+          readableLineLength={readableLineLength}
+          onReadableLineLengthChange={(enabled: boolean) => setReadableLineLength(enabled)}
         />
       )}
     </div>

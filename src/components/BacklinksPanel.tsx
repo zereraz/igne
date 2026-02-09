@@ -30,13 +30,13 @@ export function BacklinksPanel({ currentFilePath, onBacklinkClick }: BacklinksPa
         alignItems: 'center',
         gap: '8px',
         padding: '6px 12px',
-        backgroundColor: 'rgba(24, 24, 27, 0.9)',
-        borderTop: '1px solid rgba(63, 63, 70, 0.5)',
-        borderLeft: '1px solid rgba(63, 63, 70, 0.5)',
+        backgroundColor: 'var(--background-secondary)',
+        borderTop: '1px solid var(--background-modifier-border)',
+        borderLeft: '1px solid var(--background-modifier-border)',
         borderTopLeftRadius: '6px',
-        color: '#71717a',
+        color: 'var(--text-faint)',
         fontSize: '11px',
-        fontFamily: "'IBM Plex Mono', monospace",
+        fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
         boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.3)',
         backdropFilter: 'blur(8px)',
         zIndex: 100,
@@ -53,7 +53,7 @@ export function BacklinksPanel({ currentFilePath, onBacklinkClick }: BacklinksPa
             padding: '2px 6px',
             backgroundColor: 'transparent',
             border: 'none',
-            color: '#71717a',
+            color: 'var(--text-faint)',
             cursor: 'pointer',
             fontSize: '11px',
           }}
@@ -73,7 +73,7 @@ export function BacklinksPanel({ currentFilePath, onBacklinkClick }: BacklinksPa
               padding: '2px 4px',
               backgroundColor: 'transparent',
               border: 'none',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               cursor: 'pointer',
               opacity: 0.5,
             }}
@@ -90,29 +90,29 @@ export function BacklinksPanel({ currentFilePath, onBacklinkClick }: BacklinksPa
           {backlinks.slice(0, 3).map((backlink) => (
             <button
               key={backlink.path}
-              onClick={() => onBacklinkClick(backlink.path)}
+              onClick={() => onBacklinkClick(searchStore.getOsPath(backlink.path))}
               style={{
                 padding: '2px 6px',
                 backgroundColor: 'transparent',
-                border: '1px solid rgba(167, 139, 250, 0.2)',
+                border: '1px solid rgba(var(--color-accent-rgb), 0.2)',
                 borderRadius: '3px',
-                color: '#a78bfa',
+                color: 'var(--color-accent)',
                 fontSize: '11px',
-                fontFamily: "'IBM Plex Mono', monospace",
+                fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
                 cursor: 'pointer',
                 transition: 'all 100ms ease',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'rgba(167, 139, 250, 0.1)';
-                e.currentTarget.style.borderColor = 'rgba(167, 139, 250, 0.4)';
+                e.currentTarget.style.backgroundColor = 'rgba(var(--color-accent-rgb), 0.1)';
+                e.currentTarget.style.borderColor = 'rgba(var(--color-accent-rgb), 0.4)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.borderColor = 'rgba(167, 139, 250, 0.2)';
+                e.currentTarget.style.borderColor = 'rgba(var(--color-accent-rgb), 0.2)';
               }}
               title={backlink.name}
             >
-              {backlink.name.length > 15 ? backlink.name.slice(0, 15) + '...' : backlink.name}
+              {backlink.name.length > 25 ? backlink.name.slice(0, 25) + '...' : backlink.name}
             </button>
           ))}
           {backlinks.length > 3 && (

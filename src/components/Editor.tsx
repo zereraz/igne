@@ -31,9 +31,10 @@ interface EditorProps {
   scrollPosition?: number;
   refreshTrigger?: { current: number };
   lineWrapping?: boolean;
+  readableLineLength?: boolean;
 }
 
-export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick, onCursorPositionChange, vaultPath, currentFilePath, scrollPosition, refreshTrigger, lineWrapping = true }: EditorProps) {
+export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick, onCursorPositionChange, vaultPath, currentFilePath, scrollPosition, refreshTrigger, lineWrapping = true, readableLineLength = true }: EditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -464,15 +465,18 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       EditorView.theme({
         '&': {
           height: '100%',
-          fontSize: '15px',
+          fontSize: 'var(--font-text-size, 15px)',
           lineHeight: '1.6',
         },
         '.cm-scroller': {
           overflow: 'auto',
-          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+          fontFamily: 'var(--font-text-theme, var(--font-default, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif))',
         },
         '.cm-content': {
-          padding: '1rem',
+          maxWidth: 'var(--readable-line-length, none)',
+          marginLeft: 'auto',
+          marginRight: 'auto',
+          padding: '2rem 4rem',
         },
         '.cm-line': {
           padding: '0',
@@ -869,10 +873,10 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       const docLength = view.state.doc.length;
       const validPosition = Math.min(Math.max(0, scrollPosition), docLength);
 
-      // Scroll to the position
+      // Scroll to the position, centering it vertically
       view.dispatch({
         selection: { anchor: validPosition, head: validPosition },
-        scrollIntoView: true,
+        effects: EditorView.scrollIntoView(validPosition, { y: 'center' }),
       });
     }
   }, [scrollPosition]);
@@ -992,14 +996,17 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         height: '100%',
         width: '100%',
         backgroundColor: 'var(--background-primary)',
-      }}
+        '--readable-line-length': readableLineLength ? '700px' : 'none',
+      } as React.CSSProperties}
     >
       {/* Wikilink Search Popup */}
       {wikilinkSearch && (
         <div
           style={{
             position: 'fixed',
-            top: wikilinkSearch.position.top,
+            top: wikilinkSearch.position.top + 300 > window.innerHeight
+              ? Math.max(0, wikilinkSearch.position.top - 300)
+              : wikilinkSearch.position.top,
             left: wikilinkSearch.position.left,
             zIndex: 1000,
             minWidth: '280px',

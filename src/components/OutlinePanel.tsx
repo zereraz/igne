@@ -40,7 +40,7 @@ export function OutlinePanel({ content, onHeadingClick, currentLine }: OutlinePa
 
   if (headings.length === 0) {
     return (
-      <div className="outline-panel-empty" style={{ padding: '1rem', color: '#71717a', textAlign: 'center' }}>
+      <div className="outline-panel-empty" style={{ padding: '1rem', color: 'var(--text-faint)', textAlign: 'center' }}>
         <p>No headings found</p>
         <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
           Add # headings to generate outline
@@ -55,12 +55,12 @@ export function OutlinePanel({ content, onHeadingClick, currentLine }: OutlinePa
         className="outline-panel-header"
         style={{
           padding: '0.75rem 1rem',
-          borderBottom: '1px solid #27272a',
+          borderBottom: '1px solid var(--background-secondary)',
           fontSize: '0.75rem',
           fontWeight: 600,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
-          color: '#a1a1aa',
+          color: 'var(--text-muted)',
         }}
       >
         Outline
@@ -85,9 +85,9 @@ export function OutlinePanel({ content, onHeadingClick, currentLine }: OutlinePa
                 paddingLeft: `${0.5 + heading.level * 0.75}rem`,
                 cursor: 'pointer',
                 fontSize: '0.875rem',
-                color: isActive ? '#a78bfa' : '#a1a1aa',
-                backgroundColor: isActive ? 'rgba(167, 139, 250, 0.1)' : 'transparent',
-                borderLeft: isActive ? '2px solid #a78bfa' : '2px solid transparent',
+                color: isActive ? 'var(--color-accent)' : 'var(--text-muted)',
+                backgroundColor: isActive ? 'rgba(var(--color-accent-rgb), 0.1)' : 'transparent',
+                borderLeft: isActive ? '2px solid var(--color-accent)' : '2px solid transparent',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
@@ -95,14 +95,14 @@ export function OutlinePanel({ content, onHeadingClick, currentLine }: OutlinePa
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.color = '#e4e4e7';
+                  e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+                  e.currentTarget.style.color = 'var(--text-normal)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isActive) {
                   e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.color = '#a1a1aa';
+                  e.currentTarget.style.color = 'var(--text-muted)';
                 }
               }}
             >

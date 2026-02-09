@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Dot, X, Settings } from 'lucide-react';
 import { OpenFile } from '../types';
-import { ThemeToggle } from './ThemeToggle';
 import { CommandRegistry } from '../commands/registry';
 import type { CommandSource } from '../tools/types';
 
@@ -12,9 +11,7 @@ interface TitleBarProps {
   onTabClick: (path: string) => void;
   onTabClose: (path: string) => void;
   onFileNameChange: (name: string) => void;
-  onThemeChange?: (theme: 'dark' | 'light') => void;
   onOpenSettings?: () => void;
-  baseTheme?: 'dark' | 'light';
 }
 
 const source: CommandSource = 'ui';
@@ -25,11 +22,11 @@ export function TitleBar({
   onTabClick,
   onTabClose,
   onFileNameChange,
-  onThemeChange,
   onOpenSettings,
-  baseTheme = 'dark'
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
+  const [editingTab, setEditingTab] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
   const appWindow = getCurrentWindow();
 
   useEffect(() => {
@@ -81,8 +78,8 @@ export function TitleBar({
         display: 'flex',
         alignItems: 'center',
         height: '36px',
-        backgroundColor: '#27272a',
-        borderBottom: '1px solid #3f3f46',
+        backgroundColor: 'var(--background-secondary)',
+        borderBottom: '1px solid var(--background-modifier-border)',
         userSelect: 'none',
         WebkitUserSelect: 'none',
         flexShrink: 0,
@@ -104,24 +101,39 @@ export function TitleBar({
           <div
             key={tab.path}
             onClick={() => handleTabClick(tab.path)}
+            onMouseDown={(e) => {
+              if (e.button === 1) {
+                e.preventDefault();
+                handleTabClose(tab.path);
+              }
+            }}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              if (tab.path === activeTabPath) {
+                setEditingTab(tab.path);
+                setEditValue(tab.name.replace(/\.md$/, ''));
+              }
+            }}
+            data-testid="tab"
+            data-tab={tab.name}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
               padding: '0 12px',
-              backgroundColor: tab.path === activeTabPath ? '#18181b' : 'transparent',
-              border: tab.path === activeTabPath ? '1px solid #3f3f46' : '1px solid transparent',
-              borderBottom: tab.path === activeTabPath ? '1px solid #18181b' : '1px solid transparent',
+              backgroundColor: tab.path === activeTabPath ? 'var(--background-primary)' : 'transparent',
+              border: tab.path === activeTabPath ? '1px solid var(--background-modifier-border)' : '1px solid transparent',
+              borderBottom: tab.path === activeTabPath ? '1px solid var(--background-primary)' : '1px solid transparent',
               borderTopLeftRadius: '4px',
               borderTopRightRadius: '4px',
-              cursor: 'pointer',
+              cursor: 'default',
               minWidth: 'fit-content',
               maxWidth: '200px',
               boxSizing: 'border-box',
             }}
             onMouseEnter={(e) => {
               if (tab.path !== activeTabPath) {
-                e.currentTarget.style.backgroundColor = '#3f3f46';
+                e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
               }
             }}
             onMouseLeave={(e) => {
@@ -130,37 +142,76 @@ export function TitleBar({
               }
             }}
           >
-            {tab.isDirty && (
-              <Dot style={{ color: '#f59e0b', flexShrink: 0 }} size={12} />
-            )}
-            <input
-              type="text"
-              value={tab.name}
-              onChange={(e) => {
-                if (tab.path === activeTabPath) {
-                  onFileNameChange(e.target.value);
-                }
-              }}
-              onClick={(e) => e.stopPropagation()}
-              data-tauri-drag-region
+            {/* Always render dot to prevent layout jitter, use visibility to show/hide */}
+            <Dot
               style={{
-                border: 'none',
-                background: 'transparent',
-                padding: '0',
-                margin: '0',
-                fontSize: '12px',
-                color: '#a1a1aa',
-                fontFamily: '"IBM Plex Mono", "SF Mono", "Courier New", monospace',
-                outline: 'none',
-                minWidth: '40px',
-                maxWidth: '150px',
+                color: 'var(--color-orange)',
+                flexShrink: 0,
+                visibility: tab.isDirty ? 'visible' : 'hidden',
               }}
+              size={12}
             />
+            {editingTab === tab.path ? (
+              <input
+                type="text"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onBlur={() => {
+                  if (editValue.trim()) {
+                    onFileNameChange(editValue.trim() + '.md');
+                  }
+                  setEditingTab(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (editValue.trim()) {
+                      onFileNameChange(editValue.trim() + '.md');
+                    }
+                    setEditingTab(null);
+                  } else if (e.key === 'Escape') {
+                    setEditingTab(null);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                autoFocus
+                style={{
+                  border: '1px solid var(--color-accent)',
+                  background: 'var(--background-secondary)',
+                  padding: '2px 4px',
+                  margin: '0',
+                  fontSize: '12px',
+                  color: 'var(--text-normal)',
+                  fontFamily: 'var(--font-interface)',
+                  outline: 'none',
+                  minWidth: '40px',
+                  maxWidth: '150px',
+                  borderRadius: '2px',
+                }}
+              />
+            ) : (
+              <span
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  fontFamily: 'var(--font-interface)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '150px',
+                  cursor: 'default',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                }}
+              >
+                {tab.name.replace(/\.md$/, '')}
+              </span>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 handleTabClose(tab.path);
               }}
+              data-testid={`close-tab-${tab.name}`}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -169,19 +220,19 @@ export function TitleBar({
                 height: '18px',
                 border: 'none',
                 background: 'transparent',
-                color: '#71717a',
-                cursor: 'pointer',
+                color: 'var(--text-faint)',
+                cursor: 'default',
                 borderRadius: '3px',
                 padding: '0',
                 flexShrink: 0,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#3f3f46';
-                e.currentTarget.style.color = '#a1a1aa';
+                e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+                e.currentTarget.style.color = 'var(--text-muted)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = '#71717a';
+                e.currentTarget.style.color = 'var(--text-faint)';
               }}
             >
               <X size={12} />
@@ -198,14 +249,6 @@ export function TitleBar({
         height: '100%',
         paddingRight: '8px',
       }}>
-        {/* Theme Toggle Button */}
-        {onThemeChange && (
-          <ThemeToggle
-            baseTheme={baseTheme}
-            onThemeChange={onThemeChange}
-          />
-        )}
-
         {/* Settings Button */}
         {onOpenSettings && (
           <button
@@ -218,18 +261,18 @@ export function TitleBar({
               height: '28px',
               border: 'none',
               background: 'transparent',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               cursor: 'pointer',
               borderRadius: '2px',
               padding: '0',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#3f3f46';
-              e.currentTarget.style.color = '#e4e4e7';
+              e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+              e.currentTarget.style.color = 'var(--text-normal)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#71717a';
+              e.currentTarget.style.color = 'var(--text-faint)';
             }}
             title="Settings (Cmd+,)"
           >

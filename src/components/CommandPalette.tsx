@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Terminal, Hash, FileText, Clock } from 'lucide-react';
 import { searchStore } from '../stores/searchStore';
+import { safeArrayIndex } from '../utils/clamp';
 import type { ModalProps } from '../types';
 
 interface Command {
@@ -143,7 +144,8 @@ export function CommandPalette({
         setSelectedIndex((i) => Math.max(i - 1, 0));
       } else if (e.key === 'Enter' && results.length > 0) {
         e.preventDefault();
-        const selected = results[selectedIndex];
+        const idx = safeArrayIndex(selectedIndex, results.length);
+        const selected = results[idx];
 
         if ('action' in selected) {
           // It's a command
@@ -211,9 +213,9 @@ export function CommandPalette({
         style={{
           width: '560px',
           maxWidth: '90%',
-          backgroundColor: '#27272a',
+          backgroundColor: 'var(--background-secondary)',
           borderRadius: '2px',
-          border: '1px solid #3f3f46',
+          border: '1px solid var(--background-modifier-border)',
           boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
           overflow: 'hidden',
         }}
@@ -225,10 +227,10 @@ export function CommandPalette({
             display: 'flex',
             alignItems: 'center',
             padding: '12px 16px',
-            borderBottom: '1px solid #3f3f46',
+            borderBottom: '1px solid var(--background-modifier-border)',
           }}
         >
-          <ModeIcon size={18} style={{ color: '#71717a', marginRight: '12px', flexShrink: 0 }} />
+          <ModeIcon size={18} style={{ color: 'var(--text-faint)', marginRight: '12px', flexShrink: 0 }} />
           <input
             ref={inputRef}
             type="text"
@@ -241,9 +243,9 @@ export function CommandPalette({
               backgroundColor: 'transparent',
               border: 'none',
               outline: 'none',
-              color: '#e4e4e7',
+              color: 'var(--text-normal)',
               fontSize: '14px',
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             }}
           />
           {/* Mode indicator */}
@@ -252,11 +254,11 @@ export function CommandPalette({
               style={{
                 marginLeft: '8px',
                 padding: '2px 6px',
-                backgroundColor: '#3f3f46',
+                backgroundColor: 'var(--background-modifier-border)',
                 borderRadius: '2px',
                 fontSize: '11px',
-                color: '#a1a1aa',
-                fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                color: 'var(--text-muted)',
+                fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
               }}
             >
               {mode === 'files' && '@'}
@@ -272,20 +274,20 @@ export function CommandPalette({
             display: 'flex',
             gap: '4px',
             padding: '8px 16px',
-            borderBottom: '1px solid #3f3f46',
+            borderBottom: '1px solid var(--background-modifier-border)',
           }}
         >
           <button
             onClick={() => { setMode('commands'); setQuery(''); }}
             style={{
               padding: '4px 8px',
-              backgroundColor: mode === 'commands' ? 'rgba(167, 139, 250, 0.2)' : 'transparent',
+              backgroundColor: mode === 'commands' ? 'rgba(var(--color-accent-rgb), 0.2)' : 'transparent',
               border: '1px solid transparent',
               borderRadius: '2px',
-              color: mode === 'commands' ? '#a78bfa' : '#71717a',
+              color: mode === 'commands' ? 'var(--color-accent)' : 'var(--text-faint)',
               cursor: 'pointer',
               fontSize: '11px',
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
@@ -298,13 +300,13 @@ export function CommandPalette({
             onClick={() => { setMode('files'); setQuery(''); }}
             style={{
               padding: '4px 8px',
-              backgroundColor: mode === 'files' ? 'rgba(167, 139, 250, 0.2)' : 'transparent',
+              backgroundColor: mode === 'files' ? 'rgba(var(--color-accent-rgb), 0.2)' : 'transparent',
               border: '1px solid transparent',
               borderRadius: '2px',
-              color: mode === 'files' ? '#a78bfa' : '#71717a',
+              color: mode === 'files' ? 'var(--color-accent)' : 'var(--text-faint)',
               cursor: 'pointer',
               fontSize: '11px',
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
@@ -317,13 +319,13 @@ export function CommandPalette({
             onClick={() => { setMode('tags'); setQuery(''); }}
             style={{
               padding: '4px 8px',
-              backgroundColor: mode === 'tags' ? 'rgba(167, 139, 250, 0.2)' : 'transparent',
+              backgroundColor: mode === 'tags' ? 'rgba(var(--color-accent-rgb), 0.2)' : 'transparent',
               border: '1px solid transparent',
               borderRadius: '2px',
-              color: mode === 'tags' ? '#a78bfa' : '#71717a',
+              color: mode === 'tags' ? 'var(--color-accent)' : 'var(--text-faint)',
               cursor: 'pointer',
               fontSize: '11px',
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
@@ -347,8 +349,8 @@ export function CommandPalette({
                 style={{
                   padding: '8px 16px',
                   fontSize: '11px',
-                  color: '#71717a',
-                  fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                  color: 'var(--text-faint)',
+                  fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
@@ -378,39 +380,70 @@ export function CommandPalette({
                   justifyContent: 'space-between',
                   padding: '10px 16px',
                   cursor: 'pointer',
-                  backgroundColor: index === selectedIndex ? 'rgba(167, 139, 250, 0.15)' : 'transparent',
-                  borderLeft: index === selectedIndex ? '2px solid #a78bfa' : '2px solid transparent',
+                  backgroundColor: index === selectedIndex ? 'rgba(var(--color-accent-rgb), 0.15)' : 'transparent',
+                  borderLeft: index === selectedIndex ? '2px solid var(--color-accent)' : '2px solid transparent',
                   transition: 'background-color 100ms ease',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   {'action' in result ? (
-                    <Terminal size={16} style={{ color: index === selectedIndex ? '#a78bfa' : '#71717a', flexShrink: 0 }} />
+                    <Terminal size={16} style={{ color: index === selectedIndex ? 'var(--color-accent)' : 'var(--text-faint)', flexShrink: 0 }} />
                   ) : result.type === 'file' ? (
-                    <FileText size={16} style={{ color: index === selectedIndex ? '#a78bfa' : '#71717a', flexShrink: 0 }} />
+                    <FileText size={16} style={{ color: index === selectedIndex ? 'var(--color-accent)' : 'var(--text-faint)', flexShrink: 0 }} />
                   ) : (
-                    <Hash size={16} style={{ color: index === selectedIndex ? '#a78bfa' : '#71717a', flexShrink: 0 }} />
+                    <Hash size={16} style={{ color: index === selectedIndex ? 'var(--color-accent)' : 'var(--text-faint)', flexShrink: 0 }} />
                   )}
-                  <span
-                    style={{
-                      color: index === selectedIndex ? '#e4e4e7' : '#a1a1aa',
-                      fontSize: '13px',
-                      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-                    }}
-                  >
-                    {'action' in result ? result.name : result.name}
-                  </span>
+                  {'action' in result || !('type' in result) || result.type !== 'file' ? (
+                    <span
+                      style={{
+                        color: index === selectedIndex ? 'var(--text-normal)' : 'var(--text-muted)',
+                        fontSize: '13px',
+                        fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
+                      }}
+                    >
+                      {result.name}
+                    </span>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                      <span
+                        style={{
+                          color: index === selectedIndex ? 'var(--text-normal)' : 'var(--text-muted)',
+                          fontSize: '13px',
+                          fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
+                        }}
+                      >
+                        {result.name}
+                      </span>
+                      {(() => {
+                        const folderPath = result.path.split('/').slice(0, -1).join('/');
+                        return folderPath ? (
+                          <span
+                            style={{
+                              color: 'var(--text-faint)',
+                              fontSize: '11px',
+                              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {folderPath}
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
+                  )}
                 </div>
                 {'shortcut' in result && result.shortcut && (
                   <kbd
                     style={{
                       padding: '2px 6px',
-                      backgroundColor: '#18181b',
-                      border: '1px solid #3f3f46',
+                      backgroundColor: 'var(--background-primary)',
+                      border: '1px solid var(--background-modifier-border)',
                       borderRadius: '2px',
                       fontSize: '11px',
-                      color: '#71717a',
-                      fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+                      color: 'var(--text-faint)',
+                      fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
                     }}
                   >
                     {result.shortcut}
@@ -427,9 +460,9 @@ export function CommandPalette({
             style={{
               padding: '32px 16px',
               textAlign: 'center',
-              color: '#71717a',
+              color: 'var(--text-faint)',
               fontSize: '13px',
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             }}
           >
             No results found
@@ -441,32 +474,32 @@ export function CommandPalette({
           <div
             style={{
               padding: '10px 16px',
-              borderTop: '1px solid #3f3f46',
-              color: '#71717a',
+              borderTop: '1px solid var(--background-modifier-border)',
+              color: 'var(--text-faint)',
               fontSize: '11px',
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
+              fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
               display: 'flex',
               gap: '16px',
               flexWrap: 'wrap',
             }}
           >
             <span>
-              <kbd style={{ color: '#a1a1aa', marginRight: '4px' }}>↑↓</kbd> navigate
+              <kbd style={{ color: 'var(--text-muted)', marginRight: '4px' }}>↑↓</kbd> navigate
             </span>
             <span>
-              <kbd style={{ color: '#a1a1aa', marginRight: '4px' }}>Enter</kbd> open
+              <kbd style={{ color: 'var(--text-muted)', marginRight: '4px' }}>Enter</kbd> open
             </span>
             <span>
-              <kbd style={{ color: '#a1a1aa', marginRight: '4px' }}>Esc</kbd> close
+              <kbd style={{ color: 'var(--text-muted)', marginRight: '4px' }}>Esc</kbd> close
             </span>
             <span>
-              <kbd style={{ color: '#a1a1aa', marginRight: '4px' }}>@</kbd> files
+              <kbd style={{ color: 'var(--text-muted)', marginRight: '4px' }}>@</kbd> files
             </span>
             <span>
-              <kbd style={{ color: '#a1a1aa', marginRight: '4px' }}>#</kbd> tags
+              <kbd style={{ color: 'var(--text-muted)', marginRight: '4px' }}>#</kbd> tags
             </span>
             <span>
-              <kbd style={{ color: '#a1a1aa', marginRight: '4px' }}>:</kbd> symbols
+              <kbd style={{ color: 'var(--text-muted)', marginRight: '4px' }}>:</kbd> symbols
             </span>
           </div>
         )}
