@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import { Clock } from 'lucide-react';
 
 export interface StatusBarPluginItem {
@@ -114,7 +114,7 @@ function Divider() {
   );
 }
 
-export function StatusBar({
+export const StatusBar = memo(function StatusBar({
   content,
   cursorLine,
   cursorColumn,
@@ -261,4 +261,4 @@ export function StatusBar({
       </div>
     </div>
   );
-}
+});

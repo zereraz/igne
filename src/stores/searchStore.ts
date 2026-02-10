@@ -1,5 +1,4 @@
 import MiniSearch from 'minisearch';
-import Fuse from 'fuse.js';
 import { invoke } from '@tauri-apps/api/core';
 import type { FileEntry, SearchDocument } from '../types';
 import { toVaultPath, toOsPath, getVaultBasename } from '../utils/vaultPaths';
@@ -7,7 +6,6 @@ import { toVaultPath, toOsPath, getVaultBasename } from '../utils/vaultPaths';
 class SearchStore {
   private miniSearch: MiniSearch;
   private files: Map<string, SearchDocument>;
-  private fuse: Fuse<SearchDocument>;
   private vaultPath: string = '';
 
   constructor() {
@@ -16,11 +14,6 @@ class SearchStore {
       idField: 'id',
       fields: ['name', 'content'],
       storeFields: ['id', 'path', 'name'],
-    });
-    this.fuse = new Fuse([], {
-      keys: ['name'],
-      includeScore: true,
-      threshold: 0.3,
     });
   }
 
@@ -100,13 +93,6 @@ class SearchStore {
     // Clear and rebuild MiniSearch index
     this.miniSearch.removeAll();
     this.miniSearch.addAll(documents);
-
-    // Update Fuse for name-only search
-    this.fuse = new Fuse(documents, {
-      keys: ['name'],
-      includeScore: true,
-      threshold: 0.3,
-    });
   }
 
   // Update a single file's content in the index (called when file is saved)
@@ -134,13 +120,6 @@ class SearchStore {
       // Add new document
       this.miniSearch.add(doc);
     }
-
-    // Update Fuse instance
-    this.fuse = new Fuse(Array.from(this.files.values()), {
-      keys: ['name'],
-      includeScore: true,
-      threshold: 0.3,
-    });
   }
 
   // Remove a file from the index (called when file is deleted)
@@ -149,12 +128,6 @@ class SearchStore {
     const vaultPath = this.toVaultPath(path);
     this.files.delete(vaultPath);
     this.miniSearch.discard(vaultPath);
-
-    this.fuse = new Fuse(Array.from(this.files.values()), {
-      keys: ['name'],
-      includeScore: true,
-      threshold: 0.3,
-    });
   }
 
   // Search by content (MiniSearch) - for full-text search
@@ -286,18 +259,24 @@ class SearchStore {
     return filtered;
   }
 
-  // Search by file name (Fuse) - for QuickSwitcher
+  // Search by file name (MiniSearch name-only) - for QuickSwitcher
   searchFiles(query: string): SearchDocument[] {
-    // Returns SearchDocument for compatibility, can be mapped to SearchResult
     if (!query.trim()) {
       const allFiles = Array.from(this.files.values());
       console.log(`[searchStore] searchFiles('') returning ${allFiles.length} files`);
       return allFiles;
     }
 
-    const results = this.fuse.search(query);
+    const results = this.miniSearch.search(query, {
+      fields: ['name'],
+      fuzzy: 0.3,
+      prefix: true,
+    });
     console.log(`[searchStore] searchFiles('${query}') found ${results.length} results`);
-    return results.map((result) => result.item);
+    return results.map((result) => {
+      const doc = this.files.get(result.id);
+      return doc || { id: result.id, path: result.id, name: '', content: '' };
+    });
   }
 
   /**

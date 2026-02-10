@@ -79,63 +79,61 @@ const CONTAINER_NODES = [
 //   'TagMark', 'QuoteMark', 'ListMark', 'BlockIDMark',
 // ];
 
-// Helper to find code blocks (excludes mermaid blocks which are handled separately)
-function findCodeBlocks(state: EditorState): { from: number; to: number; language: string; code: string }[] {
-  const blocks: ReturnType<typeof findCodeBlocks> = [];
+// Unified fenced block scanner: finds all ```...``` blocks in one pass.
+// Returns { from, to, language, code } for every fenced block.
+interface FencedBlock { from: number; to: number; language: string; code: string }
+
+function findAllFencedBlocks(state: EditorState): FencedBlock[] {
+  const blocks: FencedBlock[] = [];
   const doc = state.doc;
 
   for (let i = 1; i <= doc.lines; i++) {
     const line = doc.line(i);
     const match = line.text.match(/^```(\w*)$/);
+    if (!match) continue;
 
-    if (match) {
-      const language = match[1] || 'text';
+    const language = match[1] || 'text';
 
-      // Skip mermaid blocks - they're handled separately by findMermaidBlocks
-      if (language.toLowerCase() === 'mermaid') {
-        // Find closing ``` and skip past it
-        let endLine = i + 1;
-        while (endLine <= doc.lines) {
-          if (doc.line(endLine).text === '```') break;
-          endLine++;
-        }
-        if (endLine <= doc.lines) {
-          i = endLine;
-        }
-        continue;
-      }
-      const startLine = i;
-
-      // Find closing ```
-      let endLine = i + 1;
-      while (endLine <= doc.lines) {
-        if (doc.line(endLine).text === '```') break;
-        endLine++;
-      }
-
-      if (endLine <= doc.lines) {
-        const codeLines: string[] = [];
-        for (let j = startLine + 1; j < endLine; j++) {
-          codeLines.push(doc.line(j).text);
-        }
-
-        blocks.push({
-          from: line.from,
-          to: doc.line(endLine).to,
-          language,
-          code: codeLines.join('\n'),
-        });
-
-        i = endLine;
-      }
+    // Find closing ```
+    let endLine = i + 1;
+    while (endLine <= doc.lines) {
+      if (doc.line(endLine).text === '```') break;
+      endLine++;
     }
+    if (endLine > doc.lines) continue; // unclosed fence
+
+    const codeLines: string[] = [];
+    for (let j = i + 1; j < endLine; j++) {
+      codeLines.push(doc.line(j).text);
+    }
+
+    blocks.push({
+      from: line.from,
+      to: doc.line(endLine).to,
+      language,
+      code: codeLines.join('\n'),
+    });
+
+    i = endLine; // skip to closing fence
   }
 
   return blocks;
 }
 
+// Convenience: code blocks only (excludes mermaid)
+export function findCodeBlocks(state: EditorState): FencedBlock[] {
+  return findAllFencedBlocks(state).filter(b => b.language.toLowerCase() !== 'mermaid');
+}
+
+// Convenience: mermaid blocks only
+export function findMermaidBlocks(state: EditorState): { from: number; to: number; code: string }[] {
+  return findAllFencedBlocks(state)
+    .filter(b => b.language.toLowerCase() === 'mermaid')
+    .map(({ from, to, code }) => ({ from, to, code }));
+}
+
 // Helper to find callouts
-function findCallouts(
+export function findCallouts(
   state: EditorState
 ): { from: number; to: number; type: string; title: string; content: string; folded: boolean }[] {
   const callouts: ReturnType<typeof findCallouts> = [];
@@ -181,7 +179,7 @@ function findCallouts(
 }
 
 // Helper to find math blocks
-function findMathBlocks(state: EditorState): { from: number; to: number; latex: string; display: boolean }[] {
+export function findMathBlocks(state: EditorState): { from: number; to: number; latex: string; display: boolean }[] {
   const blocks: ReturnType<typeof findMathBlocks> = [];
   const text = state.doc.toString();
 
@@ -214,45 +212,6 @@ function findMathBlocks(state: EditorState): { from: number; to: number; latex: 
   return blocks;
 }
 
-// Helper to find mermaid blocks
-function findMermaidBlocks(state: EditorState): { from: number; to: number; code: string }[] {
-  const blocks: ReturnType<typeof findMermaidBlocks> = [];
-  const doc = state.doc;
-
-  for (let i = 1; i <= doc.lines; i++) {
-    const line = doc.line(i);
-    const match = line.text.match(/^```mermaid$/i);
-
-    if (match) {
-      const startLine = i;
-
-      // Find closing ```
-      let endLine = i + 1;
-      while (endLine <= doc.lines) {
-        if (doc.line(endLine).text === '```') break;
-        endLine++;
-      }
-
-      if (endLine <= doc.lines) {
-        const codeLines: string[] = [];
-        for (let j = startLine + 1; j < endLine; j++) {
-          codeLines.push(doc.line(j).text);
-        }
-
-        blocks.push({
-          from: line.from,
-          to: doc.line(endLine).to,
-          code: codeLines.join('\n'),
-        });
-
-        i = endLine;
-      }
-    }
-  }
-
-  return blocks;
-}
-
 // Simple marker decoration for atomic ranges
 const atomicMarker = Decoration.mark({});
 
@@ -265,10 +224,14 @@ interface BlockScanCache {
 }
 
 function computeBlockScans(state: EditorState): BlockScanCache {
+  // Single pass for all fenced blocks, then partition by language
+  const allFenced = findAllFencedBlocks(state);
   return {
-    codeBlocks: findCodeBlocks(state),
+    codeBlocks: allFenced.filter(b => b.language.toLowerCase() !== 'mermaid'),
     mathBlocks: findMathBlocks(state),
-    mermaidBlocks: findMermaidBlocks(state),
+    mermaidBlocks: allFenced
+      .filter(b => b.language.toLowerCase() === 'mermaid')
+      .map(({ from, to, code }) => ({ from, to, code })),
     callouts: findCallouts(state),
   };
 }
@@ -385,10 +348,10 @@ function buildCursorSensitiveDecorations(
   cache: TreeScanCache,
   state: EditorState,
   config: Required<LivePreviewConfig>,
-): { inlineDecorations: Range<Decoration>[]; blockDecorations: Range<Decoration>[]; blockRanges: { from: number; to: number }[] } {
+): { inlineDecorations: Range<Decoration>[]; blockDecorations: Range<Decoration>[]; atomicRanges: { from: number; to: number }[] } {
   const inlineDecorations: Range<Decoration>[] = [...cache.stableInlineDecos];
   const blockDecorations: Range<Decoration>[] = [];
-  const blockRanges: { from: number; to: number }[] = [];
+  const atomicRanges: { from: number; to: number }[] = [];
   const resolvedEmbeds = new Set<string>();
   const { head: cursor } = state.selection.main;
   const cursorLine = state.doc.lineAt(cursor).number;
@@ -464,7 +427,7 @@ function buildCursorSensitiveDecorations(
         const target = match[1];
         const { path, params } = parseEmbedTarget(target);
         const resolved = config.resolveWikilink(path);
-        blockRanges.push({ from: node.from, to: node.to });
+        atomicRanges.push({ from: node.from, to: node.to });
 
         if (isImageFile(path)) {
           const imageSrc = config.resolveImage ? config.resolveImage(path) : path;
@@ -492,7 +455,7 @@ function buildCursorSensitiveDecorations(
         const target = embedMatch[1];
         const { path, params } = parseEmbedTarget(target);
         const resolved = config.resolveWikilink(path);
-        blockRanges.push({ from: node.from, to: node.to });
+        atomicRanges.push({ from: node.from, to: node.to });
 
         if (isImageFile(path)) {
           const imageSrc = config.resolveImage ? config.resolveImage(path) : path;
@@ -526,18 +489,18 @@ function buildCursorSensitiveDecorations(
     }
   }
 
-  return { inlineDecorations, blockDecorations, blockRanges };
+  return { inlineDecorations, blockDecorations, atomicRanges };
 }
 
 // Build decorations separated into inline and block categories
 // Block decorations cannot be provided via ViewPlugin, they must use StateField
-// Also returns blockRanges for atomicRanges facet
+// Also returns atomicRanges for embed/image widgets that cursor should skip over
 function buildAllDecorations(
   view: EditorView,
   config: LivePreviewConfig,
   cachedBlockScans?: BlockScanCache,
   cachedTreeScan?: TreeScanCache,
-): { inline: DecorationSet; block: DecorationSet; blockRanges: { from: number; to: number }[] } {
+): { inline: DecorationSet; block: DecorationSet; atomicRanges: { from: number; to: number }[] } {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
   const { head: cursor } = view.state.selection.main;
   const cursorLine = view.state.doc.lineAt(cursor).number;
@@ -545,7 +508,7 @@ function buildAllDecorations(
 
   // Use cached tree scan if available (selectionSet-only updates)
   const treeScan = cachedTreeScan ?? buildTreeScanCache(view.state, fullConfig);
-  const { inlineDecorations, blockDecorations, blockRanges } = buildCursorSensitiveDecorations(treeScan, view.state, fullConfig);
+  const { inlineDecorations, blockDecorations, atomicRanges } = buildCursorSensitiveDecorations(treeScan, view.state, fullConfig);
 
   // === BLOCK-LEVEL RENDERING ===
   // Use cached scans when available (selectionSet-only updates), otherwise compute fresh
@@ -558,7 +521,6 @@ function buildAllDecorations(
     const cursorInsideBlock = cursorLine >= startLine.number && cursorLine <= endLine.number;
 
     if (!cursorInsideBlock) {
-      blockRanges.push({ from: block.from, to: block.to });
       blockDecorations.push(
         Decoration.replace({
           widget: new CodeBlockWidget(block.code, block.language),
@@ -576,7 +538,6 @@ function buildAllDecorations(
       const cursorInsideBlock = cursorLine >= startLine.number && cursorLine <= endLine.number;
 
       if (!cursorInsideBlock) {
-        blockRanges.push({ from: block.from, to: block.to });
         blockDecorations.push(
           Decoration.replace({
             widget: new MathWidget(block.latex, block.display),
@@ -603,7 +564,6 @@ function buildAllDecorations(
     const cursorInsideBlock = cursorLine >= startLine.number && cursorLine <= endLine.number;
 
     if (!cursorInsideBlock) {
-      blockRanges.push({ from: block.from, to: block.to });
       blockDecorations.push(
         Decoration.replace({
           widget: new MermaidWidget(block.code),
@@ -620,7 +580,6 @@ function buildAllDecorations(
     if (cursorLine >= startLine.number && cursorLine <= endLine.number) {
       continue;
     }
-    blockRanges.push({ from: callout.from, to: callout.to });
     blockDecorations.push(
       Decoration.replace({
         widget: new CalloutWidget(
@@ -638,14 +597,14 @@ function buildAllDecorations(
   return {
     inline: Decoration.set(inlineDecorations, true),
     block: Decoration.set(blockDecorations, true),
-    blockRanges,
+    atomicRanges,
   };
 }
 
 // Effect to update block decorations in the StateField
 const setBlockDecorations = StateEffect.define<DecorationSet>();
 
-// Effect to update atomic ranges (for cursor motion around block widgets)
+// Effect to update atomic ranges (for cursor skip over embed/image widgets)
 const setAtomicRanges = StateEffect.define<RangeSet<Decoration>>();
 
 export function createLivePreview(config: LivePreviewConfig = {}) {
@@ -674,7 +633,8 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
     provide: (field) => EditorView.decorations.from(field),
   });
 
-  // StateField for atomic ranges (used by cursor motion to skip over block widgets)
+  // StateField for atomic ranges — only used for embed/image widgets (not code blocks,
+  // math, mermaid, or callouts, which must allow cursor entry for live preview editing)
   const atomicRangesField = StateField.define<RangeSet<Decoration>>({
     create() {
       logger.debug('livePreview', 'atomicRangesField.create()');
@@ -716,7 +676,7 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
         this.decorations = result.inline;
         // Store pending block updates — dispatched by the updateListener (not rAF)
         this.pendingBlockUpdate = result.block;
-        this.pendingAtomicRanges = this.buildAtomicRanges(result.blockRanges);
+        this.pendingAtomicRanges = this.buildAtomicRanges(result.atomicRanges);
       }
 
       buildAtomicRanges(ranges: { from: number; to: number }[]): RangeSet<Decoration> {
@@ -760,7 +720,7 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
           this.decorations = result.inline;
           // Store pending block updates — dispatched by the updateListener
           this.pendingBlockUpdate = result.block;
-          this.pendingAtomicRanges = this.buildAtomicRanges(result.blockRanges);
+          this.pendingAtomicRanges = this.buildAtomicRanges(result.atomicRanges);
 
           if (triggerChanged) {
             lastRefreshTrigger = currentTrigger;
@@ -777,6 +737,34 @@ export function createLivePreview(config: LivePreviewConfig = {}) {
     },
     {
       decorations: (v) => v.decorations,
+      eventHandlers: {
+        mousedown(event: MouseEvent, view: EditorView) {
+          // When clicking on a block widget, move cursor into the replaced range
+          // so the widget unfolds and shows raw source for editing.
+          // All block widgets share the .cm-block-widget class (set in widgets.ts).
+          const target = event.target as HTMLElement;
+          if (!target) return false;
+
+          const blockWidget = target.closest('.cm-block-widget');
+          if (!blockWidget) return false;
+
+          // Find the document position for this DOM element
+          try {
+            const pos = view.posAtDOM(blockWidget);
+            // Move cursor to the start of the block — this triggers cursorInsideBlock
+            // check in buildAllDecorations which will unfold the widget
+            view.dispatch({
+              selection: { anchor: pos },
+              scrollIntoView: true,
+            });
+            view.focus();
+            return true;
+          } catch {
+            // posAtDOM can fail if the element is not in the editor content
+            return false;
+          }
+        },
+      },
     }
   );
 

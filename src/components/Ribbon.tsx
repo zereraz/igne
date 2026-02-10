@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, memo } from 'react';
 
 export interface RibbonPluginIcon {
   id: string;
@@ -219,7 +219,7 @@ const icons = {
   ),
 };
 
-export function Ribbon({
+export const Ribbon = memo(function Ribbon({
   onNewNote,
   onOpenGraph,
   onOpenCommandPalette,
@@ -387,4 +387,4 @@ export function Ribbon({
 
     </div>
   );
-}
+});
