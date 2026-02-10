@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 // @ts-ignore - remark-footnotes types may not be available
 import remarkFootnotes from 'remark-footnotes';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { searchStore } from '../stores/searchStore';
 import { Callout } from './Callout';
 import { NoteEmbed } from './NoteEmbed';
@@ -44,6 +45,8 @@ interface MarkdownViewerProps {
   onLinkClick?: (targetName: string) => void;
   getEmbedContent?: (noteName: string) => Promise<string | null>;
   vaultPath?: string;
+  /** Directory containing the current file — used to resolve relative image paths */
+  baseDir?: string;
   /** When true, renders wikilinks as styled text without vault-dependent features */
   standaloneMode?: boolean;
   /** Scroll to this heading text when it changes */
@@ -189,7 +192,7 @@ function LazyCodeBlock({ language, code }: { language: string; code: string }) {
   );
 }
 
-export const MarkdownViewer = memo(function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPath, standaloneMode = false, scrollToHeading }: MarkdownViewerProps) {
+export const MarkdownViewer = memo(function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPath, baseDir, standaloneMode = false, scrollToHeading }: MarkdownViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Scroll to heading when scrollToHeading changes
@@ -285,13 +288,16 @@ export const MarkdownViewer = memo(function MarkdownViewer({ content, onLinkClic
         if (isImagePath(target)) {
           // Convert to markdown image syntax
           const altText = display || target;
-          // For local files, convert vault-relative path to OS path
-          // target can be "attachments/image.png" or "/attachments/image.png"
-          // toOsPath handles both cases correctly
-          const imagePath = vaultPath
-            ? toOsPath(target, vaultPath)
-            : target;
-          // Use convertFileSrc for Tauri to properly serve local files
+          // Resolve to absolute OS path for Tauri asset serving
+          let imagePath: string;
+          if (vaultPath) {
+            imagePath = toOsPath(target, vaultPath);
+          } else if (baseDir && !target.startsWith('/')) {
+            // Standalone mode: resolve relative to file's directory
+            imagePath = `${baseDir}/${target}`;
+          } else {
+            imagePath = target;
+          }
           return `![${altText}](${imagePath})`;
         }
         // For non-image embeds, treat as note embeds
@@ -614,12 +620,32 @@ export const MarkdownViewer = memo(function MarkdownViewer({ content, onLinkClic
                 const target = href.replace('wikilink:', '');
                 return renderWikilink(target, children);
               }
+              // External links — open in system browser
+              if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+                return (
+                  <a
+                    href={href}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      openUrl(href).catch(console.error);
+                    }}
+                    title={href}
+                  >
+                    {children}
+                  </a>
+                );
+              }
               return <a href={href}>{children}</a>;
             },
             img: ({ src, alt, ...props }) => {
               // Convert local file paths to Tauri asset URLs
-              if (src && (src.startsWith('/') || src.startsWith('.'))) {
-                const assetSrc = convertFileSrc(src);
+              if (src && !src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('data:')) {
+                let resolvedSrc = src;
+                // Resolve relative paths using baseDir when available
+                if (!src.startsWith('/') && baseDir) {
+                  resolvedSrc = `${baseDir}/${src}`;
+                }
+                const assetSrc = convertFileSrc(resolvedSrc);
                 return (
                   <img
                     src={assetSrc}

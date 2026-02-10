@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Edit3, Eye, Save, FolderOpen, X } from 'lucide-react';
 import { MarkdownViewer } from './MarkdownViewer';
@@ -127,10 +127,11 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
   const [scrollToPosition, setScrollToPosition] = useState<number | undefined>(undefined);
   const [scrollToHeading, setScrollToHeading] = useState<string | undefined>(undefined);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [detectedVaultPath, setDetectedVaultPath] = useState<string | null>(null);
 
   // Extract file name from path
   const fileName = filePath.split(/[/\\]/).pop() || 'Untitled';
-  const parentDir = filePath.split(/[/\\]/).slice(0, -1).join('/');
+  const parentDir = useMemo(() => filePath.split(/[/\\]/).slice(0, -1).join('/'), [filePath]);
 
   // Load file content
   useEffect(() => {
@@ -150,6 +151,29 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
         setLoading(false);
       });
   }, [filePath]);
+
+  // Detect if file is inside an Obsidian vault by walking up directories
+  useEffect(() => {
+    setDetectedVaultPath(null);
+    const parts = parentDir.split('/');
+    // Check each ancestor directory for .obsidian folder
+    (async () => {
+      for (let i = parts.length; i >= 1; i--) {
+        const candidate = parts.slice(0, i).join('/');
+        if (!candidate) continue;
+        const obsidianDir = `${candidate}/.obsidian`;
+        try {
+          const exists = await invoke<boolean>('file_exists', { path: obsidianDir });
+          if (exists) {
+            setDetectedVaultPath(candidate);
+            return;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    })();
+  }, [parentDir]);
 
   // Handle content changes in edit mode
   const handleContentChange = useCallback((_path: string, newContent: string) => {
@@ -278,23 +302,12 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
             </button>
           )}
 
-          {/* Open Vault (if file is in a vault) */}
-          {onOpenVault && (
+          {/* Open Vault (only shown when file is inside a detected vault) */}
+          {onOpenVault && detectedVaultPath && (
             <button
-              onClick={() => {
-                // Try to find .obsidian folder in parent directories
-                const parts = filePath.split(/[/\\]/);
-                for (let i = parts.length - 1; i >= 0; i--) {
-                  const potentialVault = parts.slice(0, i).join('/');
-                  // We'd need to check if .obsidian exists - for now just use parent
-                  if (i === parts.length - 1) {
-                    onOpenVault(potentialVault);
-                    return;
-                  }
-                }
-              }}
+              onClick={() => onOpenVault(detectedVaultPath)}
               style={styles.button}
-              title="Open containing folder as vault"
+              title={`Open vault: ${detectedVaultPath}`}
             >
               <FolderOpen size={14} />
               Open Vault
@@ -331,9 +344,9 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
           ) : (
             <MarkdownViewer
               content={content}
+              baseDir={parentDir}
               standaloneMode={true}
               scrollToHeading={scrollToHeading}
-              // No link clicking in standalone mode - just show styled text
             />
           )}
         </div>
