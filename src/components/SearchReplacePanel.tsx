@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Search, X, ArrowDown, ReplaceAll, Replace } from 'lucide-react';
+import { Search, X, ArrowDown, ArrowUp, ReplaceAll, Replace, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface SearchReplacePanelProps {
   onFind: (query: string, options: FindOptions) => void;
@@ -33,6 +33,7 @@ export function SearchReplacePanel({
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [regex, setRegex] = useState(false);
   const [wholeWord, setWholeWord] = useState(false);
+  const [showReplace, setShowReplace] = useState(false);
 
   const findOptions: FindOptions = {
     caseSensitive,
@@ -69,7 +70,7 @@ export function SearchReplacePanel({
     [onFindNext, onFindPrevious, onClose]
   );
 
-  // Auto-search when query or options change (setup only, no navigation)
+  // Auto-search when query or options change
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query.trim()) {
@@ -86,6 +87,8 @@ export function SearchReplacePanel({
     inputRef.current?.focus();
   }, []);
 
+  const hasQuery = query.trim().length > 0;
+
   return (
     <div
       style={{
@@ -97,7 +100,7 @@ export function SearchReplacePanel({
         borderRadius: '4px',
         padding: '12px',
         zIndex: 1000,
-        minWidth: '400px',
+        minWidth: '360px',
         boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
       }}
     >
@@ -130,9 +133,9 @@ export function SearchReplacePanel({
         <X size={16} />
       </button>
 
-      {/* Search input */}
+      {/* Search input row */}
       <div style={{ marginBottom: '8px' }}>
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '4px' }}>
           <Search
             size={16}
             style={{
@@ -141,6 +144,7 @@ export function SearchReplacePanel({
               top: '50%',
               transform: 'translateY(-50%)',
               color: 'var(--text-faint)',
+              zIndex: 1,
             }}
           />
           <input
@@ -149,9 +153,9 @@ export function SearchReplacePanel({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Find... (use tag:, file:, path: for advanced search)"
+            placeholder="Find..."
             style={{
-              width: '100%',
+              flex: 1,
               padding: '6px 8px 6px 32px',
               backgroundColor: 'var(--background-primary)',
               border: '1px solid var(--background-modifier-border)',
@@ -164,34 +168,103 @@ export function SearchReplacePanel({
         </div>
       </div>
 
-      {/* Replace input */}
-      <div style={{ marginBottom: '12px' }}>
-        <input
-          type="text"
-          value={replacement}
-          onChange={(e) => setReplacement(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Replace with..."
+      {/* Result count + nav buttons row */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '8px',
+        }}
+      >
+        {/* Result count */}
+        <div
           style={{
-            width: '100%',
-            padding: '6px 8px',
-            backgroundColor: 'var(--background-primary)',
+            fontSize: '12px',
+            color: resultCount === 0 ? 'var(--color-red)' : 'var(--text-faint)',
+            flex: 1,
+          }}
+        >
+          {resultCount !== undefined
+            ? resultCount === 0
+              ? 'No results'
+              : currentResult !== undefined
+              ? `${currentResult} of ${resultCount}`
+              : `${resultCount} result${resultCount !== 1 ? 's' : ''}`
+            : '\u00A0'}
+        </div>
+
+        {/* Find Previous */}
+        <button
+          onClick={onFindPrevious}
+          disabled={!hasQuery}
+          title="Find Previous (Shift+Enter)"
+          style={{
+            padding: '4px',
+            backgroundColor: 'transparent',
             border: '1px solid var(--background-modifier-border)',
             borderRadius: '2px',
-            color: 'var(--text-normal)',
-            fontSize: '14px',
-            outline: 'none',
+            color: hasQuery ? 'var(--text-muted)' : 'var(--text-faint)',
+            cursor: hasQuery ? 'pointer' : 'not-allowed',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: hasQuery ? 1 : 0.5,
           }}
-        />
+          onMouseEnter={(e) => {
+            if (hasQuery) {
+              e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+              e.currentTarget.style.color = 'var(--text-normal)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = hasQuery ? 'var(--text-muted)' : 'var(--text-faint)';
+          }}
+        >
+          <ArrowUp size={14} />
+        </button>
+
+        {/* Find Next */}
+        <button
+          onClick={onFindNext}
+          disabled={!hasQuery}
+          title="Find Next (Enter)"
+          style={{
+            padding: '4px',
+            backgroundColor: 'transparent',
+            border: '1px solid var(--background-modifier-border)',
+            borderRadius: '2px',
+            color: hasQuery ? 'var(--text-muted)' : 'var(--text-faint)',
+            cursor: hasQuery ? 'pointer' : 'not-allowed',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: hasQuery ? 1 : 0.5,
+          }}
+          onMouseEnter={(e) => {
+            if (hasQuery) {
+              e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+              e.currentTarget.style.color = 'var(--text-normal)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = hasQuery ? 'var(--text-muted)' : 'var(--text-faint)';
+          }}
+        >
+          <ArrowDown size={14} />
+        </button>
       </div>
 
-      {/* Options */}
+      {/* Options row */}
       <div
         style={{
           display: 'flex',
           gap: '12px',
           marginBottom: '8px',
           flexWrap: 'wrap',
+          alignItems: 'center',
         }}
       >
         <label
@@ -209,11 +282,7 @@ export function SearchReplacePanel({
             type="checkbox"
             checked={caseSensitive}
             onChange={(e) => setCaseSensitive(e.target.checked)}
-            style={{
-              width: '14px',
-              height: '14px',
-              cursor: 'pointer',
-            }}
+            style={{ width: '14px', height: '14px', cursor: 'pointer' }}
           />
           Case Sensitive
         </label>
@@ -233,11 +302,7 @@ export function SearchReplacePanel({
             type="checkbox"
             checked={regex}
             onChange={(e) => setRegex(e.target.checked)}
-            style={{
-              width: '14px',
-              height: '14px',
-              cursor: 'pointer',
-            }}
+            style={{ width: '14px', height: '14px', cursor: 'pointer' }}
           />
           Regex
         </label>
@@ -257,11 +322,7 @@ export function SearchReplacePanel({
             type="checkbox"
             checked={wholeWord}
             onChange={(e) => setWholeWord(e.target.checked)}
-            style={{
-              width: '14px',
-              height: '14px',
-              cursor: 'pointer',
-            }}
+            style={{ width: '14px', height: '14px', cursor: 'pointer' }}
           />
           Whole Word
         </label>
@@ -289,125 +350,127 @@ export function SearchReplacePanel({
         </div>
       )}
 
-      {/* Result count */}
-      {resultCount !== undefined && (
-        <div
-          style={{
-            fontSize: '12px',
-            color: 'var(--text-faint)',
-            marginBottom: '8px',
-            textAlign: 'center',
-          }}
-        >
-          {resultCount === 0
-            ? 'No results'
-            : currentResult !== undefined
-            ? `${currentResult} of ${resultCount} results`
-            : `${resultCount} result${resultCount !== 1 ? 's' : ''}`}
-        </div>
-      )}
-
-      {/* Buttons */}
-      <div
+      {/* Replace toggle */}
+      <button
+        onClick={() => setShowReplace(!showReplace)}
         style={{
           display: 'flex',
-          gap: '8px',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '4px 0',
+          background: 'none',
+          border: 'none',
+          color: 'var(--text-muted)',
+          cursor: 'pointer',
+          fontSize: '12px',
+          marginBottom: showReplace ? '8px' : '0',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = 'var(--text-normal)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = 'var(--text-muted)';
         }}
       >
-        <button
-          onClick={onFindNext}
-          disabled={!query.trim()}
-          style={{
-            flex: 1,
-            padding: '6px 12px',
-            backgroundColor: query.trim() ? 'var(--background-modifier-border)' : 'var(--background-secondary)',
-            border: '1px solid var(--interactive-normal)',
-            borderRadius: '2px',
-            color: 'var(--text-muted)',
-            cursor: query.trim() ? 'pointer' : 'not-allowed',
-            fontSize: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-          }}
-          onMouseEnter={(e) => {
-            if (query.trim()) {
-              e.currentTarget.style.backgroundColor = 'var(--interactive-normal)';
-              e.currentTarget.style.borderColor = 'var(--text-faint)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = query.trim() ? 'var(--background-modifier-border)' : 'var(--background-secondary)';
-            e.currentTarget.style.borderColor = 'var(--interactive-normal)';
-          }}
-        >
-          <ArrowDown size={14} />
-          Find Next
-        </button>
+        {showReplace ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        Replace
+      </button>
 
-        <button
-          onClick={handleReplace}
-          disabled={!query.trim()}
-          style={{
-            flex: 1,
-            padding: '6px 12px',
-            backgroundColor: query.trim() ? 'var(--background-modifier-border)' : 'var(--background-secondary)',
-            border: '1px solid var(--interactive-normal)',
-            borderRadius: '2px',
-            color: 'var(--text-muted)',
-            cursor: query.trim() ? 'pointer' : 'not-allowed',
-            fontSize: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-          }}
-          onMouseEnter={(e) => {
-            if (query.trim()) {
-              e.currentTarget.style.backgroundColor = 'var(--interactive-normal)';
-              e.currentTarget.style.borderColor = 'var(--text-faint)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = query.trim() ? 'var(--background-modifier-border)' : 'var(--background-secondary)';
-            e.currentTarget.style.borderColor = 'var(--interactive-normal)';
-          }}
-        >
-          <Replace size={14} />
-          Replace
-        </button>
+      {/* Replace section */}
+      {showReplace && (
+        <>
+          {/* Replace input */}
+          <div style={{ marginBottom: '8px' }}>
+            <input
+              type="text"
+              value={replacement}
+              onChange={(e) => setReplacement(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Replace with..."
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                backgroundColor: 'var(--background-primary)',
+                border: '1px solid var(--background-modifier-border)',
+                borderRadius: '2px',
+                color: 'var(--text-normal)',
+                fontSize: '14px',
+                outline: 'none',
+              }}
+            />
+          </div>
 
-        <button
-          onClick={handleReplaceAll}
-          disabled={!query.trim()}
-          style={{
-            flex: 1,
-            padding: '6px 12px',
-            backgroundColor: query.trim() ? 'var(--color-accent)' : 'var(--background-secondary)',
-            border: '1px solid var(--color-accent)',
-            borderRadius: '2px',
-            color: query.trim() ? 'var(--background-primary)' : 'var(--interactive-normal)',
-            cursor: query.trim() ? 'pointer' : 'not-allowed',
-            fontSize: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-          }}
-          onMouseEnter={(e) => {
-            if (query.trim()) {
-              e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = query.trim() ? 'var(--color-accent)' : 'var(--background-secondary)';
-          }}
-        >
-          <ReplaceAll size={14} />
-          Replace All
-        </button>
-      </div>
+          {/* Replace buttons */}
+          <div
+            style={{
+              display: 'flex',
+              gap: '8px',
+            }}
+          >
+            <button
+              onClick={handleReplace}
+              disabled={!hasQuery}
+              style={{
+                flex: 1,
+                padding: '6px 12px',
+                backgroundColor: hasQuery ? 'var(--background-modifier-border)' : 'var(--background-secondary)',
+                border: '1px solid var(--background-modifier-border)',
+                borderRadius: '2px',
+                color: hasQuery ? 'var(--text-normal)' : 'var(--text-faint)',
+                cursor: hasQuery ? 'pointer' : 'not-allowed',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                opacity: hasQuery ? 1 : 0.5,
+              }}
+              onMouseEnter={(e) => {
+                if (hasQuery) {
+                  e.currentTarget.style.backgroundColor = 'var(--interactive-normal)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = hasQuery ? 'var(--background-modifier-border)' : 'var(--background-secondary)';
+              }}
+            >
+              <Replace size={14} />
+              Replace
+            </button>
+
+            <button
+              onClick={handleReplaceAll}
+              disabled={!hasQuery}
+              style={{
+                flex: 1,
+                padding: '6px 12px',
+                backgroundColor: hasQuery ? 'var(--color-accent)' : 'var(--background-secondary)',
+                border: hasQuery ? '1px solid var(--color-accent)' : '1px solid var(--background-modifier-border)',
+                borderRadius: '2px',
+                color: hasQuery ? 'var(--background-primary)' : 'var(--text-faint)',
+                cursor: hasQuery ? 'pointer' : 'not-allowed',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                opacity: hasQuery ? 1 : 0.5,
+              }}
+              onMouseEnter={(e) => {
+                if (hasQuery) {
+                  e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = hasQuery ? 'var(--color-accent)' : 'var(--background-secondary)';
+              }}
+            >
+              <ReplaceAll size={14} />
+              Replace All
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

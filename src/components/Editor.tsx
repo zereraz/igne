@@ -194,7 +194,9 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       setSearchResultCount(matches.length);
 
       if (matches.length > 0) {
-        // Find current match index based on cursor position
+        // Navigate to first match from cursor position
+        findNext(view);
+        // Update current match index based on new cursor position
         const cursor = view.state.selection.main.head;
         const currentIdx = matches.findIndex(idx => idx >= cursor);
         setCurrentResultIndex(currentIdx >= 0 ? currentIdx + 1 : 1);
@@ -213,14 +215,28 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
     const view = viewRef.current;
     if (!view) return;
     findNext(view);
-  }, []);
+    // Update current result index
+    if (searchResultCount && searchResultCount > 0) {
+      setCurrentResultIndex(prev => {
+        if (prev === undefined) return 1;
+        return prev >= searchResultCount ? 1 : prev + 1;
+      });
+    }
+  }, [searchResultCount]);
 
   // Navigate to previous search match
   const handleFindPrevious = useCallback(() => {
     const view = viewRef.current;
     if (!view) return;
     findPrevious(view);
-  }, []);
+    // Update current result index
+    if (searchResultCount && searchResultCount > 0) {
+      setCurrentResultIndex(prev => {
+        if (prev === undefined) return searchResultCount;
+        return prev <= 1 ? searchResultCount : prev - 1;
+      });
+    }
+  }, [searchResultCount]);
 
   // Handle replace in search panel
   const handleReplace = useCallback((query: string, replacement: string, options: FindOptions) => {
@@ -351,6 +367,10 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       '.cm-searchMatch.cm-searchMatch-selected': {
         backgroundColor: 'rgba(var(--color-yellow-rgb), 0.5)',
       },
+      // Hide built-in CM search panel — we use our own React panel
+      '.cm-search.cm-panel': {
+        display: 'none',
+      },
     }, { dark: false }); // We handle dark/light via CSS variables
 
     const extensions = [
@@ -358,7 +378,11 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       // Line wrapping - wrap long lines to fit the editor width
       ...(lineWrapping ? [EditorView.lineWrapping] : []),
       history(),
-      search({ top: true }), // Enable search functionality with highlighting
+      search({
+        top: true,
+        // Suppress built-in search panel — we use our own React SearchReplacePanel
+        createPanel: () => ({ dom: document.createElement('span'), top: true }),
+      }),
       highlightSelectionMatches(), // Highlight all matches when text is selected
       keymap.of([
         ...defaultKeymap,

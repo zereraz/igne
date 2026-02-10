@@ -1,5 +1,5 @@
 import { ChevronRight, ChevronDown, File, Folder } from 'lucide-react';
-import { useState } from 'react';
+import { useState, memo, useMemo } from 'react';
 import { FileEntry } from '../types';
 
 interface FileTreeProps {
@@ -47,8 +47,8 @@ function collectDuplicateNames(entries: FileEntry[]): Set<string> {
   return dupes;
 }
 
-export function FileTree({ entries, selectedPath, onSelect, onContextMenu, onDrop }: FileTreeProps) {
-  const duplicateNames = collectDuplicateNames(entries);
+export const FileTree = memo(function FileTree({ entries, selectedPath, onSelect, onContextMenu, onDrop }: FileTreeProps) {
+  const duplicateNames = useMemo(() => collectDuplicateNames(entries), [entries]);
   return (
     <div style={{ fontSize: '0.875rem' }}>
       {entries.map((entry) => (
@@ -65,7 +65,7 @@ export function FileTree({ entries, selectedPath, onSelect, onContextMenu, onDro
       ))}
     </div>
   );
-}
+});
 
 interface FileTreeItemProps {
   entry: FileEntry;

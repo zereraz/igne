@@ -1,5 +1,9 @@
-import { useEffect, useRef } from 'react';
-import * as d3 from 'd3';
+import { useEffect, useRef, memo } from 'react';
+import { select } from 'd3-selection';
+import { zoom, zoomIdentity } from 'd3-zoom';
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide } from 'd3-force';
+import type { Simulation } from 'd3-force';
+import { drag } from 'd3-drag';
 import { useGraphData, GraphNode, GraphLink } from './useGraphData';
 import { Maximize2 } from 'lucide-react';
 
@@ -8,15 +12,15 @@ interface GraphViewProps {
   onNodeClick?: (path: string) => void;
 }
 
-export function GraphView({ files, onNodeClick }: GraphViewProps) {
+export const GraphView = memo(function GraphView({ files, onNodeClick }: GraphViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const { nodes, links } = useGraphData(files);
-  const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
+  const simulationRef = useRef<Simulation<GraphNode, GraphLink> | null>(null);
 
   useEffect(() => {
     if (!svgRef.current || nodes.length === 0) return;
 
-    const svg = d3.select(svgRef.current);
+    const svg = select(svgRef.current);
     svg.selectAll('*').remove();
 
     // Read CSS custom properties from computed styles for D3 SVG attributes
@@ -33,24 +37,22 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
     const height = svgRef.current.clientHeight;
 
     // Create zoom behavior
-    const zoom = d3
-      .zoom<SVGSVGElement, unknown>()
+    const zoomBehavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 4])
       .on('zoom', (event) => {
         g.attr('transform', event.transform);
       });
 
-    svg.call(zoom as any);
+    svg.call(zoomBehavior as any);
 
     const g = svg.append('g');
 
     // Create force simulation
-    const simulation = d3
-      .forceSimulation<GraphNode>(nodes)
-      .force('link', d3.forceLink<GraphNode, GraphLink>(links).id((d) => d.id).distance(100))
-      .force('charge', d3.forceManyBody().strength(-300))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(30));
+    const simulation = forceSimulation<GraphNode>(nodes)
+      .force('link', forceLink<GraphNode, GraphLink>(links).id((d) => d.id).distance(100))
+      .force('charge', forceManyBody().strength(-300))
+      .force('center', forceCenter(width / 2, height / 2))
+      .force('collision', forceCollide().radius(30));
 
     simulationRef.current = simulation;
 
@@ -72,8 +74,7 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
       .join('g')
       .attr('cursor', 'pointer')
       .call(
-        d3
-          .drag<SVGGElement, GraphNode>()
+        drag<SVGGElement, GraphNode>()
           .on('start', (event, d) => {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x;
@@ -98,10 +99,10 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
       .attr('stroke', colorAccent)
       .attr('stroke-width', 2)
       .on('mouseover', function () {
-        d3.select(this).attr('stroke-width', 4).attr('fill', colorInteractive);
+        select(this).attr('stroke-width', 4).attr('fill', colorInteractive);
       })
       .on('mouseout', function (this: SVGCircleElement, _event, d) {
-        d3.select(this)
+        select(this)
           .attr('stroke-width', 2)
           .attr('fill', d.id.startsWith('tag:') ? colorAccent : colorBorder);
       })
@@ -140,9 +141,9 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
 
   const handleZoomIn = () => {
     if (svgRef.current) {
-      const svg = d3.select(svgRef.current);
+      const svg = select(svgRef.current);
       svg.transition().call(
-        (d3.zoom as any).scaleBy as any,
+        (zoom as any).scaleBy as any,
         1.3
       );
     }
@@ -150,9 +151,9 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
 
   const handleZoomOut = () => {
     if (svgRef.current) {
-      const svg = d3.select(svgRef.current);
+      const svg = select(svgRef.current);
       svg.transition().call(
-        (d3.zoom as any).scaleBy as any,
+        (zoom as any).scaleBy as any,
         0.7
       );
     }
@@ -160,10 +161,10 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
 
   const handleResetZoom = () => {
     if (svgRef.current) {
-      const svg = d3.select(svgRef.current);
+      const svg = select(svgRef.current);
       svg.transition().call(
-        (d3.zoom as any).transform as any,
-        d3.zoomIdentity
+        (zoom as any).transform as any,
+        zoomIdentity
       );
     }
   };
@@ -268,4 +269,4 @@ export function GraphView({ files, onNodeClick }: GraphViewProps) {
       </div>
     </div>
   );
-}
+});

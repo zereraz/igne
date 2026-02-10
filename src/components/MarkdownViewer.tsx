@@ -1,17 +1,43 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo, useMemo, Suspense } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 // @ts-ignore - remark-footnotes types may not be available
 import remarkFootnotes from 'remark-footnotes';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { searchStore } from '../stores/searchStore';
 import { Callout } from './Callout';
 import { NoteEmbed } from './NoteEmbed';
 import { toOsPath } from '../utils/vaultPaths';
+
+// Lazy-loaded heavy dependencies
+const LazySyntaxHighlighter = React.lazy(() =>
+  import('react-syntax-highlighter/dist/esm/prism').then(mod => ({
+    default: mod.default,
+  }))
+);
+let oneDarkStyle: Record<string, React.CSSProperties> | null = null;
+const getOneDarkStyle = async () => {
+  if (!oneDarkStyle) {
+    const mod = await import('react-syntax-highlighter/dist/esm/styles/prism');
+    oneDarkStyle = (mod as any).oneDark;
+  }
+  return oneDarkStyle!;
+};
+
+// Lazy katex: loaded on first math render
+let katexModule: any;
+let katexCssLoaded = false;
+const getKatex = async () => {
+  if (!katexModule) {
+    katexModule = (await import('katex')).default;
+    if (!katexCssLoaded) {
+      // @ts-ignore - CSS import handled by bundler
+      await import('katex/dist/katex.min.css');
+      katexCssLoaded = true;
+    }
+  }
+  return katexModule;
+};
 
 interface MarkdownViewerProps {
   content: string;
@@ -49,22 +75,29 @@ function EmbedLoader({ noteName, getEmbedContent, onOpen }: { noteName: string; 
   return <NoteEmbed noteName={noteName} content={content} onOpen={onOpen} />;
 }
 
-// Math rendering component
+// Math rendering component - lazy loads katex
 function MathBlock({ latex, display }: { latex: string; display: boolean }) {
   const [html, setHtml] = useState<string>('');
   const [error, setError] = useState<boolean>(false);
 
   useEffect(() => {
-    try {
-      const rendered = katex.renderToString(latex, {
-        displayMode: display,
-        throwOnError: false,
-      });
-      setHtml(rendered);
-      setError(false);
-    } catch (e) {
-      setError(true);
-    }
+    let cancelled = false;
+    getKatex().then(k => {
+      if (cancelled) return;
+      try {
+        const rendered = k.renderToString(latex, {
+          displayMode: display,
+          throwOnError: false,
+        });
+        setHtml(rendered);
+        setError(false);
+      } catch (e) {
+        setError(true);
+      }
+    }).catch(() => {
+      if (!cancelled) setError(true);
+    });
+    return () => { cancelled = true; };
   }, [latex, display]);
 
   if (error) {
@@ -133,7 +166,30 @@ function MermaidBlock({ code }: { code: string }) {
   return <div dangerouslySetInnerHTML={{ __html: svg }} style={{ display: 'flex', justifyContent: 'center', padding: '1rem 0' }} />;
 }
 
-export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPath, standaloneMode = false, scrollToHeading }: MarkdownViewerProps) {
+// Lazy code block - loads SyntaxHighlighter + theme on demand
+function LazyCodeBlock({ language, code }: { language: string; code: string }) {
+  const [style, setStyle] = useState<Record<string, React.CSSProperties> | null>(oneDarkStyle);
+
+  useEffect(() => {
+    if (!style) {
+      getOneDarkStyle().then(setStyle);
+    }
+  }, [style]);
+
+  return (
+    <Suspense fallback={<pre style={{ padding: '1rem', backgroundColor: 'var(--background-secondary)', borderRadius: '0.375rem', overflow: 'auto', fontSize: '0.875rem', color: 'var(--text-normal)' }}><code>{code}</code></pre>}>
+      <LazySyntaxHighlighter
+        style={style || {}}
+        language={language}
+        PreTag="div"
+      >
+        {code}
+      </LazySyntaxHighlighter>
+    </Suspense>
+  );
+}
+
+export const MarkdownViewer = memo(function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPath, standaloneMode = false, scrollToHeading }: MarkdownViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Scroll to heading when scrollToHeading changes
@@ -256,8 +312,8 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
     return transformed;
   };
 
-  // Parse math from content
-  const { content: processedContent, mathBlocks } = parseMath(content);
+  // Parse math from content - memoize to avoid recomputing on non-content rerenders
+  const { content: processedContent, mathBlocks } = useMemo(() => parseMath(content), [content]);
 
   // Transform highlight and strikethrough syntax
   const transformInlineFormats = (text: string): string => {
@@ -421,13 +477,7 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
               }
 
               return !isInline && match ? (
-                <SyntaxHighlighter
-                  style={oneDark}
-                  language={match[1]}
-                  PreTag="div"
-                >
-                  {codeText}
-                </SyntaxHighlighter>
+                <LazyCodeBlock language={match[1]} code={codeText} />
               ) : (
                 <code className={className} {...props}>
                   {children}
@@ -588,4 +638,4 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
       </div>
     </div>
   );
-}
+});

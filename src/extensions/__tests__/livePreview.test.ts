@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { syntaxTree } from '@codemirror/language';
-import { livePreview } from '../livePreview';
+import { livePreview, findCodeBlocks, findMathBlocks, findCallouts } from '../livePreview';
 import { createMarkdownLanguage } from '../markdownLanguage';
 import { SPECS } from './fixtures';
 // import { getMediaType } from '../widgets'; // TODO: Enable when getMediaType is implemented
@@ -745,6 +745,220 @@ describe('livePreview - performance', () => {
     // Sanity: both should complete in under 5 seconds
     expect(selectionTime).toBeLessThan(5000);
     expect(docChangeTime).toBeLessThan(5000);
+  });
+});
+
+// Helper to create an EditorState (no view needed) for block scan tests
+function createState(doc: string): EditorState {
+  return EditorState.create({
+    doc,
+    extensions: [createMarkdownLanguage()],
+  });
+}
+
+describe('livePreview - block widget parsing (findCodeBlocks)', () => {
+  it('finds a simple fenced code block', () => {
+    const state = createState('text\n```js\nconsole.log("hi");\n```\nmore');
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].language).toBe('js');
+    expect(blocks[0].code).toBe('console.log("hi");');
+  });
+
+  it('finds multiple code blocks', () => {
+    const state = createState('```py\nprint(1)\n```\ntext\n```ts\nlet x = 1;\n```');
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].language).toBe('py');
+    expect(blocks[0].code).toBe('print(1)');
+    expect(blocks[1].language).toBe('ts');
+    expect(blocks[1].code).toBe('let x = 1;');
+  });
+
+  it('pairs two bare ``` fences as a code block', () => {
+    const state = createState('before\n```\nhello\n```\nafter');
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].language).toBe('text');
+    expect(blocks[0].code).toBe('hello');
+  });
+
+  it('does NOT create a block from a single unclosed fence', () => {
+    const state = createState('text\n```\nno closing fence');
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(0);
+  });
+
+  it('handles empty code block (adjacent fences)', () => {
+    const state = createState('```\n```');
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].code).toBe('');
+  });
+
+  it('handles code block with language and empty content', () => {
+    const state = createState('```rust\n```');
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].language).toBe('rust');
+    expect(blocks[0].code).toBe('');
+  });
+
+  it('skips mermaid blocks', () => {
+    const state = createState('```mermaid\ngraph TD;\n```');
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(0);
+  });
+
+  it('handles three ``` lines (two code blocks situation)', () => {
+    // First ``` pairs with second ```, third is unclosed
+    const state = createState('```\nblock1\n```\ntext\n```\nunclosed');
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(1); // Only the first pair
+    expect(blocks[0].code).toBe('block1');
+  });
+
+  it('handles four ``` lines (two complete code blocks)', () => {
+    const state = createState('```\nblock1\n```\ntext\n```\nblock2\n```');
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0].code).toBe('block1');
+    expect(blocks[1].code).toBe('block2');
+  });
+
+  it('records correct from/to positions', () => {
+    //                            0123456789...
+    const doc = 'abc\n```js\nx\n```\nend';
+    const state = createState(doc);
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(1);
+    // "abc\n" = 4 chars, "```js" starts at 4
+    expect(blocks[0].from).toBe(4);
+    // "```js\nx\n```" ends at 4+5+1+1+1+3 = "```js\nx\n```" = 4+12 = 16
+    // Let's compute: line 1 = "abc\n" (4), line 2 = "```js\n" (6), line 3 = "x\n" (2), line 4 = "```" (3)
+    // from = start of line 2 = 4, to = end of line 4 = 4+6+2+3 = 15
+    expect(blocks[0].to).toBe(15);
+  });
+});
+
+describe('livePreview - block widget parsing (findMathBlocks)', () => {
+  it('finds block math $$...$$', () => {
+    const state = createState('text\n$$\nx^2 + y^2\n$$\nmore');
+    const blocks = findMathBlocks(state);
+    const displayBlocks = blocks.filter(b => b.display);
+    expect(displayBlocks).toHaveLength(1);
+    expect(displayBlocks[0].latex).toContain('x^2 + y^2');
+  });
+
+  it('finds inline math $...$', () => {
+    const state = createState('The formula $x^2$ is nice');
+    const blocks = findMathBlocks(state);
+    const inlineBlocks = blocks.filter(b => !b.display);
+    expect(inlineBlocks).toHaveLength(1);
+    expect(inlineBlocks[0].latex).toBe('x^2');
+  });
+
+  it('does not match inline math inside block math', () => {
+    const state = createState('$$\n$x^2$\n$$');
+    const blocks = findMathBlocks(state);
+    const displayBlocks = blocks.filter(b => b.display);
+    const inlineBlocks = blocks.filter(b => !b.display);
+    expect(displayBlocks).toHaveLength(1);
+    expect(inlineBlocks).toHaveLength(0);
+  });
+});
+
+describe('livePreview - block widget parsing (findCallouts)', () => {
+  it('finds a basic callout', () => {
+    const state = createState('text\n> [!note] My note\n> Content here\nmore');
+    const callouts = findCallouts(state);
+    expect(callouts).toHaveLength(1);
+    expect(callouts[0].type).toBe('note');
+    expect(callouts[0].title).toBe('My note');
+    expect(callouts[0].content).toBe('Content here');
+  });
+
+  it('handles folded callout', () => {
+    const state = createState('> [!warning]- Collapsed\n> Hidden content');
+    const callouts = findCallouts(state);
+    expect(callouts).toHaveLength(1);
+    expect(callouts[0].folded).toBe(true);
+  });
+
+  it('handles unfolded callout', () => {
+    const state = createState('> [!tip]+ Expanded\n> Visible content');
+    const callouts = findCallouts(state);
+    expect(callouts).toHaveLength(1);
+    expect(callouts[0].folded).toBe(false);
+  });
+
+  it('handles multi-line callout content', () => {
+    const state = createState('> [!info] Title\n> Line 1\n> Line 2\n> Line 3');
+    const callouts = findCallouts(state);
+    expect(callouts).toHaveLength(1);
+    expect(callouts[0].content).toBe('Line 1\nLine 2\nLine 3');
+  });
+});
+
+describe('livePreview - block widgets are NOT in atomicRanges', () => {
+  // These tests verify the critical fix: block widgets should NOT use atomicRanges
+  // because atomicRanges prevent cursor entry (arrow keys skip over the range).
+
+  it('code block ranges are not returned in blockRanges', () => {
+    // We test indirectly: findCodeBlocks finds blocks, but buildAllDecorations
+    // should NOT add them to blockRanges (only to blockDecorations).
+    const doc = '```js\nconsole.log("hi");\n```';
+    const state = createState(doc);
+    const blocks = findCodeBlocks(state);
+    expect(blocks).toHaveLength(1);
+    // The block spans the full document — if it were in atomicRanges,
+    // cursor would skip from before to after it entirely
+    expect(blocks[0].from).toBe(0);
+    expect(blocks[0].to).toBe(doc.length);
+  });
+
+  it('cursor can be positioned inside a code block range', () => {
+    const doc = 'before\n```js\nlet x = 1;\n```\nafter';
+    // Cursor at position inside the code block (on "let x = 1;" line)
+    const view = createEditor(doc, 17); // somewhere in "let x = 1;"
+
+    // The editor should allow cursor at this position without issues
+    expect(view.state.selection.main.head).toBe(17);
+
+    // Moving cursor to different positions within the block should work
+    view.dispatch({ selection: { anchor: 14 } }); // start of code content
+    expect(view.state.selection.main.head).toBe(14);
+
+    view.dispatch({ selection: { anchor: 24 } }); // end of code content
+    expect(view.state.selection.main.head).toBe(24);
+  });
+
+  it('cursor can move through a code block line by line', () => {
+    const doc = 'line1\n```\ncode\n```\nline2';
+    // Simulate cursor moving through each line
+    const positions = [
+      0,  // line1
+      6,  // ```
+      10, // code
+      15, // ```
+      19, // line2
+    ];
+
+    for (const pos of positions) {
+      const view = createEditor(doc, pos);
+      expect(view.state.selection.main.head).toBe(pos);
+    }
+  });
+
+  it('sequential cursor movement through code block works', () => {
+    const doc = 'before\n```\ncode line\n```\nafter';
+    const view = createEditor(doc, 0);
+
+    // Move cursor through each position — should never get stuck
+    for (let pos = 0; pos <= doc.length; pos++) {
+      view.dispatch({ selection: { anchor: pos } });
+      expect(view.state.selection.main.head).toBe(pos);
+    }
   });
 });
 

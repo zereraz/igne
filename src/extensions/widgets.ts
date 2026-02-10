@@ -220,7 +220,7 @@ export class MathWidget extends WidgetType {
 
   toDOM() {
     const span = document.createElement(this.display ? 'div' : 'span');
-    span.className = this.display ? 'cm-math-block' : 'cm-math-inline';
+    span.className = this.display ? 'cm-block-widget cm-math-block' : 'cm-math-inline';
 
     // Try to use KaTeX if available
     try {
@@ -245,7 +245,7 @@ export class MathWidget extends WidgetType {
     return this.latex === other.latex && this.display === other.display;
   }
 
-  ignoreEvent() { return true; }
+  ignoreEvent() { return false; }
 }
 
 export class CodeBlockWidget extends WidgetType {
@@ -256,7 +256,7 @@ export class CodeBlockWidget extends WidgetType {
 
   toDOM() {
     const pre = document.createElement('pre');
-    pre.className = `cm-codeblock cm-codeblock-${this.language}`;
+    pre.className = `cm-block-widget cm-codeblock cm-codeblock-${this.language}`;
 
     const code = document.createElement('code');
     code.className = `language-${this.language}`;
@@ -276,7 +276,7 @@ export class CodeBlockWidget extends WidgetType {
     return this.code === other.code && this.language === other.language;
   }
 
-  ignoreEvent() { return true; }
+  ignoreEvent() { return false; }
 }
 
 export class CalloutWidget extends WidgetType {
@@ -290,7 +290,7 @@ export class CalloutWidget extends WidgetType {
 
   toDOM() {
     const container = document.createElement('div');
-    container.className = `cm-callout cm-callout-${this.type}`;
+    container.className = `cm-block-widget cm-callout cm-callout-${this.type}`;
 
     const header = document.createElement('div');
     header.className = 'cm-callout-header';
@@ -346,7 +346,7 @@ export class MermaidWidget extends WidgetType {
 
   toDOM() {
     const container = document.createElement('div');
-    container.className = 'cm-mermaid';
+    container.className = 'cm-block-widget cm-mermaid';
     container.textContent = 'Loading diagram...';
 
     // Render Mermaid asynchronously
@@ -377,7 +377,7 @@ export class MermaidWidget extends WidgetType {
     return this.code === other.code;
   }
 
-  ignoreEvent() { return true; }
+  ignoreEvent() { return false; }
 }
 
 export class VideoWidget extends WidgetType {

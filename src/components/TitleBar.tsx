@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Dot, X, Settings } from 'lucide-react';
+import { X, Settings } from 'lucide-react';
 import { OpenFile } from '../types';
 import { CommandRegistry } from '../commands/registry';
 import type { CommandSource } from '../tools/types';
@@ -16,7 +16,7 @@ interface TitleBarProps {
 
 const source: CommandSource = 'ui';
 
-export function TitleBar({
+export const TitleBar = memo(function TitleBar({
   openTabs,
   activeTabPath,
   onTabClick,
@@ -86,16 +86,17 @@ export function TitleBar({
       }}
     >
       {/* Space for macOS traffic lights (left side) */}
-      <div style={{ width: '80px', height: '100%', flexShrink: 0 }} />
+      <div data-tauri-drag-region style={{ width: '78px', height: '100%', flexShrink: 0 }} />
 
       {/* Tabs */}
       <div style={{
         display: 'flex',
         flex: 1,
         overflowX: 'auto',
-        gap: '2px',
+        gap: '1px',
         height: '100%',
         alignItems: 'stretch',
+        paddingLeft: '4px',
       }}>
         {openTabs.map((tab) => (
           <div
@@ -119,8 +120,8 @@ export function TitleBar({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              padding: '0 12px',
+              gap: '6px',
+              padding: '0 10px',
               backgroundColor: tab.path === activeTabPath ? 'var(--background-primary)' : 'transparent',
               border: tab.path === activeTabPath ? '1px solid var(--background-modifier-border)' : '1px solid transparent',
               borderBottom: tab.path === activeTabPath ? '1px solid var(--background-primary)' : '1px solid transparent',
@@ -142,14 +143,15 @@ export function TitleBar({
               }
             }}
           >
-            {/* Always render dot to prevent layout jitter, use visibility to show/hide */}
-            <Dot
+            {/* Dirty indicator dot — always rendered to prevent layout jitter */}
+            <span
               style={{
-                color: 'var(--color-orange)',
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: tab.isDirty ? 'var(--color-orange)' : 'transparent',
                 flexShrink: 0,
-                visibility: tab.isDirty ? 'visible' : 'hidden',
               }}
-              size={12}
             />
             {editingTab === tab.path ? (
               <input
@@ -247,7 +249,8 @@ export function TitleBar({
         alignItems: 'center',
         gap: '4px',
         height: '100%',
-        paddingRight: '8px',
+        paddingLeft: '8px',
+        paddingRight: '12px',
       }}>
         {/* Settings Button */}
         {onOpenSettings && (
@@ -282,4 +285,4 @@ export function TitleBar({
       </div>
     </div>
   );
-}
+});
