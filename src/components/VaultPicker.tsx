@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { FolderOpen, Plus } from 'lucide-react';
+import { FolderOpen, Plus, FileText } from 'lucide-react';
 import { vaultsStore } from '../stores/VaultsStore';
+import { getRecentFiles, removeRecentFile } from '../App';
 import type { VaultEntry } from '../types';
 import { CreateVaultDialog } from './CreateVaultDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 
 interface VaultPickerProps {
   onOpen: (path: string) => void;
+  onOpenFile?: (filePath: string) => void;
 }
 
-export function VaultPicker({ onOpen }: VaultPickerProps) {
+export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
   const [recentVaults, setRecentVaults] = useState<VaultEntry[]>([]);
+  const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState<string | null>(null);
 
@@ -19,6 +22,8 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
     // Load recent vaults from store
     const vaults = vaultsStore.getVaults();
     setRecentVaults(vaults);
+    // Load recent standalone files
+    setRecentFiles(getRecentFiles());
   }, []);
 
   const handleCreateVault = (path: string) => {
@@ -133,6 +138,120 @@ export function VaultPicker({ onOpen }: VaultPickerProps) {
                   onRemove={(e) => handleRemoveVault(vault.path, e)}
                 />
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent Files */}
+        {recentFiles.length > 0 && onOpenFile && (
+          <div
+            style={{
+              marginBottom: '32px',
+            }}
+          >
+            <h2
+              style={{
+                fontSize: '12px',
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: '16px',
+                fontWeight: 500,
+              }}
+            >
+              Recent Files
+            </h2>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+              }}
+            >
+              {recentFiles.map((fp) => {
+                const name = fp.split(/[/\\]/).pop() || fp;
+                const dir = fp.split(/[/\\]/).slice(0, -1).join('/');
+                return (
+                  <div
+                    key={fp}
+                    onClick={() => onOpenFile(fp)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '8px 12px',
+                      backgroundColor: 'var(--background-secondary)',
+                      border: '1px solid var(--background-modifier-border)',
+                      borderRadius: '2px',
+                      cursor: 'pointer',
+                      transition: 'all 100ms ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--background-tertiary)';
+                      e.currentTarget.style.borderColor = 'var(--background-modifier-border-hover)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+                      e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
+                    }}
+                  >
+                    <FileText size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        color: 'var(--text-normal)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {name}
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: 'var(--text-faint)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {dir}
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeRecentFile(fp);
+                        setRecentFiles(getRecentFiles());
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '20px',
+                        height: '20px',
+                        padding: '0',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        borderRadius: '2px',
+                        cursor: 'pointer',
+                        color: 'var(--text-faint)',
+                        fontSize: '14px',
+                        transition: 'all 100ms ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+                        e.currentTarget.style.color = 'var(--text-normal)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-faint)';
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
