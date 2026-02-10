@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Edit3, Eye, Save, FolderOpen, X } from 'lucide-react';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { Edit3, Eye, Save, FolderOpen, FileText, X } from 'lucide-react';
 import { MarkdownViewer } from './MarkdownViewer';
 import { Editor } from './Editor';
 import { OutlinePanel } from './OutlinePanel';
@@ -10,6 +11,7 @@ interface StandaloneViewerProps {
   filePath: string;
   onClose: () => void;
   onOpenVault?: (vaultPath: string) => void;
+  onOpenFile?: () => void;
 }
 
 const styles = {
@@ -117,7 +119,7 @@ const styles = {
   },
 };
 
-export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneViewerProps) {
+export function StandaloneViewer({ filePath, onClose, onOpenVault, onOpenFile }: StandaloneViewerProps) {
   const [content, setContent] = useState<string>('');
   const [isEditable, setIsEditable] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
@@ -174,6 +176,41 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
       }
     })();
   }, [parentDir]);
+
+  // Watch parent directory for changes to this file — auto-reload on external edits
+  const isDirtyRef = useRef(false);
+  isDirtyRef.current = isDirty;
+  useEffect(() => {
+    let unlistenFn: UnlistenFn | null = null;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await invoke('watch_directory', { path: parentDir });
+      } catch {
+        return; // can't watch — silently degrade
+      }
+
+      if (cancelled) return;
+
+      unlistenFn = await listen('fs-change', async () => {
+        // Don't reload if user has unsaved edits
+        if (isDirtyRef.current) return;
+        try {
+          const newContent = await invoke<string>('read_file', { path: filePath });
+          setContent(newContent);
+        } catch {
+          // file may have been deleted — ignore
+        }
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      unlistenFn?.();
+      invoke('unwatch_directory', { path: parentDir }).catch(() => {});
+    };
+  }, [filePath, parentDir]);
 
   // Handle content changes in edit mode
   const handleContentChange = useCallback((_path: string, newContent: string) => {
@@ -311,6 +348,18 @@ export function StandaloneViewer({ filePath, onClose, onOpenVault }: StandaloneV
             >
               <FolderOpen size={14} />
               Open Vault
+            </button>
+          )}
+
+          {/* Open File */}
+          {onOpenFile && (
+            <button
+              onClick={onOpenFile}
+              style={styles.button}
+              title="Open File (Cmd+O)"
+            >
+              <FileText size={14} />
+              Open
             </button>
           )}
 

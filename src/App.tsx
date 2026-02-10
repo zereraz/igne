@@ -254,6 +254,30 @@ async function findUniqueFilePath(basePath: string, baseName: string): Promise<s
   }
 }
 
+// === Recent standalone files ===
+const RECENT_FILES_KEY = 'igne_recent_files';
+const MAX_RECENT_FILES = 10;
+
+export function getRecentFiles(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_FILES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function addRecentFile(filePath: string) {
+  const recent = getRecentFiles().filter(p => p !== filePath);
+  recent.unshift(filePath);
+  localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(recent.slice(0, MAX_RECENT_FILES)));
+}
+
+export function removeRecentFile(filePath: string) {
+  const recent = getRecentFiles().filter(p => p !== filePath);
+  localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(recent));
+}
+
 interface ContextMenuState {
   path: string;
   isFolder: boolean;
@@ -507,6 +531,8 @@ function App() {
   // Handle opening a standalone markdown file
   const handleOpenStandaloneFile = useCallback((filePath: string) => {
     console.log('[App] Opening standalone file:', filePath);
+    // Track in recent files
+    addRecentFile(filePath);
     // Close any vault and show standalone viewer
     setVaultPath(null);
     setShowVaultPicker(false);
@@ -1810,6 +1836,7 @@ function App() {
             setStandaloneFilePath(null);
             handleOpenVaultPath(path);
           }}
+          onOpenFile={handleOpenFile}
         />
       </>
     );
@@ -1853,7 +1880,7 @@ function App() {
     return (
       <>
         {dropOverlay}
-        <VaultPicker onOpen={handleOpenVaultPath} />
+        <VaultPicker onOpen={handleOpenVaultPath} onOpenFile={handleOpenStandaloneFile} />
       </>
     );
   }
