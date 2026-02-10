@@ -403,6 +403,9 @@ function App() {
       const vaultSettings = vaultConfigStore.getSettings();
       const appearance = vaultConfigStore.getAppearance();
 
+      // Apply vault-specific editor settings
+      setReadableLineLength(vaultSettings.readableLineLength);
+
       console.log('[App] Loaded vault config:', { vaultSettings, appearance });
 
       // Initialize ThemeManager with mock app
@@ -1389,6 +1392,12 @@ function App() {
     await globalSettingsStore.updateSettings({ lineWrapping: enabled });
   }, []);
 
+  // Handle readable line length setting changes
+  const handleReadableLineLengthChange = useCallback(async (enabled: boolean) => {
+    setReadableLineLength(enabled);
+    await vaultConfigStore.updateSettings({ readableLineLength: enabled });
+  }, []);
+
   // Use keyboard shortcuts hook
   // This must be after all handlers are defined to avoid forward reference issues
   useEffect(() => {
@@ -2372,7 +2381,7 @@ function App() {
           lineWrapping={lineWrapping}
           onLineWrappingChange={handleLineWrappingChange}
           readableLineLength={readableLineLength}
-          onReadableLineLengthChange={(enabled: boolean) => setReadableLineLength(enabled)}
+          onReadableLineLengthChange={handleReadableLineLengthChange}
         />
       )}
 

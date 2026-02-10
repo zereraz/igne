@@ -40,8 +40,8 @@ function EmbedLoader({ noteName, getEmbedContent, onOpen }: { noteName: string; 
 
   if (loading) {
     return (
-      <div style={{ padding: '1rem', backgroundColor: '#27272a', borderRadius: '0.375rem' }}>
-        <span style={{ color: '#71717a' }}>Loading...</span>
+      <div style={{ padding: '1rem', backgroundColor: 'var(--background-secondary)', borderRadius: '0.375rem' }}>
+        <span style={{ color: 'var(--text-faint)' }}>Loading...</span>
       </div>
     );
   }
@@ -68,7 +68,7 @@ function MathBlock({ latex, display }: { latex: string; display: boolean }) {
   }, [latex, display]);
 
   if (error) {
-    return <code style={{ color: '#f87171' }}>{latex}</code>;
+    return <code style={{ color: 'var(--color-red)' }}>{latex}</code>;
   }
 
   return (
@@ -116,16 +116,16 @@ function MermaidBlock({ code }: { code: string }) {
 
   if (loading) {
     return (
-      <div style={{ padding: '1rem', backgroundColor: '#27272a', borderRadius: '0.375rem', textAlign: 'center' }}>
-        <span style={{ color: '#71717a' }}>Loading diagram...</span>
+      <div style={{ padding: '1rem', backgroundColor: 'var(--background-secondary)', borderRadius: '0.375rem', textAlign: 'center' }}>
+        <span style={{ color: 'var(--text-faint)' }}>Loading diagram...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{ padding: '1rem', backgroundColor: '#27272a', borderRadius: '0.375rem' }}>
-        <pre style={{ color: '#f87171', fontSize: '0.875rem', overflow: 'auto' }}>{code}</pre>
+      <div style={{ padding: '1rem', backgroundColor: 'var(--background-secondary)', borderRadius: '0.375rem' }}>
+        <pre style={{ color: 'var(--color-red)', fontSize: '0.875rem', overflow: 'auto' }}>{code}</pre>
       </div>
     );
   }
@@ -158,8 +158,8 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
       return (
         <span
           style={{
-            color: '#a78bfa',
-            borderBottom: '1px dashed #a78bfa',
+            color: 'var(--color-accent)',
+            borderBottom: '1px dashed var(--color-accent)',
             cursor: 'default',
           }}
           title={`Wikilink: ${target}`}
@@ -178,9 +178,9 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
           onLinkClick?.(target);
         }}
         style={{
-          color: exists ? '#a78bfa' : '#f59e0b',
+          color: exists ? 'var(--color-accent)' : 'var(--color-yellow)',
           textDecoration: 'none',
-          borderBottom: exists ? '1px dashed #a78bfa' : '1px dashed #f59e0b',
+          borderBottom: exists ? '1px dashed var(--color-accent)' : '1px dashed var(--color-yellow)',
           cursor: 'pointer',
         }}
         title={exists ? `Go to ${target}` : `Create ${target}`}
@@ -444,7 +444,7 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
                   if (element) {
                     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     // Highlight the element briefly
-                    element.style.backgroundColor = 'rgba(167, 139, 250, 0.2)';
+                    element.style.backgroundColor = 'rgba(var(--color-accent-rgb), 0.2)';
                     setTimeout(() => {
                       element.style.backgroundColor = '';
                     }, 1000);
@@ -456,7 +456,7 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
                   {...props}
                   onClick={handleClick}
                   style={{
-                    color: '#a78bfa',
+                    color: 'var(--color-accent)',
                     cursor: 'pointer',
                     fontSize: '0.75em',
                     verticalAlign: 'super',
@@ -541,8 +541,8 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
                 // In standalone mode, show embed as placeholder
                 if (standaloneMode) {
                   return (
-                    <div style={{ padding: '1rem', backgroundColor: '#27272a', borderRadius: '0.375rem', borderLeft: '3px solid #a78bfa' }}>
-                      <span style={{ color: '#a78bfa', fontSize: '0.875rem' }}>Embedded note: {noteName}</span>
+                    <div style={{ padding: '1rem', backgroundColor: 'var(--background-secondary)', borderRadius: '0.375rem', borderLeft: '3px solid var(--color-accent)' }}>
+                      <span style={{ color: 'var(--color-accent)', fontSize: '0.875rem' }}>Embedded note: {noteName}</span>
                     </div>
                   );
                 }
@@ -554,8 +554,8 @@ export function MarkdownViewer({ content, onLinkClick, getEmbedContent, vaultPat
                   return <EmbedLoader noteName={noteName} getEmbedContent={getEmbedContent} onOpen={() => onLinkClick?.(noteName)} />;
                 }
                 return (
-                  <div style={{ padding: '1rem', backgroundColor: '#27272a', borderRadius: '0.375rem' }}>
-                    <span style={{ color: '#71717a' }}>Note not found: {noteName}</span>
+                  <div style={{ padding: '1rem', backgroundColor: 'var(--background-secondary)', borderRadius: '0.375rem' }}>
+                    <span style={{ color: 'var(--text-faint)' }}>Note not found: {noteName}</span>
                   </div>
                 );
               }
