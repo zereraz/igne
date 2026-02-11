@@ -30,11 +30,33 @@ export function useFileWatcher({
   const [isWatching, setIsWatching] = useState(false);
   const isIndexingRef = useRef(false);
   const unlistenRef = useRef<UnlistenFn | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!vaultPath) return;
 
-    let lastFileCount = 0;
+    const reindexVault = async () => {
+      // Skip if already indexing (avoid race condition)
+      if (isIndexingRef.current) {
+        return;
+      }
+
+      try {
+        const rawEntries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+        const entries = filterHiddenFiles(rawEntries);
+
+        onFilesChange(entries);
+        isIndexingRef.current = true;
+        try {
+          await searchStore.indexFiles(vaultPath, entries);
+        } finally {
+          isIndexingRef.current = false;
+        }
+      } catch (e) {
+        console.error('[useFileWatcher] Failed to refresh files:', e);
+        onError?.('Failed to load files. Click to retry.');
+      }
+    };
 
     const setupWatcher = async () => {
       try {
@@ -44,40 +66,17 @@ export function useFileWatcher({
         setIsWatching(true);
 
         // Listen for file system change events from Rust
-        const unlisten = await listen('fs-change', async () => {
-          // Skip if already indexing (avoid race condition)
-          if (isIndexingRef.current) {
-            console.log('[useFileWatcher] Skipping - already indexing');
-            return;
+        // Debounce: coalesce rapid changes (e.g. 10 saves in 1s) into a single reindex
+        const unlisten = await listen('fs-change', () => {
+          if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
           }
-
-          try {
-            const rawEntries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
-            const entries = filterHiddenFiles(rawEntries);
-            const currentFileCount = entries.length;
-
-            console.log('[useFileWatcher] Files changed, count:', currentFileCount);
-
-            // Always re-index when file changes to ensure wikilink colors update
-            onFilesChange(entries);
-            isIndexingRef.current = true;
-            try {
-              await searchStore.indexFiles(vaultPath, entries);
-              console.log('[useFileWatcher] Index updated');
-            } finally {
-              isIndexingRef.current = false;
-            }
-            lastFileCount = currentFileCount;
-          } catch (e) {
-            console.error('[useFileWatcher] Failed to refresh files:', e);
-            onError?.('Failed to load files. Click to retry.');
-          }
+          debounceTimerRef.current = setTimeout(reindexVault, 500);
         });
 
         unlistenRef.current = unlisten;
       } catch (e) {
         console.error('[useFileWatcher] Failed to start native watcher:', e);
-        // Fallback to polling if native watcher fails
         onError?.('File watcher unavailable. Using fallback polling.');
         setIsWatching(false);
       }
@@ -86,7 +85,11 @@ export function useFileWatcher({
     setupWatcher();
 
     return () => {
-      // Cleanup: stop listening for events
+      // Cleanup: stop listening and cancel pending debounce
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
       if (unlistenRef.current) {
         unlistenRef.current();
         unlistenRef.current = null;

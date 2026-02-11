@@ -6,13 +6,6 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultL
 import { registerStandaloneHandler } from './main';
 import {
   FolderOpen,
-  FileText,
-  FilePlus,
-  Link2,
-  List,
-  Hash,
-  Network,
-  Star,
 } from 'lucide-react';
 import { useWorkspaceSync } from './hooks/useWorkspaceSync';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -48,6 +41,10 @@ import { DailyNotesNav } from './components/DailyNotesNav';
 import { StarredFilesPanel } from './components/StarredFilesPanel';
 import { HomeScreen } from './components/HomeScreen';
 import { SettingsModal } from './components/SettingsModal';
+import { AppSidebar } from './components/AppSidebar';
+import { AppEditorArea } from './components/AppEditorArea';
+import { AppRightPanel } from './components/AppRightPanel';
+import { PanelErrorBoundary } from './components/PanelErrorBoundary';
 import { FileEntry } from './types';
 import { searchStore } from './stores/searchStore';
 import { vaultsStore } from './stores/VaultsStore';
@@ -102,90 +99,6 @@ const styles = {
   },
   mainContent: {
     display: 'flex',
-    flex: 1,
-    overflow: 'hidden',
-  },
-  sidebar: {
-    backgroundColor: 'var(--background-secondary)',
-    borderRight: '1px solid var(--background-modifier-border)',
-    overflowY: 'auto' as const,
-    height: '100%',
-  },
-  sidebarContent: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    height: '100%',
-    paddingTop: '8px',
-  },
-  sidebarHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingLeft: '12px',
-    paddingRight: '12px',
-    paddingTop: '8px',
-    paddingBottom: '8px',
-  },
-  vaultName: {
-    fontSize: '11px',
-    color: 'var(--text-muted)',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.05em',
-    fontWeight: 500,
-    fontFamily: 'var(--font-interface)',
-  },
-  newFileButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    padding: '4px 8px',
-    fontSize: '11px',
-    fontFamily: 'var(--font-interface)',
-    backgroundColor: 'transparent',
-    border: '1px solid var(--background-modifier-border)',
-    borderRadius: '2px',
-    cursor: 'pointer',
-    color: 'var(--text-muted)',
-    transition: 'border-color 100ms ease, color 100ms ease',
-  },
-  loading: {
-    paddingLeft: '12px',
-    paddingRight: '12px',
-    paddingTop: '16px',
-    paddingBottom: '16px',
-    color: 'var(--text-muted)',
-    fontSize: '12px',
-    fontFamily: 'var(--font-interface)',
-  },
-  emptyState: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: 'var(--text-muted)',
-    fontSize: '12px',
-    padding: '16px',
-    textAlign: 'center' as const,
-    fontFamily: 'var(--font-interface)',
-  },
-  contentArea: {
-    flex: 1,
-    overflow: 'hidden',
-    backgroundColor: 'var(--background-primary)',
-    display: 'flex',
-    flexDirection: 'column' as const,
-  },
-  emptyContent: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: 'var(--text-muted)',
-    fontFamily: 'var(--font-interface)',
-  },
-  editorContainer: {
     flex: 1,
     overflow: 'hidden',
   },
@@ -1001,6 +914,8 @@ function App() {
           await invoke('write_file', { path: tabToSave.path, content: tabToSave.content });
           console.log('[App] Auto-saved:', tabToSave.name);
           markSaved(path);
+          // Incremental index update (avoids full reindex from file watcher)
+          searchStore.updateFile(tabToSave.path, tabToSave.content);
         } catch (e) {
           console.error('[App] Auto-save failed:', e);
         }
@@ -1853,194 +1768,26 @@ function App() {
                   setSidebarCollapsed(size.asPercentage === 0);
                 }}
               >
-                <aside style={{ ...styles.sidebar, position: 'relative' }}>
-                  {vaultPath ? (
-                    <div style={styles.sidebarContent}>
-                      <div style={styles.sidebarHeader}>
-                        <div style={styles.vaultName}>{vaultName}</div>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <button
-                            type="button"
-                            onClick={() => sidebarPanelRef.current?.collapse()}
-                            style={{
-                              ...styles.newFileButton,
-                              padding: '4px',
-                              width: '24px',
-                              height: '24px',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = 'var(--color-accent)';
-                              e.currentTarget.style.color = 'var(--text-normal)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
-                              e.currentTarget.style.color = 'var(--text-muted)';
-                            }}
-                            title="Collapse sidebar"
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="11 17 6 12 11 7" />
-                              <polyline points="18 17 13 12 18 7" />
-                            </svg>
-                          </button>
-                          <button
-                            type="button"
-                            data-testid="create-file-button"
-                            onClick={handleNewFile}
-                            style={{
-                              ...styles.newFileButton,
-                              padding: '4px',
-                              width: '24px',
-                              height: '24px',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.borderColor = 'var(--color-accent)';
-                              e.currentTarget.style.color = 'var(--text-normal)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
-                              e.currentTarget.style.color = 'var(--text-muted)';
-                            }}
-                            title="New File"
-                          >
-                            <FilePlus size={12} />
-                          </button>
-                        </div>
-                      </div>
-                      {loading ? (
-                        <div style={styles.loading}>Loading...</div>
-                      ) : fileTreeError ? (
-                        <div
-                          onClick={() => {
-                            setFileTreeError(null);
-                            // Trigger re-read by clearing files
-                            setFiles([]);
-                          }}
-                          style={{
-                            padding: '16px',
-                            color: 'var(--color-red)',
-                            fontSize: '12px',
-                            fontFamily: 'var(--font-interface)',
-                            cursor: 'pointer',
-                            textAlign: 'center',
-                          }}
-                          title="Click to retry"
-                        >
-                          {fileTreeError}
-                        </div>
-                      ) : (
-                        <FileTree
-                          entries={files}
-                          selectedPath={activeTabPath ?? null}
-                          onSelect={handleFileSelect}
-                          onContextMenu={handleContextMenu}
-                          onDrop={handleDrop}
-                        />
-                      )}
-                      {/* Open Vault button at bottom */}
-                      <div
-                        style={{
-                          marginTop: 'auto',
-                          padding: '6px 8px',
-                          borderTop: '1px solid var(--background-modifier-border)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          userSelect: 'none',
-                          WebkitUserSelect: 'none',
-                        }}
-                        onDoubleClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const selection = window.getSelection();
-                          if (selection) {
-                            selection.removeAllRanges();
-                          }
-                        }}
-                        onMouseDown={(e) => {
-                          if (e.detail > 1) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }
-                        }}
-                      >
-                        <FolderOpen size={12} style={{ color: 'var(--text-faint)', flexShrink: 0, pointerEvents: 'none' }} />
-                        {vaultName && (
-                          <span
-                            style={{
-                              color: 'var(--text-faint)',
-                              fontSize: '10px',
-                              fontFamily: 'var(--font-interface)',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              flex: 1,
-                              userSelect: 'none',
-                              WebkitUserSelect: 'none',
-                              pointerEvents: 'none',
-                            }}
-                          >
-                            {vaultName}
-                          </span>
-                        )}
-                        <button
-                          onClick={handleOpenVault}
-                          style={{
-                            ...styles.newFileButton,
-                            padding: '4px',
-                            width: '20px',
-                            height: '20px',
-                            flexShrink: 0,
-                            userSelect: 'none',
-                            WebkitUserSelect: 'none',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--color-accent)';
-                            e.currentTarget.style.color = 'var(--text-normal)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
-                            e.currentTarget.style.color = 'var(--text-muted)';
-                          }}
-                          title="Change Vault"
-                          onMouseDown={(e) => {
-                            if (e.detail > 1) {
-                              e.preventDefault();
-                              e.stopPropagation();
-                            }
-                          }}
-                        >
-                          <FolderOpen size={10} style={{ pointerEvents: 'none' }} />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={styles.emptyState}>
-                      <FolderOpen size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                      <p>No folder open</p>
-                      <button
-                        onClick={handleOpenVault}
-                        style={{
-                          marginTop: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 16px',
-                          fontSize: '12px',
-                          fontFamily: 'var(--font-interface)',
-                          backgroundColor: 'var(--color-accent)',
-                          border: 'none',
-                          borderRadius: '2px',
-                          cursor: 'pointer',
-                          color: 'var(--text-on-accent)',
-                        }}
-                      >
-                        <FolderOpen size={14} />
-                        Open Folder
-                      </button>
-                    </div>
-                  )}
-                </aside>
+                <PanelErrorBoundary label="Sidebar">
+                  <AppSidebar
+                    vaultPath={vaultPath}
+                    vaultName={vaultName ?? ''}
+                    files={files}
+                    loading={loading}
+                    fileTreeError={fileTreeError}
+                    activeTabPath={activeTabPath}
+                    onFileSelect={handleFileSelect}
+                    onContextMenu={handleContextMenu}
+                    onDrop={handleDrop}
+                    onNewFile={handleNewFile}
+                    onOpenVault={handleOpenVault}
+                    onCollapse={() => sidebarPanelRef.current?.collapse()}
+                    onClearError={() => {
+                      setFileTreeError(null);
+                      setFiles([]);
+                    }}
+                  />
+                </PanelErrorBoundary>
               </Panel>
               <PanelResizeHandle className="igne-resize-handle" />
             </>
@@ -2048,88 +1795,41 @@ function App() {
 
           {/* Editor Panel */}
           <Panel id="editor" defaultSize={focusMode ? 100 : 60} minSize={30}>
-            <main style={styles.contentArea}>
-              {(() => {
-                const activeTab = getActiveTab();
-                return activeTab ? (
-                  <>
-                    {/* Daily Notes Navigation (vault only) */}
-                    {workspace?.hasVault && (
-                      <DailyNotesNav
-                        vaultPath={vaultPath}
-                        currentFilePath={activeTab.path}
-                        onNoteOpen={async (path, content) => {
-                          const parts = path.split(/[/\\]/);
-                          const name = parts[parts.length - 1] || '';
+            <PanelErrorBoundary label="Editor">
+            <AppEditorArea
+              activeTab={getActiveTab()}
+              openTabs={openTabs}
+              workspace={workspace}
+              vaultPath={vaultPath}
+              isVaultReady={isVaultReady}
+              scrollToPosition={scrollToPosition}
+              editorRefreshTrigger={editorRefreshTrigger}
+              lineWrapping={lineWrapping}
+              readableLineLength={readableLineLength}
+              currentLine={currentLine}
+              currentColumn={currentColumn}
+              onContentChange={handleContentChange}
+              onCursorPositionChange={(line, column) => {
+                setCurrentLine(line);
+                setCurrentColumn(column);
+              }}
+              onFileSelect={handleFileSelect}
+              onWikilinkQueue={(target, newTab) => {
+                setWikilinkQueue(prev => [...prev, { target, newTab }]);
+              }}
+              onNoteOpen={async (path, content) => {
+                const parts = path.split(/[/\\]/);
+                const name = parts[parts.length - 1] || '';
 
-                          // Refresh file list and re-index
-                          const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath! });
-                          setFiles(entries);
-                          await searchStore.indexFiles(vaultPath!, entries);
+                // Refresh file list and re-index
+                const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath! });
+                setFiles(entries);
+                await searchStore.indexFiles(vaultPath!, entries);
 
-                          openTab(path, name, content, false);
-                        }}
-                      />
-                    )}
-                    <div style={styles.editorContainer}>
-                      {activeTab.path === '__graph__' ? (
-                        <GraphView
-                          files={openTabs.filter(t => t.path !== '__graph__')}
-                          onNodeClick={(path) => {
-                            handleFileSelect(path);
-                          }}
-                        />
-                      ) : (
-                        <Editor
-                          content={activeTab.content}
-                          onChange={handleContentChange}
-                          onCursorPositionChange={(line, column) => {
-                            setCurrentLine(line);
-                            setCurrentColumn(column);
-                          }}
-                          vaultPath={vaultPath}
-                          currentFilePath={activeTab.path}
-                          scrollPosition={scrollToPosition}
-                          refreshTrigger={editorRefreshTrigger}
-                          lineWrapping={lineWrapping}
-                          readableLineLength={readableLineLength}
-                          onWikilinkClick={(target) => {
-                            console.log('[App] onWikilinkClick called:', target);
-                            if (!isVaultReady) {
-                              console.log('[App] Vault not ready, queuing wikilink');
-                              setWikilinkQueue(prev => [...prev, { target, newTab: false }]);
-                              return;
-                            }
-                            const path = searchStore.getFilePathByName(target);
-                            console.log('[App] searchStore.getFilePathByName returned:', path);
-                            if (path) {
-                              handleFileSelect(path);
-                            } else {
-                              console.warn('[App] Wikilink target not found:', target);
-                            }
-                          }}
-                          onWikilinkCmdClick={(target) => {
-                            if (!isVaultReady) {
-                              setWikilinkQueue(prev => [...prev, { target, newTab: true }]);
-                              return;
-                            }
-                            const path = searchStore.getFilePathByName(target);
-                            if (path) {
-                              handleFileSelect(path, true);
-                            }
-                          }}
-                        />
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div style={styles.emptyContent}>
-                    <FileText size={48} style={{ marginBottom: '12px', opacity: 0.5 }} />
-                    <p>Select a file or create a new one</p>
-                  </div>
-                );
-              })()}
-            </main>
+                openTab(path, name, content, false);
+              }}
+            />
+            </PanelErrorBoundary>
           </Panel>
 
           {/* Right Panel */}
@@ -2144,118 +1844,27 @@ function App() {
                 collapsible
                 collapsedSize={0}
               >
-                <div
-                  style={{
-                    backgroundColor: 'var(--background-secondary)',
-                    borderLeft: '1px solid var(--background-modifier-border)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                    height: '100%',
-                  }}
-                >
-                  {/* Panel Toggle - Icon tabs */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'center',
-                      gap: '2px',
-                      padding: '6px 8px',
-                      borderBottom: '1px solid var(--background-modifier-border)',
+                <PanelErrorBoundary label="Panel">
+                  <AppRightPanel
+                    activeTab={activeTab}
+                    openTabs={openTabs}
+                    workspace={workspace}
+                    vaultPath={vaultPath}
+                    rightPanel={rightPanel}
+                    currentLine={currentLine}
+                    onRightPanelChange={setRightPanel}
+                    onScrollToPosition={setScrollToPosition}
+                    onFileSelect={handleFileSelect}
+                    onOpenQuickSwitcher={() => setIsQuickSwitcherOpen(true)}
+                    onOpenFullGraph={() => openTab('__graph__', 'Graph', '', true)}
+                    onRefreshFiles={async () => {
+                      if (vaultPath) {
+                        const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
+                        setFiles(entries);
+                      }
                     }}
-                  >
-                    {[
-                      { id: 'backlinks' as const, label: 'Backlinks', icon: <Link2 size={14} /> },
-                      { id: 'outline' as const, label: 'Outline', icon: <List size={14} /> },
-                      { id: 'tags' as const, label: 'Tags', icon: <Hash size={14} /> },
-                      { id: 'graph' as const, label: 'Graph', icon: <Network size={14} /> },
-                      ...(workspace?.hasVault ? [{ id: 'starred' as const, label: 'Starred', icon: <Star size={14} /> }] : []),
-                    ].map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setRightPanel(tab.id)}
-                        title={tab.label}
-                        style={{
-                          width: '28px',
-                          height: '28px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: rightPanel === tab.id ? 'var(--background-modifier-hover)' : 'transparent',
-                          border: 'none',
-                          borderRadius: '4px',
-                          color: rightPanel === tab.id ? 'var(--color-accent)' : 'var(--text-faint)',
-                          cursor: 'pointer',
-                          transition: 'background 100ms ease, color 100ms ease',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (rightPanel !== tab.id) {
-                            e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
-                            e.currentTarget.style.color = 'var(--text-muted)';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (rightPanel !== tab.id) {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                            e.currentTarget.style.color = 'var(--text-faint)';
-                          }
-                        }}
-                      >
-                        {tab.icon}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Panel Content */}
-                  <div style={{ flex: 1, overflow: 'hidden' }}>
-                    {rightPanel === 'outline' ? (
-                      <OutlinePanel
-                        key={activeTab.path}
-                        content={activeTab.content}
-                        currentLine={currentLine}
-                        onHeadingClick={(position, _headingText) => {
-                          setScrollToPosition(position);
-                        }}
-                      />
-                    ) : rightPanel === 'tags' ? (
-                      <TagsPanel
-                        files={openTabs}
-                        onTagClick={(tag) => {
-                          setIsQuickSwitcherOpen(true);
-                          console.log('Search for tag:', tag);
-                        }}
-                      />
-                    ) : rightPanel === 'graph' ? (
-                      <LocalGraphView
-                        files={openTabs}
-                        currentFilePath={activeTab.path}
-                        onNodeClick={handleFileSelect}
-                        onOpenFullGraph={() => {
-                          openTab('__graph__', 'Graph', '', true);
-                        }}
-                        depth={2}
-                      />
-                    ) : rightPanel === 'starred' ? (
-                      <StarredFilesPanel
-                        vaultPath={vaultPath}
-                        currentFilePath={activeTab.path}
-                        onFileSelect={handleFileSelect}
-                        onRefresh={async () => {
-                          if (vaultPath) {
-                            const entries = await invoke<FileEntry[]>('read_directory', { path: vaultPath });
-                            setFiles(entries);
-                          }
-                        }}
-                      />
-                    ) : (
-                      <BacklinksPanel
-                        key={activeTab.path}
-                        currentFilePath={activeTab.path}
-                        onBacklinkClick={handleFileSelect}
-                        data-testid="backlinks-panel"
-                      />
-                    )}
-                  </div>
-                </div>
+                  />
+                </PanelErrorBoundary>
               </Panel>
             </>
           )}
