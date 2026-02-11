@@ -479,6 +479,11 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::all())
+                .build()
+        )
+        .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
                     debug!("GlobalShortcut handler: shortcut={:?}, state={:?}", shortcut, event.state());
@@ -632,6 +637,11 @@ pub fn run() {
             // Initialize logging first
             init_logging();
             info!("Igne app starting...");
+
+            // Show the main window (it starts hidden to prevent flash while restoring state)
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+            }
 
             // Global shortcut: Cmd+Option+N (⌘+⌥+N) for quick capture
             #[cfg(desktop)]

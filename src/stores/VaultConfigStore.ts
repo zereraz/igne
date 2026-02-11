@@ -3,26 +3,65 @@ import type { VaultSettings, AppearanceSettings, WorkspaceState } from '../types
 import { DEFAULT_VAULT_SETTINGS, DEFAULT_APPEARANCE_SETTINGS } from '../types';
 import { readJsonSafe, writeJsonSafe, fileExists } from '../utils/safeJson';
 
+export interface VaultConfigInitOptions {
+  /** When true, store config in app data dir instead of .obsidian/ */
+  useAppDataDir?: boolean;
+}
+
+/** Simple hash of a string to a hex string (for folder-keyed storage) */
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(16).padStart(8, '0');
+}
+
 class VaultConfigStore {
-  private vaultPath: string = '';
+  private rootPath: string = '';
   private configDir: string = '';
+  private isVaultMode: boolean = false;
 
   private settings: VaultSettings = { ...DEFAULT_VAULT_SETTINGS };
   private appearance: AppearanceSettings = { ...DEFAULT_APPEARANCE_SETTINGS };
   private workspace: WorkspaceState | null = null;
 
-  // Initialize for a specific vault
-  async init(vaultPath: string): Promise<void> {
-    this.vaultPath = vaultPath;
-    this.configDir = `${vaultPath}/.obsidian`;
+  /** Whether this workspace has vault (.obsidian) config */
+  get hasVaultConfig(): boolean {
+    return this.isVaultMode;
+  }
 
-    // Ensure config directory exists
-    await this.ensureConfigDir();
+  /** The root path of the current workspace */
+  get currentRootPath(): string {
+    return this.rootPath;
+  }
 
-    // Load all configs
+  /** The config directory path */
+  get currentConfigDir(): string {
+    return this.configDir;
+  }
+
+  // Initialize for a specific root path (vault or plain folder)
+  async init(rootPath: string, options?: VaultConfigInitOptions): Promise<void> {
+    this.rootPath = rootPath;
+    this.isVaultMode = !options?.useAppDataDir;
+
+    if (options?.useAppDataDir) {
+      // Store config in app data directory, keyed by folder path hash
+      const appDataDir = await invoke<string>('get_app_data_dir');
+      const hash = simpleHash(rootPath);
+      this.configDir = `${appDataDir}/workspaces/${hash}`;
+    } else {
+      // Vault mode: use .obsidian/ directory (don't auto-create it)
+      this.configDir = `${rootPath}/.obsidian`;
+    }
+
+    // Load all configs (silently uses defaults if files don't exist)
     await Promise.all([this.loadSettings(), this.loadAppearance(), this.loadWorkspace()]);
 
-    console.log('[VaultConfigStore] Initialized for vault:', vaultPath);
+    console.log('[VaultConfigStore] Initialized for:', rootPath, options?.useAppDataDir ? '(app-data)' : '(vault)');
   }
 
   private async ensureConfigDir(): Promise<void> {
@@ -47,11 +86,13 @@ class VaultConfigStore {
       };
       console.log('[VaultConfigStore] Loaded vault settings from app.json');
     } else {
+      this.settings = { ...DEFAULT_VAULT_SETTINGS };
       console.log('[VaultConfigStore] No app.json found, using defaults');
     }
   }
 
   async saveSettings(): Promise<void> {
+    await this.ensureConfigDir();
     const path = `${this.configDir}/app.json`;
     await writeJsonSafe(path, this.settings, {
       preserveUnknown: true,
@@ -88,11 +129,13 @@ class VaultConfigStore {
       };
       console.log('[VaultConfigStore] Loaded appearance settings from appearance.json');
     } else {
+      this.appearance = { ...DEFAULT_APPEARANCE_SETTINGS };
       console.log('[VaultConfigStore] No appearance.json found, using defaults');
     }
   }
 
   async saveAppearance(): Promise<void> {
+    await this.ensureConfigDir();
     const path = `${this.configDir}/appearance.json`;
     await writeJsonSafe(path, this.appearance, {
       preserveUnknown: true,
@@ -130,6 +173,7 @@ class VaultConfigStore {
 
   async saveWorkspace(workspace: WorkspaceState): Promise<void> {
     this.workspace = workspace;
+    await this.ensureConfigDir();
     const path = `${this.configDir}/workspace.json`;
     await writeJsonSafe(path, workspace, {
       preserveUnknown: true,
@@ -151,6 +195,7 @@ class VaultConfigStore {
   }
 
   async saveHotkeys(hotkeys: Record<string, any[]>): Promise<void> {
+    await this.ensureConfigDir();
     const path = `${this.configDir}/hotkeys.json`;
     await writeJsonSafe(path, hotkeys, {
       preserveUnknown: true,

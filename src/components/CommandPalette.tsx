@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Terminal, Hash, FileText, Clock } from 'lucide-react';
+import { FocusTrapWrapper } from './FocusTrapWrapper';
 import { searchStore } from '../stores/searchStore';
 import { safeArrayIndex } from '../utils/clamp';
 import type { ModalProps } from '../types';
@@ -193,25 +194,26 @@ export function CommandPalette({
   const ModeIcon = getIcon();
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Command Palette"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        paddingTop: '15vh',
-        zIndex: 1000,
-      }}
-      onClick={onClose}
-    >
+    <FocusTrapWrapper>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command Palette"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'center',
+          paddingTop: '15vh',
+          zIndex: 1000,
+        }}
+        onClick={onClose}
+      >
       <div
         style={{
           width: '560px',
@@ -226,6 +228,7 @@ export function CommandPalette({
       >
         {/* Search Input */}
         <div
+          className="igne-search-container"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -245,11 +248,11 @@ export function CommandPalette({
               flex: 1,
               backgroundColor: 'transparent',
               border: 'none',
-              outline: 'none',
               color: 'var(--text-normal)',
               fontSize: '14px',
               fontFamily: 'var(--font-monospace-theme, var(--font-monospace))',
             }}
+            className="igne-search-input"
           />
           {/* Mode indicator */}
           {mode !== 'commands' && (
@@ -506,7 +509,8 @@ export function CommandPalette({
             </span>
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </FocusTrapWrapper>
   );
 }

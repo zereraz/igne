@@ -19,10 +19,11 @@ class WorkspaceStateManager {
   private currentActiveTab: string | null = null;
 
   /**
-   * Set the current vault path for path conversions
+   * Set the current root path for path conversions.
+   * Works for both vault paths and plain folder paths.
    */
-  setVaultPath(vaultPath: string): void {
-    this.vaultPath = vaultPath;
+  setRootPath(rootPath: string): void {
+    this.vaultPath = rootPath;
   }
 
   /**
@@ -41,7 +42,7 @@ class WorkspaceStateManager {
 
   /**
    * Restore workspace from saved state
-   * Converts stored vault paths to OS paths if needed
+   * Converts stored vault-relative paths to OS paths if needed
    */
   async restore(vaultPath?: string): Promise<{
     panes: PaneState[];

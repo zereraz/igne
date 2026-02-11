@@ -333,6 +333,8 @@ export interface LogEntry {
 
 // --- Vault Registry ---
 
+export type RecentItemType = 'vault' | 'folder' | 'file';
+
 export interface VaultEntry {
   path: string;
   name: string;
@@ -340,12 +342,16 @@ export interface VaultEntry {
   created: number;
   noteCount?: number;
   size?: number;
+  /** Type of recent item. Defaults to 'vault' for backward compatibility. */
+  type?: RecentItemType;
 }
 
 export interface VaultsRegistry {
   version: number;
   vaults: VaultEntry[];
-  lastOpenedVault: string | null;
+  lastOpened: string | null;
+  /** @deprecated v1 field name, kept for deserialization compat */
+  lastOpenedVault?: string | null;
 }
 
 // --- Window State ---

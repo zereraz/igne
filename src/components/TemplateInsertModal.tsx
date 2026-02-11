@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { FileText, X } from 'lucide-react';
+import { FocusTrapWrapper } from './FocusTrapWrapper';
 import { safeArrayIndex } from '../utils/clamp';
 
 interface Template {
@@ -70,25 +71,26 @@ export function TemplateInsertModal({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Insert Template"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 2000,
-      }}
-      onClick={onClose}
-      onKeyDown={handleKeyDown}
-    >
+    <FocusTrapWrapper>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Insert Template"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2000,
+        }}
+        onClick={onClose}
+        onKeyDown={handleKeyDown}
+      >
       <div
         style={{
           backgroundColor: 'var(--background-secondary)',
@@ -175,7 +177,6 @@ export function TemplateInsertModal({
                 borderRadius: '4px',
                 color: 'var(--text-normal)',
                 fontSize: '14px',
-                outline: 'none',
               }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = 'var(--color-accent)';
@@ -231,8 +232,7 @@ export function TemplateInsertModal({
                   borderRadius: '4px',
                   color: 'var(--text-normal)',
                   fontSize: '14px',
-                  outline: 'none',
-                }}
+                  }}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = 'var(--color-accent)';
                 }}
@@ -346,7 +346,8 @@ export function TemplateInsertModal({
           <span>Tab toggle new file</span>
           <span>Esc to close</span>
         </div>
+        </div>
       </div>
-    </div>
+    </FocusTrapWrapper>
   );
 }

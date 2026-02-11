@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Hash, FileText } from 'lucide-react';
+import { FocusTrapWrapper } from './FocusTrapWrapper';
 import { getBlockList, type BlockType } from '../utils/blockFinder';
 import { safeArrayIndex } from '../utils/clamp';
 
@@ -79,25 +80,26 @@ export function BlockPicker({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Block Picker"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        paddingTop: '15vh',
-        zIndex: 1000,
-      }}
-      onClick={onClose}
-    >
+    <FocusTrapWrapper>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Block Picker"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'center',
+          paddingTop: '15vh',
+          zIndex: 1000,
+        }}
+        onClick={onClose}
+      >
       <div
         style={{
           width: '600px',
@@ -295,7 +297,8 @@ export function BlockPicker({
             </span>
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </FocusTrapWrapper>
   );
 }

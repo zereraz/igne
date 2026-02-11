@@ -162,7 +162,6 @@ export function SearchReplacePanel({
               borderRadius: '2px',
               color: 'var(--text-normal)',
               fontSize: '14px',
-              outline: 'none',
             }}
           />
         </div>
@@ -395,8 +394,7 @@ export function SearchReplacePanel({
                 borderRadius: '2px',
                 color: 'var(--text-normal)',
                 fontSize: '14px',
-                outline: 'none',
-              }}
+                }}
             />
           </div>
 

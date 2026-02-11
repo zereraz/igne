@@ -184,7 +184,6 @@ export const TitleBar = memo(function TitleBar({
                   fontSize: '12px',
                   color: 'var(--text-normal)',
                   fontFamily: 'var(--font-interface)',
-                  outline: 'none',
                   minWidth: '40px',
                   maxWidth: '150px',
                   borderRadius: '2px',

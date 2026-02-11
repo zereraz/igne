@@ -188,7 +188,7 @@
   /* Dark theme needs LIGHT text colors */
   --text-normal: #e4e4e7;
   --text-muted: #a1a1aa;
-  --text-faint: #71717a;
+  --text-faint: #8b8b95;
   --text-on-accent: #ffffff;
   --text-accent: var(--color-accent);
   --text-accent-hover: var(--color-accent-1);
@@ -214,7 +214,7 @@
 .theme-light {
   --text-normal: #2e3440;
   --text-muted: #7f8499;
-  --text-faint: #9aa0b6;
+  --text-faint: #717893;
   --text-on-accent: #ffffff;
   --text-accent: var(--color-accent);
   --text-accent-hover: var(--color-accent-1);

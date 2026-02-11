@@ -60,12 +60,14 @@
     "@tauri-apps/plugin-updater": "^2.9.0",
     "codemirror": "^6.0.2",
     "d3": "^7.9.0",
+    "focus-trap-react": "^12.0.0",
     "fuse.js": "^7.1.0",
     "katex": "^0.16.27",
     "mermaid": "^11.12.2",
     "minisearch": "^7.2.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "react-resizable-panels": "^4.6.2",
     "remark-footnotes": "^4.0.1"
   },
   "devDependencies": {
