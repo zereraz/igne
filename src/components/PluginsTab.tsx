@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Puzzle, Power, Settings as SettingsIcon, Check, AlertCircle, AlertTriangle, Shield, Info } from 'lucide-react';
+import { Puzzle, Power, Check, AlertCircle, AlertTriangle, Shield, Info } from 'lucide-react';
 import { isPluginCompatible, OBSIDIAN_COMPAT_VERSION, compareVersions } from '../utils/semver';
 import { detectPluginTier, getTierName, getTierColor, getPermissionName, type PluginTier, type PluginTierInfo } from '../utils/plugin-tiers';
 
@@ -244,7 +244,8 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
             lineHeight: 1.5,
           }}
         >
-          Manage your Obsidian community plugins. Place plugins in{' '}
+          View and toggle Obsidian community plugins. Igne does not run plugin code — toggling
+          here updates{' '}
           <code
             style={{
               backgroundColor: 'var(--background-secondary)',
@@ -253,8 +254,9 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
               fontSize: '11px',
             }}
           >
-            .obsidian/plugins/
-          </code>
+            community-plugins.json
+          </code>{' '}
+          so plugins stay enabled/disabled when you open this vault in Obsidian.
         </p>
       </div>
 
@@ -644,57 +646,6 @@ export function PluginsTab({ vaultPath }: PluginsTabProps) {
                 </div>
               )}
 
-              {/* Settings button (for plugins with settings) */}
-              {plugin.isEnabled && plugin.hasSettings && (
-                <div
-                  style={{
-                    paddingTop: '8px',
-                    borderTop: '1px solid var(--background-modifier-border)',
-                    marginTop: '8px',
-                  }}
-                >
-                  <button
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 10px',
-                      fontSize: '11px',
-                      fontWeight: 500,
-                      fontFamily,
-                      backgroundColor: 'transparent',
-                      border: '1px solid var(--background-modifier-border)',
-                      borderRadius: '2px',
-                      cursor: 'pointer',
-                      color: 'var(--text-muted)',
-                      transition: 'all 100ms ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
-                      e.currentTarget.style.borderColor = 'var(--interactive-normal)';
-                      e.currentTarget.style.color = 'var(--text-normal)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
-                      e.currentTarget.style.color = 'var(--text-muted)';
-                    }}
-                  >
-                    <SettingsIcon size={12} />
-                    Plugin Settings
-                  </button>
-                  <p
-                    style={{
-                      fontSize: '10px',
-                      color: 'var(--interactive-normal)',
-                      margin: '4px 0 0 0',
-                      fontFamily,
-                    }}
-                  >
-                    Plugin configuration not yet supported in Igne
-                  </p>
-                </div>
-              )}
             </div>
           ))}
         </div>
