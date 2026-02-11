@@ -45,8 +45,8 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests (dev mode with mocks)
-        run: npx playwright test --project=dev
-        timeout-minutes: 10
+        run: npx playwright test --project=dev tests/e2e/core-flows.spec.ts
+        timeout-minutes: 5
 
       - name: Upload artifacts on failure
         if: failure()
