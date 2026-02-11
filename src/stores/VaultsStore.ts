@@ -1,7 +1,28 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { VaultsRegistry, VaultEntry } from '../types';
+import type { VaultsRegistry, VaultEntry, RecentItemType } from '../types';
 
-// Helper function to check if a file exists
+/**
+ * VaultsStore — unified registry of recent workspaces (vaults, folders, files).
+ *
+ * Storage: <appDataDir>/vaults.json
+ *
+ * Version history:
+ *   v1 (pre-0.4) — vault-only registry. Entries had no `type` field.
+ *                   `lastOpenedVault` was the key for last opened path.
+ *                   Recent standalone files were stored separately in
+ *                   localStorage under `igne_recent_files`.
+ *   v2 (0.4)    — unified registry. Entries gain `type` field (vault|folder|file).
+ *                   `lastOpened` replaces `lastOpenedVault`.
+ *                   Migrates localStorage `igne_recent_files` into vaults array.
+ *                   Old v1 entries get `type: 'vault'` as default.
+ *
+ * Migration notes:
+ *   - v1→v2: runs once on first load of a v1 registry. Can be removed once
+ *            all users have been on 0.4+ for a release cycle (target: 0.6).
+ */
+
+const CURRENT_VERSION = 2;
+
 async function fileExists(path: string): Promise<boolean> {
   try {
     const meta = await invoke<{ exists: boolean }>('stat_path', { path });
@@ -11,22 +32,19 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-// Helper function to get app data directory
 async function getAppDataDir(): Promise<string> {
   try {
-    const dir = await invoke<string>('get_app_data_dir');
-    return dir;
+    return await invoke<string>('get_app_data_dir');
   } catch {
-    // Fallback to a default location
     return '';
   }
 }
 
 class VaultsStore {
   private registry: VaultsRegistry = {
-    version: 1,
+    version: CURRENT_VERSION,
     vaults: [],
-    lastOpenedVault: null,
+    lastOpened: null,
   };
 
   private vaultsPath: string = '';
@@ -36,32 +54,93 @@ class VaultsStore {
       const appData = await getAppDataDir();
       this.vaultsPath = `${appData}/vaults.json`;
 
-      // Load existing registry
       if (await fileExists(this.vaultsPath)) {
         try {
           const content = await invoke<string>('read_file', { path: this.vaultsPath });
-          const loaded = JSON.parse(content) as Partial<VaultsRegistry>;
+          const loaded = JSON.parse(content) as Record<string, unknown>;
+          const version = (loaded.version as number) || 1;
+          const vaults = (loaded.vaults as VaultEntry[]) || [];
+          // Handle both v1 `lastOpenedVault` and v2 `lastOpened`
+          const lastOpened = (loaded.lastOpened as string) || (loaded.lastOpenedVault as string) || null;
 
-          // Merge with defaults to handle version upgrades
           this.registry = {
-            version: loaded.version || 1,
-            vaults: loaded.vaults || [],
-            lastOpenedVault: loaded.lastOpenedVault || null,
+            version,
+            vaults: vaults.map(v => ({
+              ...v,
+              type: v.type || 'vault', // v1 entries have no type
+            })),
+            lastOpened,
           };
 
-          console.log('[VaultsStore] Loaded vaults registry:', {
-            vaultCount: this.registry.vaults.length,
-            lastOpened: this.registry.lastOpenedVault,
+          // Run version migrations
+          if (version < CURRENT_VERSION) {
+            this.migrate(version);
+          }
+
+          console.log('[VaultsStore] Loaded registry:', {
+            version: this.registry.version,
+            itemCount: this.registry.vaults.length,
+            lastOpened: this.registry.lastOpened,
           });
         } catch (e) {
-          console.error('[VaultsStore] Failed to load vaults registry:', e);
-          // Will use default empty registry
+          console.error('[VaultsStore] Failed to load registry:', e);
         }
       } else {
-        console.log('[VaultsStore] No existing vaults registry found, starting fresh');
+        // First load — run migrations for any legacy data sources
+        this.migrate(0);
+        console.log('[VaultsStore] No existing registry, starting fresh');
       }
     } catch (e) {
       console.error('[VaultsStore] Failed to initialize:', e);
+    }
+  }
+
+  /**
+   * Run migrations from `fromVersion` up to CURRENT_VERSION.
+   * Each migration is idempotent and version-gated.
+   */
+  private migrate(fromVersion: number): void {
+    if (fromVersion < 2) {
+      this.migrateV1toV2();
+    }
+    // Future: if (fromVersion < 3) { this.migrateV2toV3(); }
+
+    this.registry.version = CURRENT_VERSION;
+  }
+
+  /**
+   * v1 → v2: Absorb localStorage `igne_recent_files` into the unified registry.
+   * These were standalone files opened via File > Open or CLI before the
+   * workspace unification in 0.4. Safe to remove after 0.6.
+   */
+  private migrateV1toV2(): void {
+    try {
+      const raw = localStorage.getItem('igne_recent_files');
+      if (!raw) return;
+
+      const recentFiles: string[] = JSON.parse(raw);
+      if (!Array.isArray(recentFiles) || recentFiles.length === 0) return;
+
+      let migrated = 0;
+      for (const filePath of recentFiles) {
+        if (this.registry.vaults.some(v => v.path === filePath)) continue;
+
+        this.registry.vaults.push({
+          path: filePath,
+          name: filePath.split(/[/\\]/).pop() || 'File',
+          lastOpened: Date.now() - migrated * 1000, // preserve relative order
+          created: Date.now(),
+          type: 'file',
+        });
+        migrated++;
+      }
+
+      if (migrated > 0) {
+        console.log(`[VaultsStore] v1→v2: Migrated ${migrated} recent files from localStorage`);
+        localStorage.removeItem('igne_recent_files');
+      }
+    } catch {
+      // Ignore migration errors — non-critical data
     }
   }
 
@@ -72,64 +151,74 @@ class VaultsStore {
         this.vaultsPath = `${appData}/vaults.json`;
       }
 
+      // Serialize with current field names (no lastOpenedVault)
+      const serialized = {
+        version: this.registry.version,
+        vaults: this.registry.vaults,
+        lastOpened: this.registry.lastOpened,
+      };
+
       await invoke('write_file', {
         path: this.vaultsPath,
-        content: JSON.stringify(this.registry, null, 2),
+        content: JSON.stringify(serialized, null, 2),
       });
-      console.log('[VaultsStore] Saved vaults registry');
     } catch (e) {
-      console.error('[VaultsStore] Failed to save vaults registry:', e);
+      console.error('[VaultsStore] Failed to save registry:', e);
     }
   }
 
-  // Get all known vaults, sorted by last opened
+  // Get all known items, sorted by last opened (most recent first)
   getVaults(): VaultEntry[] {
     return [...this.registry.vaults].sort((a, b) => b.lastOpened - a.lastOpened);
   }
 
-  // Get the last opened vault
-  getLastOpenedVault(): string | null {
-    return this.registry.lastOpenedVault;
+  // Get items filtered by type
+  getItemsByType(type: RecentItemType): VaultEntry[] {
+    return this.getVaults().filter(v => (v.type || 'vault') === type);
   }
 
-  // Add or update a vault
-  async addVault(path: string, name?: string): Promise<VaultEntry> {
+  // Get the last opened item path
+  getLastOpenedVault(): string | null {
+    return this.registry.lastOpened;
+  }
+
+  // Add or update an item in the registry
+  async addVault(path: string, name?: string, type?: RecentItemType): Promise<VaultEntry> {
     const existing = this.registry.vaults.find((v) => v.path === path);
 
     if (existing) {
       existing.lastOpened = Date.now();
       existing.name = name || existing.name;
-      console.log('[VaultsStore] Updated existing vault:', existing.name);
+      if (type) existing.type = type;
     } else {
       const entry: VaultEntry = {
         path,
-        name: name || path.split(/[/\\]/).pop() || 'Vault',
+        name: name || path.split(/[/\\]/).pop() || 'Untitled',
         lastOpened: Date.now(),
         created: Date.now(),
+        type: type || 'vault',
       };
       this.registry.vaults.push(entry);
-      console.log('[VaultsStore] Added new vault:', entry.name);
     }
 
-    this.registry.lastOpenedVault = path;
+    this.registry.lastOpened = path;
     await this.save();
 
     return this.registry.vaults.find((v) => v.path === path)!;
   }
 
-  // Remove a vault from registry (doesn't delete files)
+  // Remove an item from registry (doesn't delete files)
   async removeVault(path: string): Promise<void> {
     this.registry.vaults = this.registry.vaults.filter((v) => v.path !== path);
 
-    if (this.registry.lastOpenedVault === path) {
-      this.registry.lastOpenedVault = this.registry.vaults[0]?.path || null;
+    if (this.registry.lastOpened === path) {
+      this.registry.lastOpened = this.registry.vaults[0]?.path || null;
     }
 
     await this.save();
-    console.log('[VaultsStore] Removed vault from registry:', path);
   }
 
-  // Update vault metadata
+  // Update item metadata
   async updateVaultMetadata(path: string, metadata: Partial<VaultEntry>): Promise<void> {
     const vault = this.registry.vaults.find((v) => v.path === path);
     if (vault) {
@@ -143,7 +232,7 @@ class VaultsStore {
     const vault = this.registry.vaults.find((v) => v.path === path);
     if (vault) {
       vault.lastOpened = Date.now();
-      this.registry.lastOpenedVault = path;
+      this.registry.lastOpened = path;
       await this.save();
     }
   }

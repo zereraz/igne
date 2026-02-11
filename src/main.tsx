@@ -1,9 +1,14 @@
+// Import Tauri mocks FIRST (before any Tauri API imports)
+// This allows the app to run in browser for E2E testing
+import './utils/tauriMock';
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { listen } from '@tauri-apps/api/event';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
+import './styles/obsidian.css';  // Obsidian-compatible CSS variables for theming
 // Import the App singleton
 import { app } from './obsidian/appInstance';
 

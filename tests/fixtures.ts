@@ -1,4 +1,4 @@
-import { test as base, Page, BrowserContext } from '@playwright/test';
+import { test as base, Page } from '@playwright/test';
 
 export interface AppFixtures {
   app: AppPage;
@@ -6,282 +6,322 @@ export interface AppFixtures {
 }
 
 /**
- * TestVault - Helper for creating test files in the vault
+ * TestVault - Helper for creating test files in mock vault
  *
- * Note: In dev mode, files are created in the browser's localStorage.
- * In WebDriver mode, files are created via the Tauri file system API.
+ * Works with the Tauri mock system (window.__TAURI_MOCK__) in dev mode.
  */
 export class TestVault {
+  // Must match MOCK_VAULT_PATH in tauriMock.ts
+  private vaultPath: string = '/mock-vault';
   private testFiles: Map<string, string> = new Map();
+  private page: Page | null = null;
 
-  createFile(path: string, content: string): void {
-    this.testFiles.set(path, content);
+  setPage(page: Page): void {
+    this.page = page;
   }
 
-  updateFile(path: string, content: string): void {
-    if (this.testFiles.has(path)) {
-      this.testFiles.set(path, content);
+  /**
+   * Initialize the test vault in the mock system
+   */
+  async init(page: Page): Promise<void> {
+    this.page = page;
+
+    // Set up mock files via the Tauri mock system
+    await page.evaluate((vaultPath: string) => {
+      const mock = (window as any).__TAURI_MOCK__;
+      if (mock) {
+        // Create the vault directory
+        mock.setMockDir(vaultPath);
+        // Create .obsidian directory
+        mock.setMockDir(`${vaultPath}/.obsidian`);
+        // Create a basic community-plugins.json
+        mock.setMockFile(`${vaultPath}/.obsidian/community-plugins.json`, '[]');
+      }
+    }, this.vaultPath);
+  }
+
+  /**
+   * Create a file in the test vault
+   */
+  async createFile(path: string, content: string): Promise<void> {
+    this.testFiles.set(path, content);
+
+    if (this.page) {
+      const fullPath = `${this.vaultPath}/${path}`;
+      await this.page.evaluate(
+        ({ path, content }) => {
+          const mock = (window as any).__TAURI_MOCK__;
+          if (mock) {
+            mock.setMockFile(path, content);
+          }
+        },
+        { path: fullPath, content }
+      );
     }
   }
 
-  deleteFile(path: string): void {
-    this.testFiles.delete(path);
+  /**
+   * Update an existing file
+   */
+  async updateFile(path: string, content: string): Promise<void> {
+    await this.createFile(path, content);
   }
 
+  /**
+   * Delete a file
+   */
+  async deleteFile(path: string): Promise<void> {
+    this.testFiles.delete(path);
+    // Files in mock system persist until page reload
+  }
+
+  /**
+   * Get the vault path
+   */
+  getPath(): string {
+    return this.vaultPath;
+  }
+
+  /**
+   * Get all created files
+   */
   getFiles(): Map<string, string> {
     return new Map(this.testFiles);
   }
 
+  /**
+   * Clean up test files (clears both memory and localStorage)
+   */
   async cleanup(): Promise<void> {
+    if (this.page) {
+      await this.page.evaluate(() => {
+        const mock = (window as any).__TAURI_MOCK__;
+        if (mock && mock.clearMocks) {
+          mock.clearMocks();
+        }
+        // Also clear localStorage directly in case page reloaded
+        try {
+          localStorage.removeItem('__TAURI_MOCK_FILES__');
+        } catch {
+          // Ignore
+        }
+      });
+    }
     this.testFiles.clear();
   }
 }
 
 /**
  * AppPage - Page object for the Igne editor application
- *
- * Provides helpers for:
- * - Navigation and file operations
- * - Editor interaction (via CodeMirror API)
- * - Widget testing (wikilinks, tags, tasks)
  */
 export class AppPage {
   constructor(public page: Page) {}
 
+  /**
+   * Navigate to the app and wait for it to load
+   * In mock mode, the vault auto-opens so we wait for the editor
+   */
   async goto(): Promise<void> {
-    await this.page.goto('/');
-  }
-
-  async createNewFile(filename: string): Promise<void> {
-    // Click the create file button
-    await this.page.click('[data-testid="create-file-button"]');
-    // Fill in the file name
-    await this.page.fill('[data-testid="new-file-name-input"]', filename);
-    // Confirm creation
-    await this.page.click('[data-testid="confirm-create-file"]');
-  }
-
-  async openFile(filename: string): Promise<void> {
-    await this.page.click(`[data-file="${filename}"]`);
+    await this.page.goto('http://localhost:1420');
+    // In mock mode, vault auto-opens. Wait for editor to appear
+    await this.page.waitForSelector('.cm-editor', { timeout: 30000 });
   }
 
   /**
-   * Editor helpers - Access CodeMirror editor via JavaScript API
+   * Check if we're on the vault picker screen
+   */
+  async isOnVaultPicker(): Promise<boolean> {
+    const title = await this.page.locator('h1').textContent().catch(() => '');
+    return title === 'Igne';
+  }
+
+  /**
+   * Open a vault by clicking the Open button and navigating
+   * In dev/mock mode, this sets up a mock vault
+   */
+  async openMockVault(vault: TestVault): Promise<void> {
+    // Initialize the mock vault first
+    await vault.init(this.page);
+
+    // Set the vault path in app state by simulating vault selection
+    await this.page.evaluate((vaultPath: string) => {
+      // Trigger a vault open via mock event
+      const mock = (window as any).__TAURI_MOCK__;
+      if (mock && mock.emitEvent) {
+        // This would need the app to handle a vault-open event
+        // For now, we'll use localStorage as a workaround
+        localStorage.setItem('igne-test-vault', vaultPath);
+      }
+
+      // Directly set mock files to simulate having a vault
+      if (mock) {
+        mock.setMockDir(vaultPath);
+        mock.setMockFile(`${vaultPath}/welcome.md`, '# Welcome\n\nThis is a test vault.');
+      }
+    }, vault.getPath());
+
+    // Reload to pick up the mock vault
+    await this.page.reload();
+
+    // Wait for either vault picker or editor
+    await this.page.waitForSelector('h1, .cm-editor', { timeout: 10000 });
+  }
+
+  /**
+   * Wait for the editor to be visible
+   */
+  async waitForEditor(): Promise<void> {
+    await this.page.locator('.cm-editor').waitFor({ state: 'visible', timeout: 30000 });
+  }
+
+  /**
+   * Create a new file via the UI
+   * Uses the "New File" button in the sidebar
+   */
+  async createNewFile(filename: string): Promise<void> {
+    // Click the "New File" button in sidebar using role selector
+    await this.page.getByRole('button', { name: 'New File' }).click();
+
+    // A new untitled file should be created and focused
+    // Wait for tab bar to update
+    await this.page.waitForTimeout(500);
+
+    // Wait for editor to be ready
+    await this.page.waitForSelector('.cm-editor');
+  }
+
+  /**
+   * Open a file by clicking on it in the file tree
+   * Single click replaces active tab content
+   */
+  async openFile(filename: string): Promise<void> {
+    // Ensure filename has .md extension for data-file attribute
+    const fileWithExt = filename.endsWith('.md') ? filename : `${filename}.md`;
+    await this.page.locator(`[data-file="${fileWithExt}"]`).click();
+    await this.page.waitForTimeout(500);
+  }
+
+  /**
+   * Open a file in a new tab using Cmd+click
+   */
+  async openFileInNewTab(filename: string): Promise<void> {
+    const fileWithExt = filename.endsWith('.md') ? filename : `${filename}.md`;
+    await this.page.locator(`[data-file="${fileWithExt}"]`).click({ modifiers: ['Meta'] });
+    await this.page.waitForTimeout(500);
+  }
+
+  /**
+   * Editor helpers - Access CodeMirror editor
    */
   get editor() {
     return {
-      /**
-       * Type text into the editor
-       */
       type: async (text: string) => {
         const editor = this.page.locator('.cm-content');
         await editor.click();
-        await editor.type(text);
+        await editor.pressSequentially(text);
       },
 
-      /**
-       * Get text content from editor
-       */
       getText: async () => {
-        const editor = this.page.locator('.cm-content');
-        return await editor.innerText();
+        return await this.page.locator('.cm-content').innerText();
       },
 
-      /**
-       * Wait for specific text to appear in editor
-       */
       waitForContent: async (text: string) => {
-        const editor = this.page.locator('.cm-content');
-        await editor.waitFor({ state: 'visible' });
-        return await editor.getByText(text).waitFor();
+        await this.page.locator('.cm-content').getByText(text).waitFor();
       },
 
-      // ===== Wikilink helpers =====
-
-      /**
-       * Check if a wikilink widget is visible
-       */
       hasWikilink: async (targetName: string) => {
-        const wikilink = this.page.locator(`.cm-wikilink[data-target="${targetName}"]`);
-        return await wikilink.isVisible();
+        return await this.page.locator(`.cm-wikilink[data-target="${targetName}"]`).isVisible();
       },
 
-      /**
-       * Click on a wikilink widget
-       */
       clickWikilink: async (targetName: string) => {
-        const wikilink = this.page.locator(`.cm-wikilink[data-target="${targetName}"]`);
-        await wikilink.click();
+        await this.page.locator(`.cm-wikilink[data-target="${targetName}"]`).click();
       },
 
-      /**
-       * Wait for wikilink widgets to render
-       */
       waitForWikilinkWidget: async () => {
         await this.page.locator('.cm-wikilink').first().waitFor({ state: 'visible' });
       },
 
-      // ===== Tag helpers =====
-
-      /**
-       * Check if a tag pill is visible
-       */
       hasTag: async (tagName: string) => {
-        const tag = this.page.locator(`.cm-tag-pill:has-text("#${tagName}")`);
-        return await tag.isVisible();
+        return await this.page.locator(`.cm-tag-pill:has-text("#${tagName}")`).isVisible();
       },
 
-      /**
-       * Click on a tag pill
-       */
       clickTag: async (tagName: string) => {
-        const tag = this.page.locator(`.cm-tag-pill:has-text("#${tagName}")`);
-        await tag.click();
+        await this.page.locator(`.cm-tag-pill:has-text("#${tagName}")`).click();
       },
 
-      /**
-       * Wait for tag widgets to render
-       */
       waitForTagWidget: async () => {
         await this.page.locator('.cm-tag-pill').first().waitFor({ state: 'visible' });
       },
 
-      // ===== Task checkbox helpers =====
-
-      /**
-       * Check if a task checkbox exists
-       */
       hasTaskCheckbox: async () => {
-        const checkbox = this.page.locator('.cm-task-checkbox');
-        return await checkbox.isVisible();
+        return await this.page.locator('.cm-task-checkbox').isVisible();
       },
 
-      /**
-       * Click on a task checkbox to toggle it
-       */
       clickTaskCheckbox: async () => {
-        const checkbox = this.page.locator('.cm-task-checkbox');
-        await checkbox.click();
+        await this.page.locator('.cm-task-checkbox').click();
       },
 
-      /**
-       * Check if the task checkbox is checked
-       */
       isCheckboxChecked: async () => {
-        const checkbox = this.page.locator('.cm-task-checkbox');
-        return await checkbox.isChecked();
+        return await this.page.locator('.cm-task-checkbox').isChecked();
       },
 
-      // ===== Embed helpers =====
-
-      /**
-       * Wait for embed widgets to render
-       */
       waitForEmbedWidget: async () => {
         await this.page.locator('.cm-embed').first().waitFor({ state: 'visible' });
       },
 
-      /**
-       * Check if an image widget is visible
-       */
       hasImageWidget: async () => {
-        const image = this.page.locator('.cm-image');
-        return await image.isVisible();
+        return await this.page.locator('.cm-image').isVisible();
       },
 
-      /**
-       * Get the width of an image widget
-       */
-      getImageWidth: async () => {
-        const image = this.page.locator('.cm-image');
-        const width = await image.evaluate((el: HTMLImageElement) => {
-          return el.style.width;
-        });
-        return width;
-      },
-
-      /**
-       * Get the height of an image widget
-       */
-      getImageHeight: async () => {
-        const image = this.page.locator('.cm-image');
-        const height = await image.evaluate((el: HTMLImageElement) => {
-          return el.style.height;
-        });
-        return height;
-      },
-
-      /**
-       * Check if an image has the correct alignment class
-       */
-      hasImageAlignment: async (align: 'left' | 'center' | 'right') => {
-        const container = this.page.locator('.cm-image-container');
-        const hasClass = await container.evaluate((el: HTMLElement, alignment) => {
-          return el.classList.contains(`cm-image-align-${alignment}`);
-        }, align);
-        return hasClass;
-      },
-
-      /**
-       * Check if a video widget is visible
-       */
       hasVideoWidget: async () => {
-        const video = this.page.locator('.cm-video');
-        return await video.isVisible();
+        return await this.page.locator('.cm-video').isVisible();
       },
 
-      /**
-       * Check if a PDF widget is visible
-       */
       hasPdfWidget: async () => {
-        const pdf = this.page.locator('.cm-pdf');
-        return await pdf.isVisible();
+        return await this.page.locator('.cm-pdf').isVisible();
       },
 
-      // ===== CodeMirror API access =====
-
-      /**
-       * Get the full content of the CodeMirror editor
-       * Uses CodeMirror's internal API for accurate content
-       */
       getCodeMirrorContent: async (): Promise<string> => {
         return await this.page.evaluate(() => {
           const editor = document.querySelector('.cm-editor') as any;
-          if (editor && editor.cmView) {
-            return editor.cmView.state.doc.toString();
-          }
-          return '';
+          return editor?.__editorView?.state?.doc?.toString() || '';
         });
       },
 
-      /**
-       * Set the content of the CodeMirror editor
-       * Uses CodeMirror's internal API for accurate replacement
-       */
       setCodeMirrorContent: async (content: string) => {
-        await this.page.evaluate((text) => {
+        // Add a header line so cursor at position 0 is NOT on the same line as wikilinks
+        // This is needed because live preview hides widgets when cursor is on the same line
+        const contentWithHeader = `.\n${content}`;
+        const result = await this.page.evaluate((text) => {
           const editor = document.querySelector('.cm-editor') as any;
-          if (editor && editor.cmView) {
-            const { state, dispatch } = editor.cmView;
-            dispatch({
-              changes: { from: 0, to: state.doc.length, insert: text }
-            });
+          // Access the view exposed by Editor component
+          const view = editor?.__editorView;
+          if (!view) {
+            return { success: false, error: 'Could not find __editorView on .cm-editor element' };
           }
-        }, content);
+          try {
+            const { state, dispatch } = view;
+            // Set content and move cursor to start (position 0)
+            dispatch({
+              changes: { from: 0, to: state.doc.length, insert: text },
+              selection: { anchor: 0 },
+            });
+            return { success: true, docLength: state.doc.length };
+          } catch (e: any) {
+            return { success: false, error: e.message };
+          }
+        }, contentWithHeader);
+        if (!result.success) {
+          console.log('setCodeMirrorContent failed:', result);
+        }
+        // Wait for parser and decorations to update
+        await this.page.waitForTimeout(300);
       },
 
-      // ===== Selection helpers =====
-
-      /**
-       * Move cursor to the end of the document
-       */
       moveCursorToEnd: async () => {
         await this.page.keyboard.press('End');
       },
 
-      /**
-       * Move cursor to the start of the document
-       */
       moveCursorToStart: async () => {
         await this.page.keyboard.press('Home');
       },
@@ -292,34 +332,28 @@ export class AppPage {
    * File tree helpers
    */
   get fileTree() {
+    const sidebar = this.page.locator('aside, [role="complementary"]');
+
     return {
-      /**
-       * Wait for specific files to appear in the sidebar
-       */
       waitForFiles: async (filenames: string[]) => {
         for (const filename of filenames) {
-          await this.page.locator(`[data-file="${filename}"]`).waitFor();
+          // Remove .md extension for display name
+          const displayName = filename.replace(/\.md$/, '');
+          await sidebar.locator(`text="${displayName}"`).first().waitFor({ timeout: 10000 });
         }
       },
 
-      /**
-       * Get the count of files in the sidebar
-       */
       getFileCount: async () => {
-        return await this.page.locator('[data-file]').count();
+        // Count items in sidebar that look like files (have cursor pointer)
+        return await sidebar.locator('[cursor="pointer"], [style*="cursor: pointer"]').count();
       },
 
-      /**
-       * Check if a file exists in the sidebar
-       */
       hasFile: async (filename: string) => {
-        const file = this.page.locator(`[data-file="${filename}"]`);
-        return await file.isVisible();
+        const displayName = filename.replace(/\.md$/, '');
+        return await sidebar.locator(`text="${displayName}"`).first().isVisible().catch(() => false);
       },
     };
   }
-
-  // ===== Quick Actions =====
 
   async openQuickSwitcher(): Promise<void> {
     await this.page.keyboard.press('Meta+K');
@@ -334,11 +368,8 @@ export class AppPage {
   }
 
   async getBacklinks(): Promise<string[]> {
-    const items = await this.page.locator('[data-backlink]').allTextContents();
-    return items;
+    return await this.page.locator('[data-backlink]').allTextContents();
   }
-
-  // ===== Tab helpers =====
 
   async closeTab(tabName: string): Promise<void> {
     await this.page.click(`[data-testid="close-tab-${tabName}"]`);
@@ -353,7 +384,7 @@ export class AppPage {
   }
 
   async switchToTab(tabName: string): Promise<void> {
-    await this.page.click(`[data-file="${tabName}"]`);
+    await this.page.click(`[data-tab="${tabName}"]`);
   }
 }
 
@@ -365,8 +396,9 @@ export const test = base.extend<AppFixtures>({
     const app = new AppPage(page);
     await use(app);
   },
-  vault: async ({}, use) => {
+  vault: async ({ page }, use) => {
     const vault = new TestVault();
+    vault.setPage(page);
     await use(vault);
     await vault.cleanup();
   },

@@ -131,8 +131,8 @@ describe('isPluginCompatible', () => {
     const metadataPath = path.join(repoRoot, 'compat', 'obsidian-api', 'metadata.json');
 
     const metadataRaw = await fs.readFile(metadataPath, 'utf8');
-    const metadata = JSON.parse(metadataRaw) as { obsidianNpmVersion?: string };
+    const metadata = JSON.parse(metadataRaw) as { package?: { version?: string } };
 
-    expect(OBSIDIAN_COMPAT_VERSION).toBe(metadata.obsidianNpmVersion);
+    expect(OBSIDIAN_COMPAT_VERSION).toBe(metadata.package?.version);
   });
 });

@@ -1,29 +1,22 @@
 import { useState, useEffect } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { FolderOpen, Plus, FileText } from 'lucide-react';
+import { FolderOpen, Plus, FileText, Folder } from 'lucide-react';
 import { vaultsStore } from '../stores/VaultsStore';
-import { getRecentFiles, removeRecentFile } from '../App';
 import type { VaultEntry } from '../types';
 import { CreateVaultDialog } from './CreateVaultDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 
-interface VaultPickerProps {
+interface HomeScreenProps {
   onOpen: (path: string) => void;
-  onOpenFile?: (filePath: string) => void;
 }
 
-export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
-  const [recentVaults, setRecentVaults] = useState<VaultEntry[]>([]);
-  const [recentFiles, setRecentFiles] = useState<string[]>([]);
+export function HomeScreen({ onOpen }: HomeScreenProps) {
+  const [recentItems, setRecentItems] = useState<VaultEntry[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load recent vaults from store
-    const vaults = vaultsStore.getVaults();
-    setRecentVaults(vaults);
-    // Load recent standalone files
-    setRecentFiles(getRecentFiles());
+    setRecentItems(vaultsStore.getVaults());
   }, []);
 
   const handleCreateVault = (path: string) => {
@@ -35,7 +28,7 @@ export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: 'Open',
+      title: 'Open Folder',
     });
 
     if (selected && typeof selected === 'string') {
@@ -43,15 +36,15 @@ export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
     }
   };
 
-  const handleRemoveVault = (path: string, e: React.MouseEvent) => {
+  const handleRemoveItem = (path: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setRemoveConfirm(path);
   };
 
-  const confirmRemoveVault = async () => {
+  const confirmRemoveItem = async () => {
     if (removeConfirm) {
       await vaultsStore.removeVault(removeConfirm);
-      setRecentVaults(vaultsStore.getVaults());
+      setRecentItems(vaultsStore.getVaults());
     }
     setRemoveConfirm(null);
   };
@@ -100,12 +93,12 @@ export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
               letterSpacing: '0.05em',
             }}
           >
-            Markdown Knowledge Base
+            Markdown Editor
           </p>
         </div>
 
-        {/* Recent Vaults */}
-        {recentVaults.length > 0 && (
+        {/* Recent Items (unified list) */}
+        {recentItems.length > 0 && (
           <div
             style={{
               marginBottom: '32px',
@@ -121,7 +114,7 @@ export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
                 fontWeight: 500,
               }}
             >
-              Recent Vaults
+              Recent
             </h2>
             <div
               style={{
@@ -130,128 +123,14 @@ export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
                 gap: '8px',
               }}
             >
-              {recentVaults.map((vault) => (
-                <VaultItem
-                  key={vault.path}
-                  vault={vault}
-                  onClick={() => onOpen(vault.path)}
-                  onRemove={(e) => handleRemoveVault(vault.path, e)}
+              {recentItems.map((item) => (
+                <RecentItem
+                  key={item.path}
+                  item={item}
+                  onClick={() => onOpen(item.path)}
+                  onRemove={(e) => handleRemoveItem(item.path, e)}
                 />
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* Recent Files */}
-        {recentFiles.length > 0 && onOpenFile && (
-          <div
-            style={{
-              marginBottom: '32px',
-            }}
-          >
-            <h2
-              style={{
-                fontSize: '12px',
-                color: 'var(--text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: '16px',
-                fontWeight: 500,
-              }}
-            >
-              Recent Files
-            </h2>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px',
-              }}
-            >
-              {recentFiles.map((fp) => {
-                const name = fp.split(/[/\\]/).pop() || fp;
-                const dir = fp.split(/[/\\]/).slice(0, -1).join('/');
-                return (
-                  <div
-                    key={fp}
-                    onClick={() => onOpenFile(fp)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      padding: '8px 12px',
-                      backgroundColor: 'var(--background-secondary)',
-                      border: '1px solid var(--background-modifier-border)',
-                      borderRadius: '2px',
-                      cursor: 'pointer',
-                      transition: 'all 100ms ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--background-tertiary)';
-                      e.currentTarget.style.borderColor = 'var(--background-modifier-border-hover)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
-                      e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
-                    }}
-                  >
-                    <FileText size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: 'var(--text-normal)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {name}
-                      </div>
-                      <div style={{
-                        fontSize: '11px',
-                        color: 'var(--text-faint)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {dir}
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeRecentFile(fp);
-                        setRecentFiles(getRecentFiles());
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '20px',
-                        height: '20px',
-                        padding: '0',
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        borderRadius: '2px',
-                        cursor: 'pointer',
-                        color: 'var(--text-faint)',
-                        fontSize: '14px',
-                        transition: 'all 100ms ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
-                        e.currentTarget.style.color = 'var(--text-normal)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.color = 'var(--text-faint)';
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                );
-              })}
             </div>
           </div>
         )}
@@ -266,7 +145,7 @@ export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
         >
           <button
             onClick={handleOpenFolder}
-            title="Open a folder or drag a file (⌘O)"
+            title="Open a folder or drag a file (Cmd+O)"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -301,7 +180,7 @@ export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
               backgroundColor: 'rgba(0,0,0,0.2)',
               borderRadius: '3px',
               fontFamily: 'system-ui, -apple-system, sans-serif',
-            }}>⌘ O</kbd>
+            }}>Cmd O</kbd>
           </button>
 
           <button
@@ -331,17 +210,16 @@ export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
             }}
           >
             <Plus size={16} />
-            Create new
+            Create New Vault
           </button>
 
-          {/* Hint for file opening */}
           <p style={{
             fontSize: '11px',
             color: 'var(--text-faint)',
             textAlign: 'center',
             marginTop: '8px',
           }}>
-            Drag & drop .md files to preview
+            Drag & drop files or folders to open
           </p>
         </div>
       </div>
@@ -355,11 +233,11 @@ export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
 
       {removeConfirm && (
         <ConfirmDialog
-          title="Remove Vault"
-          message="Remove this vault from the list? The files will not be deleted."
+          title="Remove from Recent"
+          message="Remove this from the list? The files will not be deleted."
           confirmLabel="Remove"
           destructive
-          onConfirm={confirmRemoveVault}
+          onConfirm={confirmRemoveItem}
           onCancel={() => setRemoveConfirm(null)}
         />
       )}
@@ -367,13 +245,18 @@ export function VaultPicker({ onOpen, onOpenFile }: VaultPickerProps) {
   );
 }
 
-interface VaultItemProps {
-  vault: VaultEntry;
+// --- RecentItem component ---
+
+interface RecentItemProps {
+  item: VaultEntry;
   onClick: () => void;
   onRemove: (e: React.MouseEvent) => void;
 }
 
-function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
+function RecentItem({ item, onClick, onRemove }: RecentItemProps) {
+  const itemType = item.type || 'vault';
+  const isFile = itemType === 'file';
+
   const formatRelativeTime = (timestamp: number): string => {
     const seconds = Math.floor((Date.now() - timestamp) / 1000);
 
@@ -385,6 +268,8 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
     const date = new Date(timestamp);
     return date.toLocaleDateString();
   };
+
+  const Icon = isFile ? FileText : (itemType === 'vault' ? FolderOpen : Folder);
 
   return (
     <div
@@ -422,7 +307,7 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
           flexShrink: 0,
         }}
       >
-        <FolderOpen size={16} style={{ color: 'var(--text-muted)' }} />
+        <Icon size={16} style={{ color: 'var(--text-muted)' }} />
       </div>
 
       {/* Info */}
@@ -434,16 +319,40 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
       >
         <div
           style={{
-            fontSize: '13px',
-            fontWeight: 500,
-            color: 'var(--text-normal)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
             marginBottom: '2px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
           }}
         >
-          {vault.name}
+          <span
+            style={{
+              fontSize: '13px',
+              fontWeight: 500,
+              color: 'var(--text-normal)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {item.name}
+          </span>
+          {itemType === 'vault' && (
+            <span
+              style={{
+                fontSize: '9px',
+                color: 'var(--text-faint)',
+                backgroundColor: 'var(--background-tertiary)',
+                padding: '1px 5px',
+                borderRadius: '2px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+                flexShrink: 0,
+              }}
+            >
+              vault
+            </span>
+          )}
         </div>
         <div
           style={{
@@ -454,7 +363,7 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
             whiteSpace: 'nowrap',
           }}
         >
-          {vault.path}
+          {item.path}
         </div>
       </div>
 
@@ -467,14 +376,14 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
           flexShrink: 0,
         }}
       >
-        {vault.noteCount !== undefined && (
+        {item.noteCount !== undefined && (
           <span
             style={{
               fontSize: '11px',
               color: 'var(--text-faint)',
             }}
           >
-            {vault.noteCount} notes
+            {item.noteCount} notes
           </span>
         )}
         <span
@@ -483,7 +392,7 @@ function VaultItem({ vault, onClick, onRemove }: VaultItemProps) {
             color: 'var(--text-faint)',
           }}
         >
-          {formatRelativeTime(vault.lastOpened)}
+          {formatRelativeTime(item.lastOpened)}
         </span>
       </div>
 

@@ -257,7 +257,8 @@ export const Tag: MarkdownConfig = {
             !(c >= 65 && c <= 90) && /* A-Z */
             !(c >= 97 && c <= 122) && /* a-z */
             c !== 47 && /* / */
-            c !== 45) { /* - */
+            c !== 45 && /* - */
+            c !== 95) { /* _ (underscore) */
           break;
         }
         pos++;
@@ -292,16 +293,29 @@ export const TaskMarker: MarkdownConfig = {
 
       if (cx.char(pos + 2) !== 93 /* ] */) return -1;
 
-      // Must be at start of line (after list marker)
-      if (pos > 0) {
+      // Must be at start of list item (after "- " or "* " or "+ " or "1. ")
+      // Standard markdown has a space between list marker and checkbox
+      if (pos > 1) {
         const prev = cx.char(pos - 1);
-        if (prev !== 45 && /* - */
-            prev !== 42 && /* * */
-            prev !== 43) { /* + */
-          // Check for digit + dot (ordered list)
-          let i = pos - 1;
-          while (i >= 0 && cx.char(i) >= 48 && cx.char(i) <= 57) i--;
-          if (i < 0 || cx.char(i) !== 46) return -1;
+        const prevPrev = cx.char(pos - 2);
+        // Check for "- [ ]", "* [ ]", "+ [ ]" pattern (space before [)
+        if (prev === 32 /* space */) {
+          if (prevPrev !== 45 && /* - */
+              prevPrev !== 42 && /* * */
+              prevPrev !== 43) { /* + */
+            // Check for ordered list "1. [ ]" pattern
+            if (pos > 2) {
+              const prevPrevPrev = cx.char(pos - 3);
+              // Looking for ". " before "["
+              if (!(prevPrev === 46 /* . */ && prevPrevPrev >= 48 && prevPrevPrev <= 57)) {
+                return -1;
+              }
+            } else {
+              return -1;
+            }
+          }
+        } else {
+          return -1;
         }
       }
 

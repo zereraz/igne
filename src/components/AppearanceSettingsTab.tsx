@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Sun, Moon, Palette, Type } from 'lucide-react';
+import { Sun, Moon, Palette, Type, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import type { AppearanceSettings } from '../types';
+import { ThemeBrowser } from './ThemeBrowser';
 
 interface AppearanceSettingsTabProps {
   settings: AppearanceSettings;
@@ -9,10 +10,33 @@ interface AppearanceSettingsTabProps {
   vaultPath: string | null;
 }
 
+// Shared styles using CSS variables
+const labelStyle = {
+  fontSize: '11px',
+  fontWeight: 600,
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.05em',
+  color: 'var(--text-muted)',
+  fontFamily: 'var(--font-interface)',
+};
+
+const inputStyle = {
+  width: '100%',
+  padding: '8px 12px',
+  fontSize: '13px',
+  fontFamily: 'var(--font-interface)',
+  backgroundColor: 'var(--background-secondary)',
+  border: '1px solid var(--background-modifier-border)',
+  borderRadius: '2px',
+  color: 'var(--text-normal)',
+  cursor: 'pointer',
+};
+
 export function AppearanceSettingsTab({ settings, onChange, vaultPath }: AppearanceSettingsTabProps) {
   const [availableThemes, setAvailableThemes] = useState<string[]>([]);
   const [availableSnippets, setAvailableSnippets] = useState<string[]>([]);
   const [loadingThemes, setLoadingThemes] = useState(true);
+  const [showThemeBrowser, setShowThemeBrowser] = useState(false);
 
   // Load available themes and snippets
   useEffect(() => {
@@ -20,7 +44,6 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
       if (!vaultPath) return;
 
       try {
-
         // Load themes
         try {
           const themesPath = `${vaultPath}/.obsidian/themes`;
@@ -62,13 +85,11 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
 
   const handleAccentColorChange = (color: string) => {
     handleUpdate({ accentColor: color });
-    // Apply immediately for live preview
     document.documentElement.style.setProperty('--color-accent', color);
   };
 
   const handleFontSizeChange = (size: number) => {
     handleUpdate({ baseFontSize: size });
-    // Apply immediately for live preview
     document.documentElement.style.setProperty('--font-text-size', `${size}px`);
   };
 
@@ -85,7 +106,6 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
         ? '--font-text-theme'
         : '--font-monospace-theme';
 
-    // Apply immediately for live preview
     if (value) {
       document.documentElement.style.setProperty(cssVar, value);
     } else {
@@ -94,7 +114,6 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
   };
 
   const handleThemeSelect = (theme: string) => {
-    // Trigger onChange to handle theme loading through ThemeManager in App.tsx
     onChange({ cssTheme: theme });
   };
 
@@ -104,8 +123,30 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
       ? [...currentSnippets, snippet]
       : currentSnippets.filter((s) => s !== snippet);
 
-    // Trigger onChange to handle snippet loading through ThemeManager in App.tsx
     onChange({ enabledCssSnippets: updatedSnippets });
+  };
+
+  const handleThemeInstalled = async (themeName: string) => {
+    // Add the newly installed theme to the list
+    if (!availableThemes.includes(themeName)) {
+      setAvailableThemes((prev) => [...prev, themeName].sort());
+    }
+    // Optionally auto-select the installed theme
+    onChange({ cssTheme: themeName });
+  };
+
+  const reloadThemes = async () => {
+    if (!vaultPath) return;
+    try {
+      const themesPath = `${vaultPath}/.obsidian/themes`;
+      const entries = await invoke<Array<{ name: string; is_dir: boolean }>>('read_directory', {
+        path: themesPath,
+      });
+      const themes = entries.filter((e) => e.is_dir).map((e) => e.name);
+      setAvailableThemes(themes);
+    } catch {
+      // No themes folder
+    }
   };
 
   const fontOptions = [
@@ -133,47 +174,17 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
   ];
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '24px',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Theme Mode */}
       <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '12px',
-          }}
-        >
-          <Palette size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
-          <label
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: '#a1a1aa',
-              fontFamily: "'IBM Plex Mono', monospace",
-            }}
-          >
-            Base Theme
-          </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Palette size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          <label style={labelStyle}>Base Theme</label>
         </div>
-        <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-          }}
-        >
+        <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={() => {
               handleUpdate({ baseTheme: 'dark' });
-              // Apply theme mode immediately for live preview
               document.body.classList.remove('theme-dark', 'theme-light');
               document.body.classList.add('theme-dark');
             }}
@@ -186,24 +197,24 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
               padding: '10px 16px',
               fontSize: '13px',
               fontWeight: 500,
-              fontFamily: "'IBM Plex Mono', monospace",
-              backgroundColor: settings.baseTheme === 'dark' ? '#7c3aed' : '#27272a',
-              border: settings.baseTheme === 'dark' ? '1px solid #7c3aed' : '1px solid #3f3f46',
+              fontFamily: 'var(--font-interface)',
+              backgroundColor: settings.baseTheme === 'dark' ? 'var(--color-accent)' : 'var(--background-secondary)',
+              border: settings.baseTheme === 'dark' ? '1px solid var(--color-accent)' : '1px solid var(--background-modifier-border)',
               borderRadius: '2px',
               cursor: 'pointer',
-              color: settings.baseTheme === 'dark' ? 'white' : '#a1a1aa',
+              color: settings.baseTheme === 'dark' ? 'var(--text-on-accent)' : 'var(--text-muted)',
               transition: 'all 100ms ease',
             }}
             onMouseEnter={(e) => {
               if (settings.baseTheme !== 'dark') {
-                e.currentTarget.style.backgroundColor = '#3f3f46';
-                e.currentTarget.style.borderColor = '#52525b';
+                e.currentTarget.style.backgroundColor = 'var(--background-tertiary)';
+                e.currentTarget.style.borderColor = 'var(--background-modifier-border-hover)';
               }
             }}
             onMouseLeave={(e) => {
               if (settings.baseTheme !== 'dark') {
-                e.currentTarget.style.backgroundColor = '#27272a';
-                e.currentTarget.style.borderColor = '#3f3f46';
+                e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+                e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
               }
             }}
           >
@@ -213,7 +224,6 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
           <button
             onClick={() => {
               handleUpdate({ baseTheme: 'light' });
-              // Apply theme mode immediately for live preview
               document.body.classList.remove('theme-dark', 'theme-light');
               document.body.classList.add('theme-light');
             }}
@@ -226,24 +236,24 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
               padding: '10px 16px',
               fontSize: '13px',
               fontWeight: 500,
-              fontFamily: "'IBM Plex Mono', monospace",
-              backgroundColor: settings.baseTheme === 'light' ? '#7c3aed' : '#27272a',
-              border: settings.baseTheme === 'light' ? '1px solid #7c3aed' : '1px solid #3f3f46',
+              fontFamily: 'var(--font-interface)',
+              backgroundColor: settings.baseTheme === 'light' ? 'var(--color-accent)' : 'var(--background-secondary)',
+              border: settings.baseTheme === 'light' ? '1px solid var(--color-accent)' : '1px solid var(--background-modifier-border)',
               borderRadius: '2px',
               cursor: 'pointer',
-              color: settings.baseTheme === 'light' ? 'white' : '#a1a1aa',
+              color: settings.baseTheme === 'light' ? 'var(--text-on-accent)' : 'var(--text-muted)',
               transition: 'all 100ms ease',
             }}
             onMouseEnter={(e) => {
               if (settings.baseTheme !== 'light') {
-                e.currentTarget.style.backgroundColor = '#3f3f46';
-                e.currentTarget.style.borderColor = '#52525b';
+                e.currentTarget.style.backgroundColor = 'var(--background-tertiary)';
+                e.currentTarget.style.borderColor = 'var(--background-modifier-border-hover)';
               }
             }}
             onMouseLeave={(e) => {
               if (settings.baseTheme !== 'light') {
-                e.currentTarget.style.backgroundColor = '#27272a';
-                e.currentTarget.style.borderColor = '#3f3f46';
+                e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+                e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
               }
             }}
           >
@@ -255,35 +265,11 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
 
       {/* Accent Color */}
       <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '12px',
-          }}
-        >
-          <Palette size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
-          <label
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: '#a1a1aa',
-              fontFamily: "'IBM Plex Mono', monospace",
-            }}
-          >
-            Accent Color
-          </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Palette size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          <label style={labelStyle}>Accent Color</label>
         </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <input
             type="color"
             value={settings.accentColor || '#7c3aed'}
@@ -291,7 +277,7 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
             style={{
               width: '48px',
               height: '36px',
-              border: '1px solid #3f3f46',
+              border: '1px solid var(--background-modifier-border)',
               borderRadius: '2px',
               cursor: 'pointer',
               backgroundColor: 'transparent',
@@ -306,17 +292,7 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
                 handleAccentColorChange(color);
               }
             }}
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              fontSize: '13px',
-              fontFamily: "'IBM Plex Mono', monospace",
-              backgroundColor: '#27272a',
-              border: '1px solid #3f3f46',
-              borderRadius: '2px',
-              color: '#e4e4e7',
-              outline: 'none',
-            }}
+            style={{ ...inputStyle, flex: 1, cursor: 'text' }}
             placeholder="#7c3aed"
           />
         </div>
@@ -324,42 +300,12 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
 
       {/* Base Font Size */}
       <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '12px',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
-            <Type size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
-            <label
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                color: '#a1a1aa',
-                fontFamily: "'IBM Plex Mono', monospace",
-              }}
-            >
-              Base Font Size
-            </label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Type size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+            <label style={labelStyle}>Base Font Size</label>
           </div>
-          <span
-            style={{
-              fontSize: '12px',
-              color: '#a78bfa',
-              fontFamily: "'IBM Plex Mono', monospace",
-            }}
-          >
+          <span style={{ fontSize: '12px', color: 'var(--color-accent)', fontFamily: 'var(--font-interface)' }}>
             {settings.baseFontSize || 16}px
           </span>
         </div>
@@ -373,279 +319,181 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
             width: '100%',
             height: '4px',
             borderRadius: '2px',
-            background: '#3f3f46',
-            outline: 'none',
+            background: 'var(--background-modifier-border)',
             WebkitAppearance: 'none',
           }}
         />
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginTop: '4px',
-            fontSize: '11px',
-            color: '#71717a',
-            fontFamily: "'IBM Plex Mono', monospace",
-          }}
-        >
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '11px', color: 'var(--text-faint)', fontFamily: 'var(--font-interface)' }}>
           <span>12px</span>
           <span>18px</span>
           <span>24px</span>
         </div>
       </div>
 
-      {/* Font Family */}
+      {/* Interface Font */}
       <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '12px',
-          }}
-        >
-          <Type size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
-          <label
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: '#a1a1aa',
-              fontFamily: "'IBM Plex Mono', monospace",
-            }}
-          >
-            Interface Font
-          </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Type size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          <label style={labelStyle}>Interface Font</label>
         </div>
         <select
           value={settings.interfaceFontFamily || ''}
           onChange={(e) => handleFontChange('interfaceFontFamily', e.target.value)}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            fontSize: '13px',
-            fontFamily: "'IBM Plex Mono', monospace",
-            backgroundColor: '#27272a',
-            border: '1px solid #3f3f46',
-            borderRadius: '2px',
-            color: '#e4e4e7',
-            outline: 'none',
-            cursor: 'pointer',
-          }}
+          style={inputStyle}
         >
           <option value="">Default</option>
           {fontOptions.map((font) => (
-            <option key={font} value={font}>
-              {font || 'Default'}
-            </option>
+            <option key={font} value={font}>{font || 'Default'}</option>
           ))}
         </select>
       </div>
 
+      {/* Text Font */}
       <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '12px',
-          }}
-        >
-          <Type size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
-          <label
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: '#a1a1aa',
-              fontFamily: "'IBM Plex Mono', monospace",
-            }}
-          >
-            Text Font
-          </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Type size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          <label style={labelStyle}>Text Font</label>
         </div>
         <select
           value={settings.textFontFamily || ''}
           onChange={(e) => handleFontChange('textFontFamily', e.target.value)}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            fontSize: '13px',
-            fontFamily: "'IBM Plex Mono', monospace",
-            backgroundColor: '#27272a',
-            border: '1px solid #3f3f46',
-            borderRadius: '2px',
-            color: '#e4e4e7',
-            outline: 'none',
-            cursor: 'pointer',
-          }}
+          style={inputStyle}
         >
           <option value="">Default</option>
           {fontOptions.map((font) => (
-            <option key={font} value={font}>
-              {font || 'Default'}
-            </option>
+            <option key={font} value={font}>{font || 'Default'}</option>
           ))}
         </select>
       </div>
 
+      {/* Monospace Font */}
       <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '12px',
-          }}
-        >
-          <Type size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
-          <label
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: '#a1a1aa',
-              fontFamily: "'IBM Plex Mono', monospace",
-            }}
-          >
-            Monospace Font
-          </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Type size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          <label style={labelStyle}>Monospace Font</label>
         </div>
         <select
           value={settings.monospaceFontFamily || ''}
           onChange={(e) => handleFontChange('monospaceFontFamily', e.target.value)}
-          style={{
-            width: '100%',
-            padding: '8px 12px',
-            fontSize: '13px',
-            fontFamily: "'IBM Plex Mono', monospace",
-            backgroundColor: '#27272a',
-            border: '1px solid #3f3f46',
-            borderRadius: '2px',
-            color: '#e4e4e7',
-            outline: 'none',
-            cursor: 'pointer',
-          }}
+          style={inputStyle}
         >
           <option value="">Default</option>
           {monospaceFontOptions.map((font) => (
-            <option key={font} value={font}>
-              {font || 'Default'}
-            </option>
+            <option key={font} value={font}>{font || 'Default'}</option>
           ))}
         </select>
       </div>
 
       {/* Community Themes */}
       <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '12px',
-          }}
-        >
-          <Palette size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
-          <label
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: '#a1a1aa',
-              fontFamily: "'IBM Plex Mono', monospace",
-            }}
-          >
-            Community Theme
-          </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Palette size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          <label style={labelStyle}>Community Theme</label>
         </div>
         {loadingThemes ? (
-          <div
-            style={{
-              fontSize: '12px',
-              color: '#71717a',
-              fontFamily: "'IBM Plex Mono', monospace",
-            }}
-          >
+          <div style={{ fontSize: '12px', color: 'var(--text-faint)', fontFamily: 'var(--font-interface)' }}>
             Loading themes...
           </div>
         ) : (
-          <select
-            value={settings.cssTheme || ''}
-            onChange={(e) => handleThemeSelect(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              fontSize: '13px',
-              fontFamily: "'IBM Plex Mono', monospace",
-              backgroundColor: '#27272a',
-              border: '1px solid #3f3f46',
-              borderRadius: '2px',
-              color: '#e4e4e7',
-              outline: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            <option value="">Built-in (Default)</option>
-            {availableThemes.map((theme) => (
-              <option key={theme} value={theme}>
-                {theme}
-              </option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <select
+                value={settings.cssTheme || ''}
+                onChange={(e) => handleThemeSelect(e.target.value)}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  padding: '8px 12px',
+                  fontSize: '13px',
+                  fontFamily: 'var(--font-interface)',
+                  backgroundColor: 'var(--background-secondary)',
+                  border: '1px solid var(--background-modifier-border)',
+                  borderRadius: '2px',
+                  color: 'var(--text-normal)',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="">Built-in (Default)</option>
+                {availableThemes.map((theme) => (
+                  <option key={theme} value={theme}>{theme}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => setShowThemeBrowser(!showThemeBrowser)}
+                style={{
+                  flexShrink: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  fontSize: '12px',
+                  fontFamily: 'var(--font-interface)',
+                  fontWeight: 500,
+                  backgroundColor: showThemeBrowser ? 'var(--color-accent)' : 'var(--background-secondary)',
+                  color: showThemeBrowser ? 'var(--text-on-accent)' : 'var(--text-muted)',
+                  border: '1px solid var(--background-modifier-border)',
+                  borderRadius: '2px',
+                  cursor: 'pointer',
+                  transition: 'all 100ms ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!showThemeBrowser) {
+                    e.currentTarget.style.backgroundColor = 'var(--background-tertiary)';
+                    e.currentTarget.style.borderColor = 'var(--background-modifier-border-hover)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!showThemeBrowser) {
+                    e.currentTarget.style.backgroundColor = 'var(--background-secondary)';
+                    e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
+                  }
+                }}
+              >
+                <Download size={14} />
+                Browse
+                {showThemeBrowser ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+            </div>
+
+            {/* Theme Browser */}
+            {showThemeBrowser && (
+              <div style={{
+                backgroundColor: 'var(--background-primary)',
+                border: '1px solid var(--background-modifier-border)',
+                borderRadius: '4px',
+                padding: '16px',
+              }}>
+                <ThemeBrowser
+                  vaultPath={vaultPath}
+                  currentTheme={settings.cssTheme || ''}
+                  onThemeInstalled={handleThemeInstalled}
+                />
+              </div>
+            )}
+          </div>
         )}
       </div>
 
       {/* CSS Snippets */}
       <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '12px',
-          }}
-        >
-          <Type size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
-          <label
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: '#a1a1aa',
-              fontFamily: "'IBM Plex Mono', monospace",
-            }}
-          >
-            CSS Snippets
-          </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Type size={16} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+          <label style={labelStyle}>CSS Snippets</label>
         </div>
         {availableSnippets.length === 0 ? (
-          <div
-            style={{
-              fontSize: '12px',
-              color: '#71717a',
-              fontFamily: "'IBM Plex Mono', monospace",
-              padding: '12px',
-              backgroundColor: '#27272a',
-              borderRadius: '2px',
-              border: '1px dashed #3f3f46',
-            }}
-          >
+          <div style={{
+            fontSize: '12px',
+            color: 'var(--text-faint)',
+            fontFamily: 'var(--font-interface)',
+            padding: '12px',
+            backgroundColor: 'var(--background-secondary)',
+            borderRadius: '2px',
+            border: '1px dashed var(--background-modifier-border)',
+          }}>
             No CSS snippets found. Place .css files in .obsidian/snippets/
           </div>
         ) : (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-            }}
-          >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {availableSnippets.map((snippet) => (
               <label
                 key={snippet}
@@ -654,37 +502,26 @@ export function AppearanceSettingsTab({ settings, onChange, vaultPath }: Appeara
                   alignItems: 'center',
                   gap: '8px',
                   padding: '8px',
-                  backgroundColor: '#27272a',
-                  border: '1px solid #3f3f46',
+                  backgroundColor: 'var(--background-secondary)',
+                  border: '1px solid var(--background-modifier-border)',
                   borderRadius: '2px',
                   cursor: 'pointer',
                   transition: 'border-color 100ms ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#52525b';
+                  e.currentTarget.style.borderColor = 'var(--background-modifier-border-hover)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#3f3f46';
+                  e.currentTarget.style.borderColor = 'var(--background-modifier-border)';
                 }}
               >
                 <input
                   type="checkbox"
                   checked={(settings.enabledCssSnippets || []).includes(snippet)}
                   onChange={(e) => handleSnippetToggle(snippet, e.target.checked)}
-                  style={{
-                    width: '16px',
-                    height: '16px',
-                    flexShrink: 0,
-                    cursor: 'pointer',
-                  }}
+                  style={{ width: '16px', height: '16px', flexShrink: 0, cursor: 'pointer' }}
                 />
-                <span
-                  style={{
-                    fontSize: '13px',
-                    color: '#e4e4e7',
-                    fontFamily: "'IBM Plex Mono', monospace",
-                  }}
-                >
+                <span style={{ fontSize: '13px', color: 'var(--text-normal)', fontFamily: 'var(--font-interface)' }}>
                   {snippet}
                 </span>
               </label>

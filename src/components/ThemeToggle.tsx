@@ -19,18 +19,18 @@ export function ThemeToggle({ baseTheme, onThemeChange }: ThemeToggleProps) {
         height: '28px',
         border: 'none',
         background: 'transparent',
-        color: '#71717a',
+        color: 'var(--text-faint)',
         cursor: 'pointer',
         borderRadius: '2px',
         padding: '0',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = '#3f3f46';
-        e.currentTarget.style.color = '#e4e4e7';
+        e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+        e.currentTarget.style.color = 'var(--text-normal)';
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.backgroundColor = 'transparent';
-        e.currentTarget.style.color = '#71717a';
+        e.currentTarget.style.color = 'var(--text-faint)';
       }}
       title={`Toggle to ${isDark ? 'light' : 'dark'} theme`}
     >

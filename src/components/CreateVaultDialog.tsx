@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { X, FolderOpen } from 'lucide-react';
+import { FocusTrapWrapper } from './FocusTrapWrapper';
 import { CommandRegistry } from '../commands/registry';
 import type { CommandSource } from '../tools/types';
 
@@ -209,25 +210,26 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Create Vault"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        fontFamily: "var(--font-monospace-theme, var(--font-monospace))",
-      }}
-      onClick={handleCancel}
-    >
+    <FocusTrapWrapper>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create Vault"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          fontFamily: "var(--font-monospace-theme, var(--font-monospace))",
+        }}
+        onClick={handleCancel}
+      >
       <div
         style={{
           backgroundColor: 'var(--background-secondary)',
@@ -335,7 +337,6 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
                 border: '1px solid var(--background-modifier-border)',
                 borderRadius: '2px',
                 color: 'var(--text-normal)',
-                outline: 'none',
                 transition: 'border-color 100ms ease',
                 cursor: isCreating ? 'not-allowed' : 'text',
               }}
@@ -384,8 +385,7 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
                   border: '1px solid var(--background-modifier-border)',
                   borderRadius: '2px',
                   color: 'var(--text-normal)',
-                  outline: 'none',
-                  transition: 'border-color 100ms ease',
+                    transition: 'border-color 100ms ease',
                   cursor: isCreating ? 'not-allowed' : 'text',
                 }}
                 onFocus={(e) => {
@@ -523,8 +523,9 @@ export function CreateVaultDialog({ onClose, onVaultCreated }: CreateVaultDialog
               {isCreating ? 'Creating...' : 'Create Vault'}
             </button>
           </div>
+          </div>
         </div>
       </div>
-    </div>
+    </FocusTrapWrapper>
   );
 }
