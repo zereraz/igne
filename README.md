@@ -4,7 +4,7 @@ A fast, native markdown editor. Opens your Obsidian vaults.
 
 ## Download
 
-**[Download v0.4.0](https://github.com/zereraz/igne/releases/latest)** — macOS, Windows, Linux
+**[Download v0.4.1](https://github.com/zereraz/igne/releases/latest)** — macOS, Windows, Linux
 
 ## Why Igne?
 
