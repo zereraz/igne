@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Igne Editor</title>
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      -webkit-text-size-adjust: 100%;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: -apple-system, system-ui, 'Helvetica Neue', sans-serif;
+      background-color: var(--background-primary, #1e1e2e);
+      color: var(--text-normal, #cdd6f4);
+    }
+    #editor {
+      height: 100%;
+      width: 100%;
+    }
+    /* Ensure CM6 fills the container */
+    #editor .cm-editor {
+      height: 100%;
+    }
+    #editor .cm-scroller {
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* Larger touch targets for mobile */
+    .cm-task-checkbox {
+      min-width: 22px;
+      min-height: 22px;
+    }
+    .cm-wikilink, .cm-tag-pill {
+      padding: 2px 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="editor"></div>
+  <!-- CM6 bundle will be injected here by the build script -->
+  <script src="cm-bundle.js"></script>
+</body>
+</html>

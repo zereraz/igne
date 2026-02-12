@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Igne",
+    "slug": "igne",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "scheme": "igne",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1e1e2e"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.igne.mobile"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-asset"
+    ]
+  }
+}
