@@ -10,11 +10,23 @@ body {
    GLOBAL FOCUS INDICATORS — WCAG 2.4.7 Focus Visible
    ============================================================================= */
 
-/* Keyboard focus: purple ring on all interactive elements.
-   !important overrides inline outline:'none' that exists in many components. */
-:focus-visible {
+/* Keyboard focus: purple ring on interactive elements only.
+   Scoped to actual controls — not divs/sections that accidentally receive focus. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid var(--color-accent) !important;
   outline-offset: 2px !important;
+}
+
+/* CodeMirror editor: no focus ring — the cursor is the focus indicator */
+.cm-editor:focus-visible,
+.cm-editor *:focus-visible,
+.cm-editor [tabindex]:focus-visible {
+  outline: none !important;
 }
 
 /* Mouse/touch focus: no ring (browser default behavior preserved) */
@@ -134,8 +146,15 @@ body {
 /* Panel resize handle */
 .igne-resize-handle {
   width: 4px;
+  position: relative;
   background: transparent;
   transition: background-color 150ms ease;
+}
+/* Wider invisible hit area for easier grabbing */
+.igne-resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;
 }
 .igne-resize-handle[data-separator="hover"],
 .igne-resize-handle[data-separator="dragging"] {

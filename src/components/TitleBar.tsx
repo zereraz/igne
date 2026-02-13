@@ -1,32 +1,57 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { X, Settings } from 'lucide-react';
 import { OpenFile } from '../types';
 import { CommandRegistry } from '../commands/registry';
 import type { CommandSource } from '../tools/types';
 
+interface TabContextMenu {
+  path: string;
+  name: string;
+  x: number;
+  y: number;
+}
+
 interface TitleBarProps {
   openTabs: OpenFile[];
   activeTabPath: string | null;
   onTabClick: (path: string) => void;
   onTabClose: (path: string) => void;
+  onTabCloseOthers?: (path: string) => void;
   onFileNameChange: (name: string) => void;
   onOpenSettings?: () => void;
 }
 
 const source: CommandSource = 'ui';
 
+const ctxMenuItemStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  width: '100%',
+  padding: '6px 12px',
+  border: 'none',
+  background: 'transparent',
+  color: 'var(--text-normal)',
+  cursor: 'pointer',
+  textAlign: 'left',
+  fontSize: '12px',
+  fontFamily: 'var(--font-interface)',
+};
+
 export const TitleBar = memo(function TitleBar({
   openTabs,
   activeTabPath,
   onTabClick,
   onTabClose,
+  onTabCloseOthers,
   onFileNameChange,
   onOpenSettings,
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [editingTab, setEditingTab] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [tabContextMenu, setTabContextMenu] = useState<TabContextMenu | null>(null);
   const appWindow = getCurrentWindow();
 
   useEffect(() => {
@@ -63,6 +88,36 @@ export const TitleBar = memo(function TitleBar({
     CommandRegistry.execute('tab.close', source, path).catch(console.error);
     onTabClose(path); // Also call direct handler for immediate UI update
   };
+
+  // F2 to rename active tab
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F2' && activeTabPath) {
+        e.preventDefault();
+        const tab = openTabs.find(t => t.path === activeTabPath);
+        if (tab) {
+          setEditingTab(tab.path);
+          setEditValue(tab.name.replace(/\.md$/, ''));
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTabPath, openTabs]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    if (!tabContextMenu) return;
+    const dismiss = () => setTabContextMenu(null);
+    window.addEventListener('click', dismiss);
+    return () => window.removeEventListener('click', dismiss);
+  }, [tabContextMenu]);
+
+  const startRename = useCallback((path: string, name: string) => {
+    setEditingTab(path);
+    setEditValue(name.replace(/\.md$/, ''));
+    setTabContextMenu(null);
+  }, []);
 
   // Handle settings click via command registry (Phase D)
   const handleSettingsClick = () => {
@@ -107,6 +162,11 @@ export const TitleBar = memo(function TitleBar({
                 e.preventDefault();
                 handleTabClose(tab.path);
               }
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setTabContextMenu({ path: tab.path, name: tab.name, x: e.clientX, y: e.clientY });
             }}
             onDoubleClick={(e) => {
               e.stopPropagation();
@@ -282,6 +342,57 @@ export const TitleBar = memo(function TitleBar({
           </button>
         )}
       </div>
+
+      {/* Tab context menu */}
+      {tabContextMenu && (
+        <div
+          style={{
+            position: 'fixed',
+            top: tabContextMenu.y,
+            left: tabContextMenu.x,
+            zIndex: 9999,
+            backgroundColor: 'var(--background-secondary)',
+            border: '1px solid var(--background-modifier-border)',
+            borderRadius: '4px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            padding: '4px 0',
+            minWidth: '160px',
+            fontFamily: 'var(--font-interface)',
+            fontSize: '12px',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            style={ctxMenuItemStyle}
+            onClick={() => startRename(tabContextMenu.path, tabContextMenu.name)}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+          >
+            Rename
+            <span style={{ color: 'var(--text-faint)' }}>F2</span>
+          </button>
+          <div style={{ height: '1px', backgroundColor: 'var(--background-modifier-border)', margin: '4px 8px' }} />
+          <button
+            style={ctxMenuItemStyle}
+            onClick={() => { handleTabClose(tabContextMenu.path); setTabContextMenu(null); }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+          >
+            Close
+            <span style={{ color: 'var(--text-faint)' }}>⌘W</span>
+          </button>
+          {onTabCloseOthers && openTabs.length > 1 && (
+            <button
+              style={ctxMenuItemStyle}
+              onClick={() => { onTabCloseOthers(tabContextMenu.path); setTabContextMenu(null); }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+            >
+              Close Others
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 });

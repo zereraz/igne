@@ -55,6 +55,44 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
   onWikilinkCmdClickRef.current = onWikilinkCmdClick;
   currentFilePathRef.current = currentFilePath;
 
+  const closeSearchPanel = useCallback(() => {
+    setShowSearchPanel(false);
+    const view = viewRef.current;
+    if (view) {
+      view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: '' })) });
+    }
+    setSearchResultCount(undefined);
+    setCurrentResultIndex(undefined);
+  }, []);
+
+  // Close search panel when switching tabs
+  useEffect(() => {
+    closeSearchPanel();
+  }, [currentFilePath]);
+
+  // Close search panel on Escape or click outside
+  useEffect(() => {
+    if (!showSearchPanel) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeSearchPanel();
+        viewRef.current?.focus();
+      }
+    };
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-search-panel]')) {
+        closeSearchPanel();
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      window.removeEventListener('keydown', handleEsc);
+      window.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSearchPanel, closeSearchPanel]);
+
   // Search when query changes
   const performSearch = useCallback((query: string) => {
     setSearchResults(searchWikilinks(query));
@@ -194,12 +232,17 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
       setSearchResultCount(matches.length);
 
       if (matches.length > 0) {
-        // Navigate to first match from cursor position
-        findNext(view);
-        // Update current match index based on new cursor position
-        const cursor = view.state.selection.main.head;
-        const currentIdx = matches.findIndex(idx => idx >= cursor);
-        setCurrentResultIndex(currentIdx >= 0 ? currentIdx + 1 : 1);
+        // Always select the first match in the document on query change.
+        // findNext/findPrevious handle relative navigation.
+        const matchPos = matches[0];
+        pattern.lastIndex = matchPos;
+        const m = pattern.exec(doc);
+        const matchLen = m ? m[0].length : searchTerm.length;
+        view.dispatch({
+          selection: { anchor: matchPos, head: matchPos + matchLen },
+          scrollIntoView: true,
+        });
+        setCurrentResultIndex(1);
       } else {
         setCurrentResultIndex(undefined);
       }
@@ -327,6 +370,9 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         backgroundColor: 'var(--background-primary)',
         color: 'var(--text-normal)',
       },
+      '&.cm-focused': {
+        outline: 'none',
+      },
       '.cm-content': {
         caretColor: 'var(--color-accent)',
       },
@@ -340,12 +386,12 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         backgroundColor: 'var(--background-modifier-hover)',
       },
       '.cm-gutters': {
-        backgroundColor: 'var(--background-secondary)',
+        backgroundColor: 'var(--background-primary)',
         color: 'var(--text-faint)',
-        borderRight: '1px solid var(--background-modifier-border)',
+        border: 'none',
       },
       '.cm-activeLineGutter': {
-        backgroundColor: 'var(--background-modifier-hover)',
+        backgroundColor: 'transparent',
       },
       '.cm-foldPlaceholder': {
         backgroundColor: 'var(--background-secondary)',
@@ -495,12 +541,13 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         '.cm-scroller': {
           overflow: 'auto',
           fontFamily: 'var(--font-text-theme, var(--font-default, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif))',
+          backgroundColor: 'var(--background-primary)',
         },
         '.cm-content': {
           maxWidth: 'var(--readable-line-length, none)',
           marginLeft: 'auto',
           marginRight: 'auto',
-          padding: '2rem 4rem',
+          padding: '2rem 2rem',
         },
         '.cm-line': {
           padding: '0',
@@ -1020,7 +1067,7 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         height: '100%',
         width: '100%',
         backgroundColor: 'var(--background-primary)',
-        '--readable-line-length': readableLineLength ? '700px' : 'none',
+        '--readable-line-length': readableLineLength ? '900px' : 'none',
       } as React.CSSProperties}
     >
       {/* Wikilink Search Popup */}
@@ -1121,16 +1168,7 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           onFindPrevious={handleFindPrevious}
           onReplace={handleReplace}
           onReplaceAll={handleReplaceAll}
-          onClose={() => {
-            setShowSearchPanel(false);
-            // Clear search highlighting when panel closes
-            const view = viewRef.current;
-            if (view) {
-              view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: '' })) });
-            }
-            setSearchResultCount(undefined);
-            setCurrentResultIndex(undefined);
-          }}
+          onClose={closeSearchPanel}
           resultCount={searchResultCount}
           currentResult={currentResultIndex}
         />

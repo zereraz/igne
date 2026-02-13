@@ -237,6 +237,23 @@ function App() {
   const sidebarPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
 
+  // Switch right panel tab and ensure it's expanded
+  const switchRightPanel = useCallback((panel: 'backlinks' | 'outline' | 'tags' | 'graph' | 'starred') => {
+    setRightPanel(panel);
+    rightPanelRef.current?.expand();
+  }, [rightPanelRef]);
+
+  const toggleRightPanel = useCallback((panel: 'backlinks' | 'outline' | 'tags' | 'graph' | 'starred') => {
+    setRightPanel(prev => {
+      if (prev === panel) {
+        rightPanelRef.current?.collapse();
+        return prev;
+      }
+      rightPanelRef.current?.expand();
+      return panel;
+    });
+  }, [rightPanelRef]);
+
   // Persist panel layout across page reloads
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'igne-main-layout',
@@ -1369,7 +1386,7 @@ function App() {
       name: 'Toggle Graph View',
       icon: 'Graph',
       category: 'view',
-      callback: () => setRightPanel(prev => prev === 'graph' ? 'backlinks' : 'graph'),
+      callback: () => toggleRightPanel('graph'),
     });
 
     CommandRegistry.register({
@@ -1386,7 +1403,7 @@ function App() {
       name: 'Toggle Backlinks Panel',
       icon: 'Link2',
       category: 'view',
-      callback: () => setRightPanel(prev => prev === 'backlinks' ? 'outline' : 'backlinks'),
+      callback: () => toggleRightPanel('backlinks'),
     });
 
     CommandRegistry.register({
@@ -1394,7 +1411,7 @@ function App() {
       name: 'Toggle Outline Panel',
       icon: 'List',
       category: 'view',
-      callback: () => setRightPanel(prev => prev === 'outline' ? 'tags' : 'outline'),
+      callback: () => toggleRightPanel('outline'),
     });
 
     CommandRegistry.register({
@@ -1402,7 +1419,7 @@ function App() {
       name: 'Toggle Tags Panel',
       icon: 'Tags',
       category: 'view',
-      callback: () => setRightPanel(prev => prev === 'tags' ? 'starred' : 'tags'),
+      callback: () => toggleRightPanel('tags'),
     });
 
     // Workspace commands
@@ -1735,6 +1752,10 @@ function App() {
         activeTabPath={activeTabPath}
         onTabClick={setActive}
         onTabClose={closeTab}
+        onTabCloseOthers={(keepPath) => {
+          openTabs.forEach(t => { if (t.path !== keepPath) closeTab(t.path); });
+          setActive(keepPath);
+        }}
         onFileNameChange={handleFileNameChange}
         onOpenSettings={() => setShowSettings(true)}
       />}
@@ -1744,7 +1765,7 @@ function App() {
         {/* Ribbon - Left Icon Bar (fixed width, outside PanelGroup) */}
         {!focusMode && <Ribbon
           onNewNote={handleNewFile}
-          onOpenGraph={() => setRightPanel('graph')}
+          onOpenGraph={() => switchRightPanel('graph')}
           onOpenCommandPalette={() => setIsQuickSwitcherOpen(true)}
           onOpenSettings={() => setShowSettings(true)}
           onSwitchVault={handleOpenVault}
@@ -1761,7 +1782,7 @@ function App() {
                 panelRef={sidebarPanelRef}
                 id="sidebar"
                 defaultSize={20}
-                minSize={12}
+                minSize={5}
                 collapsible
                 collapsedSize={0}
                 onResize={(size) => {
@@ -1840,7 +1861,7 @@ function App() {
                 panelRef={rightPanelRef}
                 id="right-panel"
                 defaultSize={20}
-                minSize={12}
+                minSize={5}
                 collapsible
                 collapsedSize={0}
               >
@@ -1852,7 +1873,8 @@ function App() {
                     vaultPath={vaultPath}
                     rightPanel={rightPanel}
                     currentLine={currentLine}
-                    onRightPanelChange={setRightPanel}
+                    onRightPanelChange={switchRightPanel}
+                    onClose={() => rightPanelRef.current?.collapse()}
                     onScrollToPosition={setScrollToPosition}
                     onFileSelect={handleFileSelect}
                     onOpenQuickSwitcher={() => setIsQuickSwitcherOpen(true)}

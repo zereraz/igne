@@ -46,6 +46,8 @@ const styles = {
   editorContainer: {
     flex: 1,
     overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column' as const,
   },
 };
 

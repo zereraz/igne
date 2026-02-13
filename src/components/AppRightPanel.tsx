@@ -1,4 +1,4 @@
-import { Link2, List, Hash, Network, Star } from 'lucide-react';
+import { Link2, List, Hash, Network, Star, X } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { BacklinksPanel } from './BacklinksPanel';
 import { OutlinePanel } from './OutlinePanel';
@@ -15,6 +15,7 @@ interface AppRightPanelProps {
   rightPanel: 'backlinks' | 'outline' | 'tags' | 'graph' | 'starred';
   currentLine: number;
   onRightPanelChange: (panel: 'backlinks' | 'outline' | 'tags' | 'graph' | 'starred') => void;
+  onClose: () => void;
   onScrollToPosition: (pos: number) => void;
   onFileSelect: (path: string, newTab?: boolean) => void;
   onOpenQuickSwitcher: () => void;
@@ -30,6 +31,7 @@ export function AppRightPanel({
   rightPanel,
   currentLine,
   onRightPanelChange,
+  onClose,
   onScrollToPosition,
   onFileSelect,
   onOpenQuickSwitcher,
@@ -47,16 +49,17 @@ export function AppRightPanel({
         height: '100%',
       }}
     >
-      {/* Panel Toggle - Icon tabs */}
+      {/* Panel Toggle - Icon tabs + close */}
       <div
         style={{
           display: 'flex',
-          justifyContent: 'center',
+          alignItems: 'center',
           gap: '2px',
           padding: '6px 8px',
           borderBottom: '1px solid var(--background-modifier-border)',
         }}
       >
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: '2px' }}>
         {[
           { id: 'backlinks' as const, label: 'Backlinks', icon: <Link2 size={14} /> },
           { id: 'outline' as const, label: 'Outline', icon: <List size={14} /> },
@@ -97,6 +100,34 @@ export function AppRightPanel({
             {tab.icon}
           </button>
         ))}
+        </div>
+        <button
+          onClick={onClose}
+          title="Close panel"
+          style={{
+            width: '28px',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderRadius: '4px',
+            color: 'var(--text-faint)',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'var(--background-modifier-hover)';
+            e.currentTarget.style.color = 'var(--text-muted)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = 'var(--text-faint)';
+          }}
+        >
+          <X size={14} />
+        </button>
       </div>
       {/* Panel Content */}
       <div style={{ flex: 1, overflow: 'hidden' }}>

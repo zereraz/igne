@@ -91,6 +91,7 @@ export function SearchReplacePanel({
 
   return (
     <div
+      data-search-panel
       style={{
         position: 'absolute',
         top: '8px',
