@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { X, Settings } from 'lucide-react';
+import { X, PanelRight } from 'lucide-react';
 import { OpenFile } from '../types';
 import { CommandRegistry } from '../commands/registry';
 import type { CommandSource } from '../tools/types';
@@ -19,7 +19,7 @@ interface TitleBarProps {
   onTabClose: (path: string) => void;
   onTabCloseOthers?: (path: string) => void;
   onFileNameChange: (name: string) => void;
-  onOpenSettings?: () => void;
+  onToggleRightPanel?: () => void;
 }
 
 const source: CommandSource = 'ui';
@@ -46,7 +46,7 @@ export const TitleBar = memo(function TitleBar({
   onTabClose,
   onTabCloseOthers,
   onFileNameChange,
-  onOpenSettings,
+  onToggleRightPanel,
 }: TitleBarProps) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [editingTab, setEditingTab] = useState<string | null>(null);
@@ -119,11 +119,6 @@ export const TitleBar = memo(function TitleBar({
     setTabContextMenu(null);
   }, []);
 
-  // Handle settings click via command registry (Phase D)
-  const handleSettingsClick = () => {
-    CommandRegistry.execute('view.toggleSettings', source).catch(console.error);
-    if (onOpenSettings) onOpenSettings(); // Also call direct handler for immediate UI update
-  };
 
   return (
     <div
@@ -311,10 +306,10 @@ export const TitleBar = memo(function TitleBar({
         paddingLeft: '8px',
         paddingRight: '12px',
       }}>
-        {/* Settings Button */}
-        {onOpenSettings && (
+        {/* Toggle Right Sidebar */}
+        {onToggleRightPanel && (
           <button
-            onClick={handleSettingsClick}
+            onClick={onToggleRightPanel}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -336,9 +331,9 @@ export const TitleBar = memo(function TitleBar({
               e.currentTarget.style.backgroundColor = 'transparent';
               e.currentTarget.style.color = 'var(--text-faint)';
             }}
-            title="Settings (Cmd+,)"
+            title="Toggle right sidebar"
           >
-            <Settings size={14} />
+            <PanelRight size={14} />
           </button>
         )}
       </div>

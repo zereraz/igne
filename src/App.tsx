@@ -1757,7 +1757,13 @@ function App() {
           setActive(keepPath);
         }}
         onFileNameChange={handleFileNameChange}
-        onOpenSettings={() => setShowSettings(true)}
+        onToggleRightPanel={() => {
+          if (rightPanelRef.current?.isCollapsed()) {
+            rightPanelRef.current?.expand();
+          } else {
+            rightPanelRef.current?.collapse();
+          }
+        }}
       />}
 
       {/* Main Content */}
