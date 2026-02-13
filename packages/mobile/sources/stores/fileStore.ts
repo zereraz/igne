@@ -51,23 +51,33 @@ export const useFileStore = create<FileState>((set, get) => ({
     set({ loading: true, vaultUri });
     try {
       const files = await listMarkdownFiles(vaultUri);
-      // Sort by name for now (modifiedTime is 0 in SDK 54)
       files.sort((a, b) => a.name.localeCompare(b.name));
 
-      // Load previews for the first 50 files (async, non-blocking)
-      const withPreviews = await Promise.all(
-        files.slice(0, 50).map(async (f) => {
-          try {
-            const content = await readFileContent(f.path);
-            return { ...f, preview: extractPreview(content) };
-          } catch {
-            return f;
-          }
-        })
-      );
-      // Merge previews back with remaining files
-      const remaining = files.slice(50);
-      set({ files: [...withPreviews, ...remaining], loading: false });
+      // Show the list immediately — no waiting for previews
+      set({ files, loading: false });
+
+      // Load previews in the background, batched to avoid flooding
+      const batch = files.slice(0, 50);
+      for (let i = 0; i < batch.length; i += 5) {
+        const chunk = batch.slice(i, i + 5);
+        const previews = await Promise.all(
+          chunk.map(async (f) => {
+            try {
+              const content = await readFileContent(f.path);
+              return { path: f.path, preview: extractPreview(content) };
+            } catch (_e) {
+              return null;
+            }
+          })
+        );
+        // Merge previews into existing files
+        const current = get().files;
+        const updated = current.map((f) => {
+          const p = previews.find((pv) => pv && pv.path === f.path);
+          return p ? { ...f, preview: p.preview } : f;
+        });
+        set({ files: updated });
+      }
     } catch (err) {
       console.error('Failed to load files:', err);
       set({ loading: false });
