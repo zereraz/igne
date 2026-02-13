@@ -1,30 +1,23 @@
 import { File, Directory } from 'expo-file-system';
-import * as DocumentPicker from 'expo-document-picker';
 import type { VaultEntry } from '../stores/vaultStore';
 import type { FileEntry } from '../stores/fileStore';
 
 /**
- * Pick a vault folder from iCloud Drive (or local storage).
- * Returns a VaultEntry or null if cancelled.
+ * Pick a vault folder using the native iOS directory picker.
+ *
+ * Uses expo-file-system's Directory.pickDirectoryAsync() which
+ * presents a UIDocumentPickerViewController configured for folders.
+ * This grants full read/write access to the entire selected directory.
  */
 export async function pickVaultFolder(): Promise<VaultEntry | null> {
   try {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: '*/*',
-      copyToCacheDirectory: false,
-    });
+    const dir = await Directory.pickDirectoryAsync();
+    const name = decodeURIComponent(dir.uri.split('/').filter(Boolean).pop() || 'Vault');
 
-    if (result.canceled || !result.assets?.length) {
-      return null;
-    }
-
-    const asset = result.assets[0];
-    const uri = asset.uri;
-    const name = decodeURIComponent(uri.split('/').pop() || 'Vault');
-
-    return { uri, name, lastOpened: Date.now() };
+    return { uri: dir.uri, name, lastOpened: Date.now() };
   } catch (err) {
-    console.error('Failed to pick vault folder:', err);
+    // User cancelled or picker failed
+    console.error('[icloud] Pick vault failed:', err);
     return null;
   }
 }
@@ -67,7 +60,7 @@ export async function listMarkdownFiles(vaultUri: string): Promise<FileEntry[]> 
     const rootDir = new Directory(vaultUri);
     walk(rootDir, '');
   } catch (err) {
-    console.error('Failed to list vault files:', err);
+    console.error('[icloud] Failed to list vault files:', err);
   }
 
   return files;
@@ -79,9 +72,9 @@ export async function listMarkdownFiles(vaultUri: string): Promise<FileEntry[]> 
 export async function readFileContent(fileUri: string): Promise<string> {
   try {
     const file = new File(fileUri);
-    return file.text();
+    return await file.text();
   } catch (err) {
-    console.error('Failed to read file:', err);
+    console.error('[icloud] Failed to read file:', fileUri, err);
     return '';
   }
 }

@@ -14,7 +14,7 @@ export default function VaultLayout() {
       }}
     >
       <Stack.Screen name="index" />
-      <Stack.Screen name="[file]" />
+      <Stack.Screen name="editor" />
     </Stack>
   );
 }

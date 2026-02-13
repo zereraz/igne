@@ -10,7 +10,7 @@
 import { useEffect } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useNavigationContainerRef } from 'expo-router';
 import { useVaultStore, type VaultEntry } from '../sources/stores/vaultStore';
 import { pickVaultFolder } from '../sources/sync/icloud';
 import { useColors } from '../sources/theme/colors';
@@ -18,14 +18,22 @@ import { useColors } from '../sources/theme/colors';
 export default function VaultPicker() {
   const c = useColors();
   const { vaults, lastOpenedUri, addVault, setLastOpened } = useVaultStore();
+  const nav = useNavigationContainerRef();
 
-  // Auto-open last vault — user never sees this screen again after first use
+  // Auto-open last vault — wait for navigator to be ready first
   useEffect(() => {
-    if (lastOpenedUri) {
-      const vault = vaults.find((v) => v.uri === lastOpenedUri);
-      if (vault) {
+    if (!lastOpenedUri) return;
+    const vault = vaults.find((v) => v.uri === lastOpenedUri);
+    if (!vault) return;
+
+    if (nav?.isReady()) {
+      openVault(vault);
+    } else {
+      const unsub = nav?.addListener('state', () => {
         openVault(vault);
-      }
+        unsub?.();
+      });
+      return () => unsub?.();
     }
   }, []);
 
@@ -74,7 +82,7 @@ export default function VaultPicker() {
             lineHeight: 22,
           }}
         >
-          Open your vault from iCloud Drive{'\n'}to get started.
+          Open your vault folder{'\n'}to get started.
         </Text>
 
         {/* Previous vaults — if any */}
@@ -113,7 +121,7 @@ export default function VaultPicker() {
           })}
         >
           <Text style={{ color: c.accent, fontSize: 15, fontWeight: '500' }}>
-            Open from iCloud
+            Open vault folder
           </Text>
         </Pressable>
       </View>

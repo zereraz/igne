@@ -29,24 +29,42 @@ import { useVaultStore } from '../../sources/stores/vaultStore';
 import { useColors } from '../../sources/theme/colors';
 
 export default function Stream() {
-  const { uri, name } = useLocalSearchParams<{ uri: string; name: string }>();
+  const params = useLocalSearchParams<{ uri: string; name: string }>();
+  const uri = Array.isArray(params.uri) ? params.uri[0] : params.uri;
+  const name = Array.isArray(params.name) ? params.name[0] : params.name;
+
   const c = useColors();
   const [query, setQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const searchRef = useRef<TextInput>(null);
 
   const { files, loading, loadFiles, searchFiles } = useFileStore();
   const { lastOpenedFile, setLastOpenedFile } = useVaultStore();
 
   useEffect(() => {
-    if (uri) loadFiles(uri);
+    if (uri) {
+      setError(null);
+      loadFiles(uri).catch((_err) => {
+        setError('Failed to read vault');
+      });
+    } else {
+      setError('No vault selected');
+    }
   }, [uri]);
 
   const filteredFiles = query ? searchFiles(query) : files;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    if (uri) await loadFiles(uri);
+    setError(null);
+    if (uri) {
+      try {
+        await loadFiles(uri);
+      } catch (_err) {
+        setError('Failed to read vault');
+      }
+    }
     setRefreshing(false);
   }, [uri]);
 
@@ -54,7 +72,7 @@ export default function Stream() {
     Keyboard.dismiss();
     setLastOpenedFile(file.path);
     router.push({
-      pathname: '/(vault)/[file]',
+      pathname: '/(vault)/editor',
       params: { file: file.path, uri: uri!, name: name! },
     });
   };
@@ -62,17 +80,15 @@ export default function Stream() {
   const resumeLastFile = () => {
     if (lastOpenedFile) {
       router.push({
-        pathname: '/(vault)/[file]',
+        pathname: '/(vault)/editor',
         params: { file: lastOpenedFile, uri: uri!, name: name! },
       });
     }
   };
 
-  // Extract display name from a file path
   const displayName = (file: FileEntry) =>
     file.name.replace(/\.md$/, '');
 
-  // Extract the last file's name for the resume bar
   const lastFileName = lastOpenedFile
     ? decodeURIComponent(lastOpenedFile.split('/').pop() || '').replace(/\.md$/, '')
     : null;
@@ -214,9 +230,11 @@ export default function Stream() {
             <Text style={{ color: c.textMuted, fontSize: 14, textAlign: 'center' }}>
               {loading
                 ? 'Loading...'
-                : query
-                  ? 'No notes match your search'
-                  : 'No markdown files found'}
+                : error
+                  ? error
+                  : query
+                    ? 'No notes match your search'
+                    : 'No markdown files found'}
             </Text>
           </View>
         }

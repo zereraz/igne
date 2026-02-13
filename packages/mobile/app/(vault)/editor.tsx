@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { EditorWebView } from '../../sources/editor/EditorWebView';
@@ -20,11 +20,14 @@ import { useVaultStore } from '../../sources/stores/vaultStore';
 import { useColors } from '../../sources/theme/colors';
 
 export default function EditorScreen() {
-  const { file, uri, name } = useLocalSearchParams<{
+  const params = useLocalSearchParams<{
     file: string;
     uri: string;
     name: string;
   }>();
+  const file = Array.isArray(params.file) ? params.file[0] : params.file;
+  const uri = Array.isArray(params.uri) ? params.uri[0] : params.uri;
+  const name = Array.isArray(params.name) ? params.name[0] : params.name;
   const c = useColors();
   const [content, setContent] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -98,7 +101,7 @@ export default function EditorScreen() {
       const resolved = resolveWikilink(target);
       if (resolved) {
         router.push({
-          pathname: '/(vault)/[file]',
+          pathname: '/(vault)/editor',
           params: { file: resolved, uri: uri!, name: name! },
         });
       }
@@ -109,17 +112,27 @@ export default function EditorScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
-      {/* Header — filename and nothing else */}
+      {/* Header */}
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          paddingHorizontal: 16,
+          paddingHorizontal: 12,
           paddingVertical: 10,
           borderBottomWidth: 1,
           borderBottomColor: c.border,
         }}
       >
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={8}
+          style={({ pressed }) => ({
+            paddingRight: 12,
+            opacity: pressed ? 0.5 : 1,
+          })}
+        >
+          <Text style={{ fontSize: 22, color: c.accent }}>‹</Text>
+        </Pressable>
         {isDirty && (
           <View
             style={{

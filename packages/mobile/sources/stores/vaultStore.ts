@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import { createMMKV, type MMKV } from 'react-native-mmkv';
 
-const storage: MMKV = createMMKV({ id: 'igne-vaults' });
+let _storage: MMKV | null = null;
+function getStorage(): MMKV {
+  if (!_storage) _storage = createMMKV({ id: 'igne-vaults' });
+  return _storage;
+}
 
 export interface VaultEntry {
   uri: string;
@@ -21,23 +25,23 @@ interface VaultState {
 }
 
 function loadVaults(): VaultEntry[] {
-  const raw = storage.getString('vaults');
+  const raw = getStorage().getString('vaults');
   if (!raw) return [];
   try {
     return JSON.parse(raw);
-  } catch {
+  } catch (_e) {
     return [];
   }
 }
 
 function saveVaults(vaults: VaultEntry[]) {
-  storage.set('vaults', JSON.stringify(vaults));
+  getStorage().set('vaults', JSON.stringify(vaults));
 }
 
 export const useVaultStore = create<VaultState>((set, get) => ({
   vaults: loadVaults(),
-  lastOpenedUri: storage.getString('lastOpenedUri') ?? null,
-  lastOpenedFile: storage.getString('lastOpenedFile') ?? null,
+  lastOpenedUri: getStorage().getString('lastOpenedUri') || null,
+  lastOpenedFile: getStorage().getString('lastOpenedFile') || null,
 
   addVault: (vault) => {
     const existing = get().vaults;
@@ -54,7 +58,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   },
 
   setLastOpened: (uri) => {
-    storage.set('lastOpenedUri', uri);
+    getStorage().set('lastOpenedUri', uri);
     const vaults = get().vaults.map((v) =>
       v.uri === uri ? { ...v, lastOpened: Date.now() } : v
     );
@@ -64,9 +68,9 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
   setLastOpenedFile: (fileUri) => {
     if (fileUri) {
-      storage.set('lastOpenedFile', fileUri);
+      getStorage().set('lastOpenedFile', fileUri);
     } else {
-      storage.remove('lastOpenedFile');
+      getStorage().remove('lastOpenedFile');
     }
     set({ lastOpenedFile: fileUri });
   },

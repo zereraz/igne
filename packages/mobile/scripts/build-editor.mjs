@@ -83,7 +83,7 @@ async function build() {
     bundle: true,
     write: false,
     format: 'iife',
-    target: ['es2020'],
+    target: ['safari14'],
     minify: isProduction,
     sourcemap: false,
     nodePaths: [resolve(igneRoot, 'node_modules')],
