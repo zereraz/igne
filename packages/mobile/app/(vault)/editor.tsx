@@ -10,14 +10,16 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { EditorWebView } from '../../sources/editor/EditorWebView';
+import { EditorWebView, type EditorWebViewHandle } from '../../sources/editor/EditorWebView';
 import { readFileContent, writeFileContent } from '../../sources/sync/icloud';
 import { useFileStore } from '../../sources/stores/fileStore';
 import { useVaultStore } from '../../sources/stores/vaultStore';
 import { useColors } from '../../sources/theme/colors';
+import { SlashCommandPalette } from '../../sources/ai/SlashCommandPalette';
+import { useAIStore } from '../../sources/ai/aiStore';
 
 export default function EditorScreen() {
   const params = useLocalSearchParams<{
@@ -31,8 +33,11 @@ export default function EditorScreen() {
   const c = useColors();
   const [content, setContent] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
+  const [showSlashPalette, setShowSlashPalette] = useState(false);
+  const [selection, setSelection] = useState('');
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestContentRef = useRef<string | null>(null);
+  const editorRef = useRef<EditorWebViewHandle>(null);
 
   const { resolveWikilink } = useFileStore();
   const { setLastOpenedFile } = useVaultStore();
@@ -110,6 +115,33 @@ export default function EditorScreen() {
     [resolveWikilink, uri, name]
   );
 
+  const handleSlashTrigger = useCallback(() => {
+    // Only show slash palette if AI server is configured
+    if (useAIStore.getState().serverUrl) {
+      setShowSlashPalette(true);
+    }
+  }, []);
+
+  const handleSlashDismiss = useCallback(() => {
+    setShowSlashPalette(false);
+  }, []);
+
+  const handleSelectionChange = useCallback((text: string) => {
+    setSelection(text);
+  }, []);
+
+  const handleAIResult = useCallback(
+    (text: string, mode: 'insert' | 'replace') => {
+      setShowSlashPalette(false);
+      if (mode === 'replace') {
+        editorRef.current?.replaceSelection(text);
+      } else {
+        editorRef.current?.insertText(text);
+      }
+    },
+    []
+  );
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       {/* Header */}
@@ -159,13 +191,30 @@ export default function EditorScreen() {
 
       {/* Editor — takes everything */}
       {content !== null ? (
-        <EditorWebView
-          content={content}
-          theme={c.isDark ? 'dark' : 'light'}
-          onChange={handleContentChange}
-          onWikilinkClick={handleWikilinkClick}
-          style={{ backgroundColor: c.bg }}
-        />
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <EditorWebView
+            ref={editorRef}
+            content={content}
+            colors={c}
+            onChange={handleContentChange}
+            onWikilinkClick={handleWikilinkClick}
+            onSlashTrigger={handleSlashTrigger}
+            onSlashDismiss={handleSlashDismiss}
+            onSelectionChange={handleSelectionChange}
+            style={{ flex: 1, backgroundColor: c.bg }}
+          />
+          <SlashCommandPalette
+            visible={showSlashPalette}
+            noteContent={content}
+            selection={selection}
+            colors={c}
+            onDismiss={() => setShowSlashPalette(false)}
+            onResult={handleAIResult}
+          />
+        </KeyboardAvoidingView>
       ) : (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text style={{ color: c.textMuted, fontSize: 14 }}>Loading...</Text>
