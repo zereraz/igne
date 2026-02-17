@@ -28,6 +28,9 @@ const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   nativeMenus: true,
   framelessWindow: false,
   lineWrapping: true,
+  aiServerUrl: 'http://localhost:9091',
+  aiProvider: 'anthropic',
+  aiModel: 'claude-sonnet-4-20250514',
 };
 
 class GlobalSettingsStore {

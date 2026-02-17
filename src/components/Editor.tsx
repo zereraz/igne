@@ -12,12 +12,36 @@ import { handleImagePaste, handleImageDrop } from '../utils/imageHandler';
 import { extractHeadingContent, headingCache } from '../utils/headingFinder';
 import { safeArrayIndex } from '../utils/clamp';
 import { SearchReplacePanel, FindOptions } from './SearchReplacePanel';
+import { complete } from '../services/aiService';
+import { summarizePrompt, continuePrompt, fixPrompt, askPrompt } from '../services/aiPrompts';
+import { globalSettingsStore } from '../stores/GlobalSettingsStore';
 import type { WikilinkSearchResult, EditorChangeHandler, WikilinkClickHandler } from '../types';
 
 interface WikilinkSearchState {
   position: { top: number; left: number };
   query: string;
 }
+
+interface SlashCommandState {
+  position: { top: number; left: number };
+  slashPos: number;
+  phase: 'select' | 'input';
+  selectedCommand?: SlashCommand;
+}
+
+interface SlashCommand {
+  id: 'summarize' | 'continue' | 'fix' | 'ask';
+  label: string;
+  description: string;
+  needsInput: boolean;
+}
+
+const SLASH_COMMANDS: SlashCommand[] = [
+  { id: 'summarize', label: '/summarize', description: 'Summarize this note', needsInput: false },
+  { id: 'continue', label: '/continue', description: 'Continue writing', needsInput: false },
+  { id: 'fix', label: '/fix', description: 'Fix selected text', needsInput: false },
+  { id: 'ask', label: '/ask', description: 'Ask about this note', needsInput: true },
+];
 
 interface EditorProps {
   content: string;
@@ -48,6 +72,15 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
   const [searchResultCount, setSearchResultCount] = useState<number | undefined>();
   const [currentResultIndex, setCurrentResultIndex] = useState<number | undefined>();
   const scrollPositionRef = useRef<number>(0);
+
+  // Slash command state
+  const [slashCommand, setSlashCommand] = useState<SlashCommandState | null>(null);
+  const [slashFilter, setSlashFilter] = useState('');
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const [slashInput, setSlashInput] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const slashCommandRef = useRef<SlashCommandState | null>(null);
+  slashCommandRef.current = slashCommand;
 
   // Keep refs updated
   onChangeRef.current = onChange;
@@ -480,6 +513,42 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
           },
         },
       ]),
+      // Slash command trigger: "/" at empty line start
+      keymap.of([
+        {
+          key: '/',
+          run: (view) => {
+            const pos = view.state.selection.main.head;
+            const line = view.state.doc.lineAt(pos);
+            const textBefore = line.text.slice(0, pos - line.from);
+
+            // Only trigger on empty line (or whitespace-only before cursor)
+            if (textBefore.trim() !== '') return false;
+
+            // Check if AI server is configured
+            const settings = globalSettingsStore.getSettings();
+            if (!settings.aiServerUrl) return false;
+
+            // Insert the "/" and show popup
+            view.dispatch({
+              changes: { from: pos, to: pos, insert: '/' },
+              selection: { anchor: pos + 1 },
+            });
+
+            const coords = view.coordsAtPos(pos + 1);
+            if (coords) {
+              setSlashCommand({
+                position: { top: coords.bottom + 4, left: coords.left },
+                slashPos: line.from,
+                phase: 'select',
+              });
+              setSlashFilter('');
+              setSlashSelectedIndex(0);
+            }
+            return true;
+          },
+        },
+      ]),
       createLivePreview({
         onWikilinkClick: (target: string) => onWikilinkClickRef.current?.(target),
         onWikilinkCmdClick: (target: string) => onWikilinkCmdClickRef.current?.(target),
@@ -524,6 +593,18 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
         if (update.docChanged) {
           const newContent = update.state.doc.toString();
           onChangeRef.current(currentFilePathRef.current || '', newContent);
+
+          // Track slash command filter
+          if (slashCommandRef.current?.phase === 'select') {
+            const pos = update.state.selection.main.head;
+            const line = update.state.doc.lineAt(pos);
+            if (line.text.startsWith('/')) {
+              setSlashFilter(line.text.slice(1));
+              setSlashSelectedIndex(0);
+            } else {
+              setSlashCommand(null);
+            }
+          }
         }
         if (update.selectionSet) {
           const cursorPos = update.state.selection.main.head;
@@ -998,6 +1079,104 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
     fetchHeadingContent();
   }, [content, refreshTrigger]);
 
+  // Execute a slash command
+  const executeSlashCommand = useCallback(async (command: SlashCommand, askQuestion?: string) => {
+    const view = viewRef.current;
+    if (!view) return;
+
+    const settings = globalSettingsStore.getSettings();
+    if (!settings.aiServerUrl) {
+      setSlashCommand(null);
+      return;
+    }
+
+    setAiGenerating(true);
+    setSlashCommand(null);
+
+    const doc = view.state.doc.toString();
+    const sel = view.state.sliceDoc(
+      view.state.selection.main.from,
+      view.state.selection.main.to
+    );
+
+    let messages;
+    switch (command.id) {
+      case 'summarize': messages = summarizePrompt(doc); break;
+      case 'continue': messages = continuePrompt(doc); break;
+      case 'fix': messages = fixPrompt(sel || doc); break;
+      case 'ask': messages = askPrompt(doc, askQuestion || ''); break;
+    }
+
+    try {
+      const result = await complete(settings.aiServerUrl, settings.aiProvider, settings.aiModel, messages);
+
+      if (command.id === 'fix' && view.state.selection.main.from !== view.state.selection.main.to) {
+        // /fix with selection: replace selected text
+        const { from, to } = view.state.selection.main;
+        view.dispatch({ changes: { from, to, insert: result } });
+      } else {
+        // Replace the "/" line
+        const pos = view.state.selection.main.head;
+        const line = view.state.doc.lineAt(pos);
+        view.dispatch({ changes: { from: line.from, to: line.to, insert: result } });
+      }
+    } catch (err: any) {
+      console.error('[ai] Error:', err.message);
+    } finally {
+      setAiGenerating(false);
+    }
+  }, []);
+
+  // Keyboard handler for slash command popup (capture phase to beat CM6)
+  useEffect(() => {
+    if (!slashCommand) return;
+
+    const handler = (e: KeyboardEvent) => {
+      if (slashCommand.phase === 'select') {
+        const filtered = SLASH_COMMANDS.filter(c => c.label.includes('/' + slashFilter));
+        if (e.key === 'ArrowDown') {
+          e.preventDefault(); e.stopPropagation();
+          setSlashSelectedIndex(i => Math.min(i + 1, filtered.length - 1));
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault(); e.stopPropagation();
+          setSlashSelectedIndex(i => Math.max(i - 1, 0));
+        } else if (e.key === 'Enter' && filtered.length > 0) {
+          e.preventDefault(); e.stopPropagation();
+          const cmd = filtered[slashSelectedIndex] || filtered[0];
+          if (cmd.needsInput) {
+            setSlashCommand(prev => prev ? { ...prev, phase: 'input', selectedCommand: cmd } : null);
+            setSlashInput('');
+          } else {
+            executeSlashCommand(cmd);
+          }
+        } else if (e.key === 'Escape') {
+          e.preventDefault(); e.stopPropagation();
+          setSlashCommand(null);
+        }
+      } else if (slashCommand.phase === 'input') {
+        if (e.key === 'Escape') {
+          e.preventDefault(); e.stopPropagation();
+          setSlashCommand(null);
+        }
+        // Enter for input is handled by the React input's onKeyDown
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-slash-popup]')) {
+        setSlashCommand(null);
+      }
+    };
+
+    window.addEventListener('keydown', handler, true);
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      window.removeEventListener('keydown', handler, true);
+      window.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [slashCommand, slashFilter, slashSelectedIndex, executeSlashCommand]);
+
   // Handle image paste and drop
   useEffect(() => {
     const container = containerRef.current;
@@ -1157,6 +1336,135 @@ export function Editor({ content, onChange, onWikilinkClick, onWikilinkCmdClick,
               No notes found
             </div>
           )}
+        </div>
+      )}
+
+      {/* Slash Command Popup — select phase */}
+      {slashCommand?.phase === 'select' && (() => {
+        const filtered = SLASH_COMMANDS.filter(c => c.label.includes('/' + slashFilter));
+        return (
+          <div
+            data-slash-popup
+            style={{
+              position: 'fixed',
+              top: slashCommand.position.top + 200 > window.innerHeight
+                ? Math.max(0, slashCommand.position.top - 200)
+                : slashCommand.position.top,
+              left: slashCommand.position.left,
+              zIndex: 1000,
+              minWidth: '220px',
+              backgroundColor: 'var(--background-secondary)',
+              border: '1px solid var(--background-modifier-border)',
+              borderRadius: '2px',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+              overflow: 'hidden',
+            }}
+          >
+            {filtered.map((cmd, index) => (
+              <div
+                key={cmd.id}
+                onClick={() => {
+                  if (cmd.needsInput) {
+                    setSlashCommand(prev => prev ? { ...prev, phase: 'input', selectedCommand: cmd } : null);
+                    setSlashInput('');
+                  } else {
+                    executeSlashCommand(cmd);
+                  }
+                }}
+                onMouseEnter={() => setSlashSelectedIndex(index)}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  backgroundColor: index === slashSelectedIndex ? 'rgba(var(--color-accent-rgb), 0.15)' : 'transparent',
+                  borderLeft: index === slashSelectedIndex ? '2px solid var(--color-accent)' : '2px solid transparent',
+                  color: index === slashSelectedIndex ? 'var(--text-normal)' : 'var(--text-muted)',
+                  fontSize: '12px',
+                  fontFamily: 'var(--font-interface)',
+                }}
+              >
+                <div style={{ fontWeight: 'bold' }}>{cmd.label}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-faint)', marginTop: '2px' }}>{cmd.description}</div>
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-faint)', fontSize: '12px', fontFamily: 'var(--font-interface)' }}>
+                No matching commands
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Slash Command Popup — input phase (/ask) */}
+      {slashCommand?.phase === 'input' && (
+        <div
+          data-slash-popup
+          style={{
+            position: 'fixed',
+            top: slashCommand.position.top + 100 > window.innerHeight
+              ? Math.max(0, slashCommand.position.top - 100)
+              : slashCommand.position.top,
+            left: slashCommand.position.left,
+            zIndex: 1000,
+            minWidth: '280px',
+            backgroundColor: 'var(--background-secondary)',
+            border: '1px solid var(--background-modifier-border)',
+            borderRadius: '2px',
+            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5)',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ padding: '10px 12px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginBottom: '6px', fontFamily: 'var(--font-interface)' }}>
+              Ask about this note:
+            </div>
+            <input
+              type="text"
+              value={slashInput}
+              onChange={e => setSlashInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && slashInput.trim()) {
+                  e.preventDefault();
+                  executeSlashCommand(slashCommand.selectedCommand!, slashInput.trim());
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setSlashCommand(null);
+                }
+              }}
+              placeholder="Type your question..."
+              autoFocus
+              style={{
+                width: '100%',
+                backgroundColor: 'transparent',
+                border: 'none',
+                borderBottom: '1px solid var(--background-modifier-border)',
+                color: 'var(--text-normal)',
+                fontSize: '13px',
+                fontFamily: 'var(--font-interface)',
+                padding: '6px 0',
+                outline: 'none',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* AI Loading Toast */}
+      {aiGenerating && (
+        <div style={{
+          position: 'fixed',
+          bottom: '40px',
+          right: '20px',
+          zIndex: 999,
+          padding: '8px 16px',
+          backgroundColor: 'var(--background-secondary)',
+          border: '1px solid var(--background-modifier-border)',
+          borderRadius: '4px',
+          fontSize: '12px',
+          color: 'var(--text-muted)',
+          fontFamily: 'var(--font-interface)',
+        }}>
+          AI generating...
         </div>
       )}
 

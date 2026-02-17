@@ -383,6 +383,9 @@ export interface GlobalSettings {
   nativeMenus: boolean;
   framelessWindow: boolean;
   lineWrapping: boolean;
+  aiServerUrl: string;
+  aiProvider: string;
+  aiModel: string;
 }
 
 // --- Vault Settings ---
