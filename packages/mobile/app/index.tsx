@@ -8,11 +8,11 @@
  */
 
 import { useEffect } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useNavigationContainerRef } from 'expo-router';
 import { useVaultStore, type VaultEntry } from '../sources/stores/vaultStore';
-import { pickVaultFolder } from '../sources/sync/icloud';
+import { pickVaultFolder, isVaultAccessible } from '../sources/sync/icloud';
 import { useColors } from '../sources/theme/colors';
 
 export default function VaultPicker() {
@@ -20,11 +20,14 @@ export default function VaultPicker() {
   const { vaults, lastOpenedUri, addVault, setLastOpened } = useVaultStore();
   const nav = useNavigationContainerRef();
 
-  // Auto-open last vault — wait for navigator to be ready first
+  // Auto-open last vault — wait for navigator to be ready, validate URI first
   useEffect(() => {
     if (!lastOpenedUri) return;
     const vault = vaults.find((v) => v.uri === lastOpenedUri);
     if (!vault) return;
+
+    // Security-scoped URIs expire between sessions — check before navigating
+    if (!isVaultAccessible(vault.uri)) return;
 
     if (nav?.isReady()) {
       openVault(vault);
@@ -38,6 +41,14 @@ export default function VaultPicker() {
   }, []);
 
   const openVault = (vault: VaultEntry) => {
+    if (!isVaultAccessible(vault.uri)) {
+      Alert.alert(
+        'Vault access expired',
+        'iOS revoked access to this folder. Please re-open it.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     setLastOpened(vault.uri);
     router.replace({
       pathname: '/(vault)',

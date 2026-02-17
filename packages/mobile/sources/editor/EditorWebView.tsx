@@ -6,38 +6,66 @@
  * Edits are sent back via postMessage as plain text.
  */
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import type { Colors } from '../theme/colors';
+
+export interface EditorWebViewHandle {
+  insertText: (text: string) => void;
+  replaceSelection: (text: string) => void;
+  getContent: () => string | null;
+}
 
 interface EditorWebViewProps {
   content: string;
-  theme: 'dark' | 'light';
+  colors: Colors & { isDark: boolean };
   onChange: (content: string) => void;
   onWikilinkClick?: (target: string) => void;
   onReady?: () => void;
+  onSlashTrigger?: () => void;
+  onSlashDismiss?: () => void;
+  onSelectionChange?: (text: string) => void;
   style?: object;
 }
 
-export function EditorWebView({
-  content,
-  theme,
-  onChange,
-  onWikilinkClick,
-  onReady,
-  style,
-}: EditorWebViewProps) {
+export const EditorWebView = forwardRef<EditorWebViewHandle, EditorWebViewProps>(function EditorWebView(
+  {
+    content,
+    colors,
+    onChange,
+    onWikilinkClick,
+    onReady,
+    onSlashTrigger,
+    onSlashDismiss,
+    onSelectionChange,
+    style,
+  },
+  ref
+) {
   const webviewRef = useRef<WebView>(null);
   const initialContentRef = useRef(content);
+  const latestContentRef = useRef(content);
 
-  const isDark = theme === 'dark';
-  const bg = isDark ? '#1e1e2e' : '#ffffff';
-  const fg = isDark ? '#cdd6f4' : '#1e1e2e';
-  const muted = isDark ? '#a6adc8' : '#5c5f77';
-  const faint = isDark ? '#6c7086' : '#9399b2';
-  const accent = isDark ? '#89b4fa' : '#1e66f5';
-  const codeBg = isDark ? '#313244' : '#f5f5f5';
-  const border = isDark ? '#45475a' : '#e6e6e6';
-  const hoverBg = isDark ? '#313244' : '#f0f0f0';
+  useImperativeHandle(ref, () => ({
+    insertText: (text: string) => {
+      const escaped = JSON.stringify(text);
+      webviewRef.current?.injectJavaScript(`window.__insertAtCursor(${escaped}); true;`);
+    },
+    replaceSelection: (text: string) => {
+      const escaped = JSON.stringify(text);
+      webviewRef.current?.injectJavaScript(`window.__replaceSelection(${escaped}); true;`);
+    },
+    getContent: () => latestContentRef.current,
+  }));
+
+  const bg = colors.bg;
+  const fg = colors.text;
+  const muted = colors.textSecondary;
+  const faint = colors.textMuted;
+  const accent = colors.accent;
+  const codeBg = colors.surface;
+  const border = colors.border;
+  const hoverBg = colors.surfaceHover;
 
   // Pass raw markdown as JSON string to avoid HTML injection issues
   const contentJson = JSON.stringify(initialContentRef.current);
@@ -208,12 +236,172 @@ function render(md) {
 
 ed.innerHTML = render(CONTENT);
 
-// On edit, send plain text back
+// ── Cursor save/restore via character offset ──────────────────────
+
+function getCursorOffset(container) {
+  var sel = window.getSelection();
+  if (!sel || !sel.focusNode || !container.contains(sel.focusNode)) return -1;
+  var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  var offset = 0;
+  var node;
+  while ((node = walker.nextNode())) {
+    if (node === sel.focusNode) return offset + sel.focusOffset;
+    offset += node.textContent.length;
+  }
+  return offset;
+}
+
+function setCursorOffset(container, targetOffset) {
+  if (targetOffset < 0) return;
+  var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  var offset = 0;
+  var node;
+  while ((node = walker.nextNode())) {
+    var len = node.textContent.length;
+    if (offset + len >= targetOffset) {
+      var sel = window.getSelection();
+      var range = document.createRange();
+      range.setStart(node, targetOffset - offset);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    offset += len;
+  }
+  // If offset exceeds content, place cursor at end
+  var sel = window.getSelection();
+  sel.selectAllChildren(container);
+  sel.collapseToEnd();
+}
+
+// ── Live re-render on input ───────────────────────────────────────
+
+var renderPending = false;
+var slashActive = false;
+
+function getCurrentLineText() {
+  var sel = window.getSelection();
+  if (!sel || !sel.focusNode) return '';
+  var node = sel.focusNode;
+  // Walk up to the div/line container
+  while (node && node !== ed && node.parentNode !== ed) {
+    node = node.parentNode;
+  }
+  if (!node || node === ed) {
+    // focusNode is a direct text child of ed
+    return (sel.focusNode.textContent || '').split('\\n')[0] || '';
+  }
+  return (node.textContent || '').trim();
+}
+
 ed.addEventListener('input', function() {
+  var text = ed.innerText;
+  // Send content to RN
   if (window.ReactNativeWebView) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'contentChange', content: ed.innerText }));
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'contentChange', content: text }));
+  }
+
+  // Slash command detection
+  var lineText = getCurrentLineText();
+  if (lineText === '/') {
+    if (!slashActive) {
+      slashActive = true;
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'slashTrigger' }));
+      }
+    }
+  } else if (slashActive) {
+    slashActive = false;
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'slashDismiss' }));
+    }
+  }
+
+  // Schedule re-render with cursor preservation
+  if (!renderPending) {
+    renderPending = true;
+    requestAnimationFrame(function() {
+      renderPending = false;
+      var off = getCursorOffset(ed);
+      ed.innerHTML = render(ed.innerText);
+      setCursorOffset(ed, off);
+    });
   }
 });
+
+// ── Selection change tracking ─────────────────────────────────────
+
+var selectionDebounce = null;
+document.addEventListener('selectionchange', function() {
+  if (selectionDebounce) clearTimeout(selectionDebounce);
+  selectionDebounce = setTimeout(function() {
+    var sel = window.getSelection();
+    var text = sel ? sel.toString() : '';
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'selectionChange', text: text }));
+    }
+  }, 200);
+});
+
+// ── Insert/replace functions for AI slash commands ────────────────
+
+window.__insertAtCursor = function(text) {
+  // Delete the current line (the /command line) and insert text in its place
+  var sel = window.getSelection();
+  if (!sel || !sel.focusNode) return;
+
+  // Find the line node
+  var lineNode = sel.focusNode;
+  while (lineNode && lineNode !== ed && lineNode.parentNode !== ed) {
+    lineNode = lineNode.parentNode;
+  }
+
+  // Get the full text, find the line, replace it
+  var fullText = ed.innerText;
+  var lines = fullText.split('\\n');
+
+  // Find which line the cursor is on by counting chars
+  var curOff = getCursorOffset(ed);
+  var charCount = 0;
+  var targetLine = 0;
+  for (var i = 0; i < lines.length; i++) {
+    if (charCount + lines[i].length >= curOff) {
+      targetLine = i;
+      break;
+    }
+    charCount += lines[i].length + 1; // +1 for newline
+  }
+
+  // Replace the slash line with AI text
+  lines[targetLine] = text;
+  var newText = lines.join('\\n');
+  ed.innerHTML = render(newText);
+
+  // Place cursor at end of inserted text
+  var insertEnd = charCount + text.length;
+  setCursorOffset(ed, insertEnd);
+
+  // Notify RN of change
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'contentChange', content: newText }));
+  }
+  slashActive = false;
+};
+
+window.__replaceSelection = function(text) {
+  var sel = window.getSelection();
+  if (!sel || sel.isCollapsed) return;
+
+  // Get selection range in character offsets
+  var fullText = ed.innerText;
+
+  // Use execCommand for undo-able replacement
+  document.execCommand('insertText', false, text);
+
+  // The input event will fire and handle re-render + RN notification
+  slashActive = false;
+};
 
 // Wikilink clicks
 ed.addEventListener('click', function(e) {
@@ -238,6 +426,7 @@ if (window.ReactNativeWebView) {
         const msg = JSON.parse(event.nativeEvent.data);
         switch (msg.type) {
           case 'contentChange':
+            latestContentRef.current = msg.content;
             onChange(msg.content);
             break;
           case 'wikilinkClick':
@@ -246,12 +435,21 @@ if (window.ReactNativeWebView) {
           case 'ready':
             onReady?.();
             break;
+          case 'slashTrigger':
+            onSlashTrigger?.();
+            break;
+          case 'slashDismiss':
+            onSlashDismiss?.();
+            break;
+          case 'selectionChange':
+            onSelectionChange?.(msg.text);
+            break;
         }
       } catch (_e) {
         // Ignore
       }
     },
-    [onChange, onWikilinkClick, onReady]
+    [onChange, onWikilinkClick, onReady, onSlashTrigger, onSlashDismiss, onSelectionChange]
   );
 
   return (
@@ -270,4 +468,4 @@ if (window.ReactNativeWebView) {
       domStorageEnabled={true}
     />
   );
-}
+});

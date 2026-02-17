@@ -23,6 +23,19 @@ export async function pickVaultFolder(): Promise<VaultEntry | null> {
 }
 
 /**
+ * Check if a vault URI is still accessible (security-scoped access may expire).
+ */
+export function isVaultAccessible(vaultUri: string): boolean {
+  try {
+    const dir = new Directory(vaultUri);
+    dir.list(); // throws if access has expired
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
  * List all .md files in a vault directory (recursive).
  * Uses the new SDK 54 File/Directory API.
  */
@@ -88,5 +101,26 @@ export async function writeFileContent(fileUri: string, content: string): Promis
     file.write(content);
   } catch (err) {
     console.error('Failed to write file:', err);
+  }
+}
+
+/**
+ * Create a new markdown file in the vault root.
+ * Returns the file URI, or null if it already exists or creation failed.
+ */
+export function createNote(vaultUri: string, name: string): string | null {
+  const safeName = name.endsWith('.md') ? name : `${name}.md`;
+  // Build URI: vault root + filename
+  const separator = vaultUri.endsWith('/') ? '' : '/';
+  const fileUri = `${vaultUri}${separator}${encodeURIComponent(safeName)}`;
+
+  try {
+    const file = new File(fileUri);
+    if (file.exists) return null; // already exists
+    file.write(`# ${name.replace(/\.md$/, '')}\n\n`);
+    return fileUri;
+  } catch (err) {
+    console.error('[icloud] Failed to create note:', err);
+    return null;
   }
 }
