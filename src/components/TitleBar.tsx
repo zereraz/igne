@@ -18,7 +18,7 @@ interface TitleBarProps {
   onTabClick: (path: string) => void;
   onTabClose: (path: string) => void;
   onTabCloseOthers?: (path: string) => void;
-  onFileNameChange: (name: string) => void;
+  onFileNameChange: (path: string, name: string) => void;
   onToggleRightPanel?: () => void;
 }
 
@@ -165,10 +165,8 @@ export const TitleBar = memo(function TitleBar({
             }}
             onDoubleClick={(e) => {
               e.stopPropagation();
-              if (tab.path === activeTabPath) {
-                setEditingTab(tab.path);
-                setEditValue(tab.name.replace(/\.md$/, ''));
-              }
+              setEditingTab(tab.path);
+              setEditValue(tab.name.replace(/\.md$/, ''));
             }}
             data-testid="tab"
             data-tab={tab.name}
@@ -214,15 +212,15 @@ export const TitleBar = memo(function TitleBar({
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
                 onBlur={() => {
-                  if (editValue.trim()) {
-                    onFileNameChange(editValue.trim() + '.md');
+                  if (editValue.trim() && editingTab) {
+                    onFileNameChange(editingTab, editValue.trim() + '.md');
                   }
                   setEditingTab(null);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    if (editValue.trim()) {
-                      onFileNameChange(editValue.trim() + '.md');
+                    if (editValue.trim() && editingTab) {
+                      onFileNameChange(editingTab, editValue.trim() + '.md');
                     }
                     setEditingTab(null);
                   } else if (e.key === 'Escape') {

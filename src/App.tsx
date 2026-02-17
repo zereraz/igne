@@ -940,9 +940,9 @@ function App() {
     }, 1000);
   }, [materialize, updateContent, markSaved, tabStateRef]);
 
-  const handleFileNameChange = useCallback(async (newName: string) => {
-    const activeTab = getActiveTab();
-    if (!activeTab || !activeTab.path) return;
+  const handleFileNameChange = useCallback(async (tabPath: string, newName: string) => {
+    const tab = openTabs.find(t => t.path === tabPath);
+    if (!tab) return;
 
     // Add .md extension if not present
     if (!newName.endsWith('.md')) {
@@ -950,15 +950,15 @@ function App() {
     }
 
     // Don't do anything if name hasn't changed
-    if (newName === activeTab.name) return;
+    if (newName === tab.name) return;
 
-    const parts = activeTab.path.split(/[/\\]/);
+    const parts = tab.path.split(/[/\\]/);
     parts.pop();
     const newPath = [...parts, newName].join('/');
 
     try {
       // Get link update count before renaming
-      const linkUpdateCount = getLinkUpdateCount(activeTab.path);
+      const linkUpdateCount = getLinkUpdateCount(tab.path);
 
       // Show confirmation if there are incoming links
       if (linkUpdateCount > 0) {
@@ -972,13 +972,13 @@ function App() {
 
       // Use enhanced rename with link updates
       await renameFileWithLinkUpdates({
-        oldPath: activeTab.path,
+        oldPath: tab.path,
         newPath: newPath,
         updateLinks: true,
       });
 
       // Update tab path/name using hook's action
-      renameTab(activeTab.path, newPath, newName);
+      renameTab(tab.path, newPath, newName);
 
       // Refresh file list
       if (vaultPath) {
@@ -990,7 +990,7 @@ function App() {
       console.error('Failed to rename:', error);
       showAlert('Error', 'Failed to rename file: ' + (error as Error).message);
     }
-  }, [getActiveTab, renameTab, vaultPath, showConfirm, showAlert]);
+  }, [openTabs, renameTab, vaultPath, showConfirm, showAlert]);
 
   // Daily Notes handlers
   const handleOpenDailyNote = useCallback(async () => {
